@@ -1,8 +1,10 @@
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from app.models import User, RealCompetition, MatchDaysStatus
+
+from app.models import User
 from app.security import verify_password, create_access_token, hash_password
+from app.services import QueryService
+from app.context import RequestContext
 from fastapi import HTTPException, status
 
 
@@ -10,93 +12,8 @@ class SignInAction:
     """Sign in a user and return user data + context."""
 
     @staticmethod
-    def _get_season_id() -> int:
-        """Calculate current season ID based on month."""
-        SEASON_START_MONTH = 8
-        now = datetime.utcnow()
-        if now.month < SEASON_START_MONTH:
-            return now.year
-        else:
-            return now.year - 1
-
-    @staticmethod
-    def _get_current_base_real_competition(db: Session) -> dict | None:
-        """Get the current base RealCompetition (EN_PR)."""
-        season_id = SignInAction._get_season_id()
-        rc = db.query(RealCompetition).filter(
-            RealCompetition.realCompetitionSYMID == 'EN_PR',
-            RealCompetition.realCompetitionSeasonId == str(season_id)
-        ).first()
-        return {
-            "baseRealCompetitionID": rc.realCompetitionID,
-            "realCompetitionLastMatchDay": rc.realCompetitionLastMatchDay,
-            "extraRealCompetitionID": rc.extraRealCompetitionID,
-            "baseRealCompetitionMatchDayBeforeExtra": rc.realCompetitionExtraMatchDay,
-            "useExtraRealCompetition": rc.useExtraRealCompetition,
-        } if rc else None
-
-    @staticmethod
-    def _get_current_match_day_status(db: Session, base_real_competition_id: int, current_datetime: datetime) -> dict | None:
-        """Get current MatchDayStatus for the base competition."""
-        mds = db.query(MatchDaysStatus).filter(
-            MatchDaysStatus.matchDayMapKey == str(base_real_competition_id),
-            MatchDaysStatus.startWaivers <= current_datetime,
-            MatchDaysStatus.finishPostMatch > current_datetime
-        ).first()
-
-        if not mds:
-            return None
-
-        return {
-            "realCompetitionID": mds.realCompetitionID,
-            "realCompetitionMatchDay": mds.realCompetitionMatchDay,
-            "baseRealCompetitionMatchDay": mds.realCompetitionMatchDay,
-            "matchDayStatus": mds.scriptsStatus,
-            "matchDayStatusStart": mds.startMatchDay.isoformat() if mds.startMatchDay else None,
-            "matchDayStatusFinish": mds.finishMatchDay.isoformat() if mds.finishMatchDay else None,
-            "realCompetitionMatchDaySort": mds.realCompetitionMatchDaySort,
-            "prevActiveRealCompetitionID": mds.prevActiveRealCompetitionID,
-            "prevActiveRealCompetitionMatchDay": mds.prevActiveRealCompetitionMatchDay,
-            "nextActiveRealCompetitionID": mds.nextActiveRealCompetitionID,
-            "nextActiveRealCompetitionMatchDay": mds.nextActiveRealCompetitionMatchDay,
-        }
-
-    @staticmethod
-    def _get_show_data(db: Session, current_datetime: datetime) -> dict | None:
-        """Get current show data (what to display)."""
-        sd = db.query(MatchDaysStatus).filter(
-            MatchDaysStatus.finishBaseMatchDay <= current_datetime
-        ).order_by(MatchDaysStatus.finishBaseMatchDay.desc()).first()
-
-        if not sd:
-            return None
-
-        return {
-            "showRealCompetitionID": sd.realCompetitionID,
-            "showRealCompetitionMatchDay": sd.realCompetitionMatchDay,
-        }
-
-    @staticmethod
-    def execute(db: Session, user_email: str, user_password: str, client_ip: str) -> dict:
-        """Authenticate user and return signed-in data."""
-        # Cache datetime for consistent use throughout request
-        request_datetime = datetime.utcnow()
-
-        user = db.query(User).filter(User.userEmail == user_email).first()
-
-        if not user or not verify_password(user_password, user.userPassword):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password"
-            )
-
-        # Update last sign in
-        user.lastSignInDate = request_datetime
-        user.lastSignInIP = client_ip
-        db.commit()
-        db.refresh(user)
-
-        # Build session data
+    def _build_session_data(user: User, token: str | None = None) -> dict:
+        """Build the session data for a user."""
         session_data = {
             "userID": user.userID,
             "userEmail": user.userEmail,
@@ -117,24 +34,58 @@ class SignInAction:
             "createdIn": user.createdIn.isoformat() if user.createdIn else None,
             "updatedIn": user.updatedIn.isoformat() if user.updatedIn else None,
             "feedsMode": 0,
-            "token": create_access_token({"sub": str(user.userID), "email": user.userEmail}),
         }
+        if token:
+            session_data["token"] = token
+        return session_data
 
+    @staticmethod
+    def _add_context_data(db: Session, session_data: dict) -> None:
+        """Add RealCompetition, MatchDayStatus, and show data to session_data."""
         # Add RealCompetition context
-        rc_data = SignInAction._get_current_base_real_competition(db)
+        rc_data = QueryService.get_current_base_competition(db)
         if rc_data:
             session_data.update(rc_data)
 
         # Add MatchDayStatus context
         if "baseRealCompetitionID" in session_data:
-            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"], request_datetime)
+            mds_data = QueryService.get_current_match_day_status(db, session_data["baseRealCompetitionID"])
             if mds_data:
                 session_data.update(mds_data)
 
         # Add show data
-        sd_data = SignInAction._get_show_data(db, request_datetime)
+        sd_data = QueryService.get_show_data(db)
         if sd_data:
             session_data.update(sd_data)
+
+    @staticmethod
+    def execute(db: Session, user_email: str, user_password: str, client_ip: str) -> dict:
+        """Authenticate user and return signed-in data."""
+        # Set request datetime in context
+        request_datetime = RequestContext.get_datetime()
+
+        user = db.query(User).filter(User.userEmail == user_email).first()
+
+        if not user or not verify_password(user_password, user.userPassword):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+
+        # Update last sign in
+        user.lastSignInDate = request_datetime
+        user.lastSignInIP = client_ip
+        db.commit()
+        db.refresh(user)
+
+        # Generate JWT token
+        token = create_access_token({"sub": str(user.userID), "email": user.userEmail})
+
+        # Build session data
+        session_data = SignInAction._build_session_data(user, token)
+
+        # Add context data
+        SignInAction._add_context_data(db, session_data)
 
         # Return in PHP-compatible format
         return {
@@ -159,8 +110,7 @@ class SignInfoAction:
     @staticmethod
     def execute(db: Session, user_id: int) -> dict:
         """Return current user information with context."""
-        # Cache datetime for consistent use throughout request
-        request_datetime = datetime.utcnow()
+        request_datetime = RequestContext.get_datetime()
 
         user = db.query(User).filter(User.userID == user_id).first()
 
@@ -170,44 +120,11 @@ class SignInfoAction:
                 detail="User not found"
             )
 
-        # Build same session data as SignIn
-        session_data = {
-            "userID": user.userID,
-            "userEmail": user.userEmail,
-            "userName": user.userName,
-            "userLevel": user.userLevel,
-            "firstName": user.firstName,
-            "lastName": user.lastName,
-            "birthday": user.birthday.isoformat() if user.birthday else None,
-            "country": user.country,
-            "state": user.state,
-            "city": user.city,
-            "phoneNumber": user.phoneNumber,
-            "timeZone": user.timeZone,
-            "userAvatar": user.userAvatar,
-            "favoriteTeam": user.favoriteTeam,
-            "lastSignInDate": user.lastSignInDate.isoformat() if user.lastSignInDate else None,
-            "lastSignInIP": user.lastSignInIP,
-            "createdIn": user.createdIn.isoformat() if user.createdIn else None,
-            "updatedIn": user.updatedIn.isoformat() if user.updatedIn else None,
-            "feedsMode": 0,
-        }
+        # Build session data (no token for SignInfo)
+        session_data = SignInAction._build_session_data(user)
 
-        # Add RealCompetition context
-        rc_data = SignInAction._get_current_base_real_competition(db)
-        if rc_data:
-            session_data.update(rc_data)
-
-        # Add MatchDayStatus context
-        if "baseRealCompetitionID" in session_data:
-            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"], request_datetime)
-            if mds_data:
-                session_data.update(mds_data)
-
-        # Add show data
-        sd_data = SignInAction._get_show_data(db, request_datetime)
-        if sd_data:
-            session_data.update(sd_data)
+        # Add context data
+        SignInAction._add_context_data(db, session_data)
 
         # Return in PHP-compatible format
         return {
@@ -237,8 +154,8 @@ class SignUpAction:
         favorite_team: str | None = None,
     ) -> dict:
         """Create new user and return signed-in data."""
-        # Cache datetime for consistent use throughout request
-        request_datetime = datetime.utcnow()
+        # Get request datetime from context
+        request_datetime = RequestContext.get_datetime()
 
         # Check if user exists
         existing_user = db.query(User).filter(User.userEmail == user_email).first()
@@ -274,44 +191,10 @@ class SignUpAction:
         token = create_access_token({"sub": str(new_user.userID), "email": new_user.userEmail})
 
         # Build session data
-        session_data = {
-            "userID": new_user.userID,
-            "userEmail": new_user.userEmail,
-            "userName": new_user.userName,
-            "userLevel": new_user.userLevel,
-            "firstName": new_user.firstName,
-            "lastName": new_user.lastName,
-            "birthday": new_user.birthday.isoformat() if new_user.birthday else None,
-            "country": new_user.country,
-            "state": new_user.state,
-            "city": new_user.city,
-            "phoneNumber": new_user.phoneNumber,
-            "timeZone": new_user.timeZone,
-            "userAvatar": new_user.userAvatar,
-            "favoriteTeam": new_user.favoriteTeam,
-            "lastSignInDate": new_user.lastSignInDate.isoformat() if new_user.lastSignInDate else None,
-            "lastSignInIP": new_user.lastSignInIP,
-            "createdIn": new_user.createdIn.isoformat() if new_user.createdIn else None,
-            "updatedIn": new_user.updatedIn.isoformat() if new_user.updatedIn else None,
-            "feedsMode": 0,
-            "token": token,
-        }
+        session_data = SignInAction._build_session_data(new_user, token)
 
-        # Add RealCompetition context
-        rc_data = SignInAction._get_current_base_real_competition(db)
-        if rc_data:
-            session_data.update(rc_data)
-
-        # Add MatchDayStatus context
-        if "baseRealCompetitionID" in session_data:
-            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"], request_datetime)
-            if mds_data:
-                session_data.update(mds_data)
-
-        # Add show data
-        sd_data = SignInAction._get_show_data(db, request_datetime)
-        if sd_data:
-            session_data.update(sd_data)
+        # Add context data
+        SignInAction._add_context_data(db, session_data)
 
         # Return in PHP-compatible format
         return {
