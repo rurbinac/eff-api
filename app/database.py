@@ -1,0 +1,33 @@
+from google.cloud.sql.connector import Connector
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, DeclarativeBase
+
+from app.config import settings
+
+connector = Connector()
+
+
+def _get_connection():
+    return connector.connect(
+        settings.cloud_sql_instance,
+        "pymysql",
+        user=settings.db_user,
+        password=settings.db_password,
+        db=settings.db_name,
+    )
+
+
+engine = create_engine("mysql+pymysql://", creator=_get_connection, pool_pre_ping=True)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

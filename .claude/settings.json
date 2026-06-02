@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gcloud config *)",
+      "Bash(gcloud services *)",
+      "Bash(gcloud sql *)",
+      "Bash(gcloud iam *)",
+      "Bash(gcloud projects *)",
+      "Bash(gcloud run *)",
+      "Bash(curl -s https://my-api-150703383580.us-central1.run.app/health)"
+    ]
+  }
+}

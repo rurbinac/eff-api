@@ -1,0 +1,38 @@
+substitutions:
+  _REGION: us-central1
+  _SERVICE: my-api
+  _CLOUD_SQL_INSTANCE: eff-dev-497918:us-central1:eff-dev-db
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - gcr.io/$PROJECT_ID/${_SERVICE}:$SHORT_SHA
+      - -t
+      - gcr.io/$PROJECT_ID/${_SERVICE}:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - gcr.io/$PROJECT_ID/${_SERVICE}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=gcr.io/$PROJECT_ID/${_SERVICE}:$SHORT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --add-cloudsql-instances=${_CLOUD_SQL_INSTANCE}
+      - --set-env-vars=CLOUD_SQL_INSTANCE=${_CLOUD_SQL_INSTANCE}
+      - --update-secrets=DB_PASSWORD=db-password:latest,DB_USER=db-user:latest,DB_NAME=db-name:latest
+      - --allow-unauthenticated
+
+images:
+  - gcr.io/$PROJECT_ID/${_SERVICE}:$SHORT_SHA
+  - gcr.io/$PROJECT_ID/${_SERVICE}:latest
