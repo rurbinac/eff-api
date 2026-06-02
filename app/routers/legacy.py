@@ -23,15 +23,14 @@ async def legacy_users(
 
     if f == "SignIn":
         result = SignInAction.execute(db, userEmail, userPassword, client_ip)
-        return {"Session": result, "_format": _format}
+        return result
 
     elif f == "SignOut":
         result = SignOutAction.execute(0)
-        return {"response": result, "_format": _format}
+        return {"table": "success", "values": result, "_format": _format}
 
     elif f == "SignInfo":
-        # Parse JWT from header or form data
-        # For now, we'll return a placeholder
+        # Parse user ID from token or request
         return {"error": "Not implemented - need user context"}, 501
 
     else:
@@ -49,11 +48,28 @@ async def legacy_signin(
     """Legacy SignIn endpoint (shortcut)."""
     client_ip = request.client.host if request.client else "0.0.0.0"
     result = SignInAction.execute(db, userEmail, userPassword, client_ip)
-    return {"Session": result, "_format": _format}
+    return result
 
 
 @router.post("/eff/eff_api/SignOut.php")
 async def legacy_signout(_format: str | None = Query("json")):
     """Legacy SignOut endpoint (shortcut)."""
     result = SignOutAction.execute(0)
-    return {"response": result, "_format": _format}
+    return {"table": "success", "values": result, "_format": _format}
+
+
+@router.post("/eff/eff_api/SignInfo.php")
+async def legacy_signinfo(
+    _format: str | None = Query("json"),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Legacy SignInfo endpoint (shortcut)."""
+    # Parse user ID from Authorization header
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return {"error": "Missing or invalid token"}, 401
+
+    token = auth_header[7:]  # Remove "Bearer " prefix
+    # For now, just return error - will implement token parsing next
+    return {"error": "Token parsing not yet implemented"}, 501

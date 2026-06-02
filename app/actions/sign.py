@@ -1,12 +1,67 @@
 from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models import User
+from sqlalchemy import desc
+from app.models import User, RealCompetition, MatchDaysStatus
 from app.security import verify_password, create_access_token, hash_password
 from fastapi import HTTPException, status
 
 
 class SignInAction:
-    """Sign in a user and return user data + JWT token."""
+    """Sign in a user and return user data + context."""
+
+    @staticmethod
+    def _get_current_base_real_competition(db: Session) -> dict | None:
+        """Get the current base RealCompetition."""
+        rc = db.query(RealCompetition).filter(
+            RealCompetition.baseRealCompetitionID == RealCompetition.realCompetitionID
+        ).order_by(desc(RealCompetition.createdIn)).first()
+        return {
+            "baseRealCompetitionID": rc.realCompetitionID,
+            "realCompetitionLastMatchDay": rc.realCompetitionLastMatchDay,
+            "extraRealCompetitionID": rc.extraRealCompetitionID,
+            "baseRealCompetitionMatchDayBeforeExtra": rc.realCompetitionExtraMatchDay,
+            "useExtraRealCompetition": rc.useExtraRealCompetition,
+        } if rc else None
+
+    @staticmethod
+    def _get_current_match_day_status(db: Session, base_real_competition_id: int) -> dict | None:
+        """Get current MatchDayStatus for the base competition."""
+        mds = db.query(MatchDaysStatus).filter(
+            MatchDaysStatus.baseRealCompetitionID == base_real_competition_id,
+            MatchDaysStatus.active == True
+        ).first()
+
+        if not mds:
+            return None
+
+        return {
+            "realCompetitionID": mds.realCompetitionID,
+            "realCompetitionMatchDay": mds.realCompetitionMatchDay,
+            "baseRealCompetitionMatchDay": mds.realCompetitionMatchDay,
+            "matchDayStatus": mds.scriptsStatus,
+            "matchDayStatusStart": mds.startMatchDay.isoformat() if mds.startMatchDay else None,
+            "matchDayStatusFinish": mds.finishMatchDay.isoformat() if mds.finishMatchDay else None,
+            "realCompetitionMatchDaySort": mds.realCompetitionMatchDaySort,
+            "prevActiveRealCompetitionID": mds.prevActiveRealCompetitionID,
+            "prevActiveRealCompetitionMatchDay": mds.prevActiveRealCompetitionMatchDay,
+            "nextActiveRealCompetitionID": mds.nextActiveRealCompetitionID,
+            "nextActiveRealCompetitionMatchDay": mds.nextActiveRealCompetitionMatchDay,
+        }
+
+    @staticmethod
+    def _get_show_data(db: Session) -> dict | None:
+        """Get current show data (what to display)."""
+        sd = db.query(MatchDaysStatus).filter(
+            MatchDaysStatus.active == True
+        ).first()
+
+        if not sd:
+            return None
+
+        return {
+            "showRealCompetitionID": sd.realCompetitionID,
+            "showRealCompetitionMatchDay": sd.realCompetitionMatchDay,
+        }
 
     @staticmethod
     def execute(db: Session, user_email: str, user_password: str, client_ip: str) -> dict:
@@ -25,18 +80,51 @@ class SignInAction:
         db.commit()
         db.refresh(user)
 
-        # Generate JWT token
-        token = create_access_token({"sub": str(user.userID), "email": user.userEmail})
-
-        return {
+        # Build session data
+        session_data = {
             "userID": user.userID,
             "userEmail": user.userEmail,
             "userName": user.userName,
+            "userLevel": user.userLevel,
             "firstName": user.firstName,
             "lastName": user.lastName,
-            "userLevel": user.userLevel,
-            "token": token,
-            "feedsMode": 0
+            "birthday": user.birthday.isoformat() if user.birthday else None,
+            "country": user.country,
+            "state": user.state,
+            "city": user.city,
+            "phoneNumber": user.phoneNumber,
+            "timeZone": user.timeZone,
+            "userAvatar": user.userAvatar,
+            "favoriteTeam": user.favoriteTeam,
+            "lastSignInDate": user.lastSignInDate.isoformat() if user.lastSignInDate else None,
+            "lastSignInIP": user.lastSignInIP,
+            "createdIn": user.createdIn.isoformat() if user.createdIn else None,
+            "updatedIn": user.updatedIn.isoformat() if user.updatedIn else None,
+            "feedsMode": 0,
+            "token": create_access_token({"sub": str(user.userID), "email": user.userEmail}),
+        }
+
+        # Add RealCompetition context
+        rc_data = SignInAction._get_current_base_real_competition(db)
+        if rc_data:
+            session_data.update(rc_data)
+
+        # Add MatchDayStatus context
+        if "baseRealCompetitionID" in session_data:
+            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"])
+            if mds_data:
+                session_data.update(mds_data)
+
+        # Add show data
+        sd_data = SignInAction._get_show_data(db)
+        if sd_data:
+            session_data.update(sd_data)
+
+        # Return in PHP-compatible format
+        return {
+            "table": "Session",
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "values": session_data
         }
 
 
@@ -54,7 +142,7 @@ class SignInfoAction:
 
     @staticmethod
     def execute(db: Session, user_id: int) -> dict:
-        """Return current user information."""
+        """Return current user information with context."""
         user = db.query(User).filter(User.userID == user_id).first()
 
         if not user:
@@ -63,14 +151,50 @@ class SignInfoAction:
                 detail="User not found"
             )
 
-        return {
+        # Build same session data as SignIn
+        session_data = {
             "userID": user.userID,
             "userEmail": user.userEmail,
             "userName": user.userName,
+            "userLevel": user.userLevel,
             "firstName": user.firstName,
             "lastName": user.lastName,
-            "userLevel": user.userLevel,
-            "feedsMode": 0
+            "birthday": user.birthday.isoformat() if user.birthday else None,
+            "country": user.country,
+            "state": user.state,
+            "city": user.city,
+            "phoneNumber": user.phoneNumber,
+            "timeZone": user.timeZone,
+            "userAvatar": user.userAvatar,
+            "favoriteTeam": user.favoriteTeam,
+            "lastSignInDate": user.lastSignInDate.isoformat() if user.lastSignInDate else None,
+            "lastSignInIP": user.lastSignInIP,
+            "createdIn": user.createdIn.isoformat() if user.createdIn else None,
+            "updatedIn": user.updatedIn.isoformat() if user.updatedIn else None,
+            "feedsMode": 0,
+        }
+
+        # Add RealCompetition context
+        rc_data = SignInAction._get_current_base_real_competition(db)
+        if rc_data:
+            session_data.update(rc_data)
+
+        # Add MatchDayStatus context
+        if "baseRealCompetitionID" in session_data:
+            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"])
+            if mds_data:
+                session_data.update(mds_data)
+
+        # Add show data
+        sd_data = SignInAction._get_show_data(db)
+        if sd_data:
+            session_data.update(sd_data)
+
+        # Return in PHP-compatible format
+        return {
+            "table": "Session",
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "values": session_data
         }
 
 
@@ -127,13 +251,49 @@ class SignUpAction:
         # Generate JWT token
         token = create_access_token({"sub": str(new_user.userID), "email": new_user.userEmail})
 
-        return {
+        # Build session data
+        session_data = {
             "userID": new_user.userID,
             "userEmail": new_user.userEmail,
             "userName": new_user.userName,
+            "userLevel": new_user.userLevel,
             "firstName": new_user.firstName,
             "lastName": new_user.lastName,
-            "userLevel": new_user.userLevel,
+            "birthday": new_user.birthday.isoformat() if new_user.birthday else None,
+            "country": new_user.country,
+            "state": new_user.state,
+            "city": new_user.city,
+            "phoneNumber": new_user.phoneNumber,
+            "timeZone": new_user.timeZone,
+            "userAvatar": new_user.userAvatar,
+            "favoriteTeam": new_user.favoriteTeam,
+            "lastSignInDate": new_user.lastSignInDate.isoformat() if new_user.lastSignInDate else None,
+            "lastSignInIP": new_user.lastSignInIP,
+            "createdIn": new_user.createdIn.isoformat() if new_user.createdIn else None,
+            "updatedIn": new_user.updatedIn.isoformat() if new_user.updatedIn else None,
+            "feedsMode": 0,
             "token": token,
-            "feedsMode": 0
+        }
+
+        # Add RealCompetition context
+        rc_data = SignInAction._get_current_base_real_competition(db)
+        if rc_data:
+            session_data.update(rc_data)
+
+        # Add MatchDayStatus context
+        if "baseRealCompetitionID" in session_data:
+            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"])
+            if mds_data:
+                session_data.update(mds_data)
+
+        # Add show data
+        sd_data = SignInAction._get_show_data(db)
+        if sd_data:
+            session_data.update(sd_data)
+
+        # Return in PHP-compatible format
+        return {
+            "table": "Session",
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "values": session_data
         }
