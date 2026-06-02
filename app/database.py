@@ -9,11 +9,11 @@ connector = Connector()
 
 def _get_connection():
     return connector.connect(
-        settings.cloud_sql_instance,
+        settings.cloud_sql_instance.strip(),
         "pymysql",
-        user=settings.db_user,
-        password=settings.db_password,
-        db=settings.db_name,
+        user=settings.db_user.strip(),
+        password=settings.db_password.strip(),
+        db=settings.db_name.strip(),
     )
 
 
