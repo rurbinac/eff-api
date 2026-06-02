@@ -1,6 +1,5 @@
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
 from app.models import User, RealCompetition, MatchDaysStatus
 from app.security import verify_password, create_access_token, hash_password
 from fastapi import HTTPException, status
@@ -10,11 +9,23 @@ class SignInAction:
     """Sign in a user and return user data + context."""
 
     @staticmethod
+    def _get_season_id() -> int:
+        """Calculate current season ID based on month."""
+        SEASON_START_MONTH = 8
+        now = datetime.utcnow()
+        if now.month < SEASON_START_MONTH:
+            return now.year
+        else:
+            return now.year - 1
+
+    @staticmethod
     def _get_current_base_real_competition(db: Session) -> dict | None:
-        """Get the current base RealCompetition."""
+        """Get the current base RealCompetition (EN_PR)."""
+        season_id = SignInAction._get_season_id()
         rc = db.query(RealCompetition).filter(
-            RealCompetition.baseRealCompetitionID == RealCompetition.realCompetitionID
-        ).order_by(desc(RealCompetition.createdIn)).first()
+            RealCompetition.realCompetitionSYMID == 'EN_PR',
+            RealCompetition.realCompetitionSeasonId == str(season_id)
+        ).first()
         return {
             "baseRealCompetitionID": rc.realCompetitionID,
             "realCompetitionLastMatchDay": rc.realCompetitionLastMatchDay,
