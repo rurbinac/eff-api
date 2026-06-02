@@ -1,297 +1,295 @@
 from datetime import datetime
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Integer, String, Date, DateTime, SmallInteger, ForeignKey, Text, Float
+from typing import Optional
+from sqlmodel import SQLModel, Field
 from sqlalchemy.dialects.mysql import TINYINT
 
-from app.database import Base
 
-
-class User(Base):
+class User(SQLModel, table=True):
     __tablename__ = "Users"
 
-    userID: Mapped[int] = mapped_column(Integer, primary_key=True)
-    userEmail: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
-    userPassword: Mapped[str] = mapped_column(String(255), nullable=False)
-    userName: Mapped[str] = mapped_column(String(128), nullable=False)
-    userLevel: Mapped[int] = mapped_column(TINYINT, nullable=False)
-    firstName: Mapped[str] = mapped_column(String(50), nullable=False)
-    lastName: Mapped[str] = mapped_column(String(50), nullable=False)
-    birthday: Mapped[datetime] = mapped_column(Date, nullable=False)
-    country: Mapped[str | None] = mapped_column(String(50))
-    state: Mapped[str | None] = mapped_column(String(50))
-    city: Mapped[str | None] = mapped_column(String(50))
-    phoneNumber: Mapped[str | None] = mapped_column(String(15))
-    timeZone: Mapped[str | None] = mapped_column(String(20))
-    userAvatar: Mapped[str | None] = mapped_column(String(128))
-    favoriteTeam: Mapped[str | None] = mapped_column(String(50))
-    lastSignInDate: Mapped[datetime | None] = mapped_column(DateTime)
-    lastSignInIP: Mapped[str | None] = mapped_column(String(15))
-    createdIn: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    updatedIn: Mapped[datetime | None] = mapped_column(DateTime)
+    userID: Optional[int] = Field(default=None, primary_key=True)
+    userEmail: str = Field(max_length=128, unique=True, index=True)
+    userPassword: str = Field(max_length=255)
+    userName: str = Field(max_length=128)
+    userLevel: int = Field(sa_type=TINYINT)
+    firstName: str = Field(max_length=50)
+    lastName: str = Field(max_length=50)
+    birthday: datetime
+    country: Optional[str] = Field(default=None, max_length=50)
+    state: Optional[str] = Field(default=None, max_length=50)
+    city: Optional[str] = Field(default=None, max_length=50)
+    phoneNumber: Optional[str] = Field(default=None, max_length=15)
+    timeZone: Optional[str] = Field(default=None, max_length=20)
+    userAvatar: Optional[str] = Field(default=None, max_length=128)
+    favoriteTeam: Optional[str] = Field(default=None, max_length=50)
+    lastSignInDate: Optional[datetime] = Field(default=None)
+    lastSignInIP: Optional[str] = Field(default=None, max_length=15)
+    createdIn: datetime
+    updatedIn: Optional[datetime] = Field(default=None)
 
 
-class RealCompetition(Base):
+class RealCompetition(SQLModel, table=True):
     __tablename__ = "RealCompetitions"
 
-    realCompetitionID: Mapped[int] = mapped_column(Integer, primary_key=True)
-    prevRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    nextRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    realCompetitionUID: Mapped[str] = mapped_column(String(20), nullable=False)
-    realCompetitionSYMID: Mapped[str] = mapped_column(String(20), nullable=False)
-    realCompetitionName: Mapped[str] = mapped_column(String(100), nullable=False)
-    realCompetitionCountry: Mapped[str] = mapped_column(String(100), nullable=False)
-    realCompetitionSeasonId: Mapped[str] = mapped_column(String(20), nullable=False)
-    realCompetitionSeasonName: Mapped[str] = mapped_column(String(100), nullable=False)
-    realCompetitionFirstMatchDay: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    realCompetitionLastMatchDay: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    realCompetitionExtraMatchDay: Mapped[int | None] = mapped_column(SmallInteger)
-    useExtraRealCompetition: Mapped[bool] = mapped_column(TINYINT, default=1)
-    baseRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    extraRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    calcStandings: Mapped[bool] = mapped_column(TINYINT, nullable=False)
-    lastF7Date: Mapped[datetime] = mapped_column(DateTime, default=datetime(2000, 1, 1))
-    lastF42Date: Mapped[datetime] = mapped_column(DateTime, default=datetime(2000, 1, 1))
-    lastFDate: Mapped[datetime] = mapped_column(DateTime, default=datetime(2000, 1, 1))
-    createdIn: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    updatedIn: Mapped[datetime | None] = mapped_column(DateTime)
+    realCompetitionID: Optional[int] = Field(default=None, primary_key=True)
+    prevRealCompetitionID: Optional[int] = None
+    nextRealCompetitionID: Optional[int] = None
+    realCompetitionUID: str = Field(max_length=20)
+    realCompetitionSYMID: str = Field(max_length=20)
+    realCompetitionName: str = Field(max_length=100)
+    realCompetitionCountry: str = Field(max_length=100)
+    realCompetitionSeasonId: str = Field(max_length=20)
+    realCompetitionSeasonName: str = Field(max_length=100)
+    realCompetitionFirstMatchDay: int
+    realCompetitionLastMatchDay: int
+    realCompetitionExtraMatchDay: Optional[int] = None
+    useExtraRealCompetition: int = Field(default=1, sa_type=TINYINT)
+    baseRealCompetitionID: Optional[int] = None
+    extraRealCompetitionID: Optional[int] = None
+    calcStandings: int = Field(sa_type=TINYINT)
+    lastF7Date: datetime = Field(default_factory=lambda: datetime(2000, 1, 1))
+    lastF42Date: datetime = Field(default_factory=lambda: datetime(2000, 1, 1))
+    lastFDate: datetime = Field(default_factory=lambda: datetime(2000, 1, 1))
+    createdIn: datetime
+    updatedIn: Optional[datetime] = None
 
 
-class Lookup(Base):
+class Lookup(SQLModel, table=True):
     __tablename__ = "Lookups"
 
-    lookupID: Mapped[int] = mapped_column(Integer, primary_key=True)
-    lookupNum: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    lookupKey: Mapped[str] = mapped_column(String(20), nullable=False)
-    lookupCode: Mapped[str] = mapped_column(String(10), nullable=False)
-    lookupText: Mapped[str] = mapped_column(String(50), nullable=False)
+    lookupID: Optional[int] = Field(default=None, primary_key=True)
+    lookupNum: int
+    position: int
+    lookupKey: str = Field(max_length=20)
+    lookupCode: str = Field(max_length=10)
+    lookupText: str = Field(max_length=50)
 
 
-class League(Base):
+class League(SQLModel, table=True):
     __tablename__ = "Leagues"
 
-    leagueID: Mapped[int] = mapped_column(Integer, primary_key=True)
-    baseRealCompetitionID: Mapped[int] = mapped_column(Integer, nullable=False)
-    extraRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    leagueName: Mapped[str] = mapped_column(String(128), nullable=False)
-    leaguePassword: Mapped[str] = mapped_column(String(255), nullable=False)
-    commissionerID: Mapped[int] = mapped_column(Integer, nullable=False)
-    prevLeagueID: Mapped[int | None] = mapped_column(Integer)
-    nextLeagueID: Mapped[int | None] = mapped_column(Integer)
-    season: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    seasonNum: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    numDivisions: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    leagueType: Mapped[int] = mapped_column(TINYINT, nullable=False)
-    gameType: Mapped[int] = mapped_column(TINYINT, nullable=False)
-    scoringSystem: Mapped[int] = mapped_column(TINYINT, nullable=False)
-    tradeDeadline: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    publishLeague: Mapped[bool] = mapped_column(TINYINT, nullable=False)
-    seasonStatus: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    totalTeams: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    availableTeams: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    totPromoted: Mapped[int] = mapped_column(TINYINT, default=2)
-    maxFranchiseMembers: Mapped[int] = mapped_column(TINYINT, default=2)
-    maxWaiver: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    minEPLTeam: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    minPlayer: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    minGoalkeeper: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    minDefender: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    minMidfielder: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    minStriker: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    maxEPLTeam: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    maxPlayer: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    maxGoalkeeper: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    maxDefender: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    maxMidfielder: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    maxStriker: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    autoEPLTeam: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    autoGoalkeeper: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    autoDefender: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    autoMidfielder: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    autoStriker: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    createdBy: Mapped[int] = mapped_column(Integer, nullable=False)
-    createdIn: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    updatedBy: Mapped[int | None] = mapped_column(Integer)
-    updatedIn: Mapped[datetime | None] = mapped_column(DateTime)
+    leagueID: Optional[int] = Field(default=None, primary_key=True)
+    baseRealCompetitionID: int
+    extraRealCompetitionID: Optional[int] = None
+    leagueName: str = Field(max_length=128)
+    leaguePassword: str = Field(max_length=255)
+    commissionerID: int
+    prevLeagueID: Optional[int] = None
+    nextLeagueID: Optional[int] = None
+    season: int
+    seasonNum: int
+    numDivisions: int
+    leagueType: int = Field(sa_type=TINYINT)
+    gameType: int = Field(sa_type=TINYINT)
+    scoringSystem: int = Field(sa_type=TINYINT)
+    tradeDeadline: datetime
+    publishLeague: int = Field(sa_type=TINYINT)
+    seasonStatus: int
+    totalTeams: int
+    availableTeams: int
+    totPromoted: int = Field(default=2, sa_type=TINYINT)
+    maxFranchiseMembers: int = Field(default=2, sa_type=TINYINT)
+    maxWaiver: int
+    minEPLTeam: int
+    minPlayer: int
+    minGoalkeeper: int
+    minDefender: int
+    minMidfielder: int
+    minStriker: int
+    maxEPLTeam: int
+    maxPlayer: int
+    maxGoalkeeper: int
+    maxDefender: int
+    maxMidfielder: int
+    maxStriker: int
+    autoEPLTeam: int
+    autoGoalkeeper: int
+    autoDefender: int
+    autoMidfielder: int
+    autoStriker: int
+    createdBy: int
+    createdIn: datetime
+    updatedBy: Optional[int] = None
+    updatedIn: Optional[datetime] = None
 
 
-class Division(Base):
+class Division(SQLModel, table=True):
     __tablename__ = "Divisions"
 
-    divisionID: Mapped[int] = mapped_column(Integer, primary_key=True)
-    baseRealCompetitionID: Mapped[int] = mapped_column(Integer, nullable=False)
-    extraRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    matchDayMapKey: Mapped[str | None] = mapped_column(String(20))
-    leagueID: Mapped[int] = mapped_column(Integer, ForeignKey("Leagues.leagueID"), nullable=False)
-    commissionerID: Mapped[int] = mapped_column(Integer, nullable=False)
-    prevLeagueID: Mapped[int | None] = mapped_column(Integer)
-    nextLeagueID: Mapped[int | None] = mapped_column(Integer)
-    prevDivisionID: Mapped[int | None] = mapped_column(Integer)
-    nextDivisionID: Mapped[int | None] = mapped_column(Integer)
-    season: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    seasonNum: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    leagueMatches: Mapped[int] = mapped_column(TINYINT, default=0)
-    divisionMatches: Mapped[int] = mapped_column(TINYINT, default=0)
-    draftType: Mapped[str] = mapped_column(String(1), nullable=False)
-    draftDate: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    draftCompleteDate: Mapped[datetime | None] = mapped_column(DateTime)
-    draftStatus: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    draftTime: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    draftingStart: Mapped[datetime | None] = mapped_column(DateTime)
-    draftingFinish: Mapped[datetime | None] = mapped_column(DateTime)
-    draftingLimit: Mapped[datetime | None] = mapped_column(DateTime)
-    draftingRound: Mapped[int | None] = mapped_column(SmallInteger)
-    draftingMemberOrder: Mapped[int | None] = mapped_column(SmallInteger)
-    draftingTeamOrder: Mapped[int | None] = mapped_column(SmallInteger)
-    draftingNextTeamOrder: Mapped[int | None] = mapped_column(SmallInteger)
-    draftingUsers: Mapped[str] = mapped_column(Text, nullable=False)
-    draftingHooks: Mapped[int] = mapped_column(SmallInteger, default=0)
-    franchiseMembers: Mapped[str] = mapped_column(Text, nullable=False)
-    firstRealCompetitionMatchDay: Mapped[int | None] = mapped_column(SmallInteger)
-    lastRealCompetitionMatchDay: Mapped[int | None] = mapped_column(SmallInteger)
-    waiverStatus: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    matchDay: Mapped[int | None] = mapped_column(SmallInteger)
-    isCupMatchDay: Mapped[bool | None] = mapped_column(TINYINT)
-    isDivisionCupMatchDay: Mapped[bool | None] = mapped_column(TINYINT)
-    totalTeams: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    numTeams: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    availableTeams: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    divisionType: Mapped[str] = mapped_column(String(1), nullable=False)
-    createdBy: Mapped[int] = mapped_column(Integer, nullable=False)
-    createdIn: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    updatedBy: Mapped[int | None] = mapped_column(Integer)
-    updatedIn: Mapped[datetime | None] = mapped_column(DateTime)
+    divisionID: Optional[int] = Field(default=None, primary_key=True)
+    baseRealCompetitionID: int
+    extraRealCompetitionID: Optional[int] = None
+    matchDayMapKey: Optional[str] = Field(default=None, max_length=20)
+    leagueID: int
+    commissionerID: int
+    prevLeagueID: Optional[int] = None
+    nextLeagueID: Optional[int] = None
+    prevDivisionID: Optional[int] = None
+    nextDivisionID: Optional[int] = None
+    season: int
+    seasonNum: int
+    leagueMatches: int = Field(default=0, sa_type=TINYINT)
+    divisionMatches: int = Field(default=0, sa_type=TINYINT)
+    draftType: str = Field(max_length=1)
+    draftDate: datetime
+    draftCompleteDate: Optional[datetime] = None
+    draftStatus: int
+    draftTime: int
+    draftingStart: Optional[datetime] = None
+    draftingFinish: Optional[datetime] = None
+    draftingLimit: Optional[datetime] = None
+    draftingRound: Optional[int] = None
+    draftingMemberOrder: Optional[int] = None
+    draftingTeamOrder: Optional[int] = None
+    draftingNextTeamOrder: Optional[int] = None
+    draftingUsers: str
+    draftingHooks: int = Field(default=0)
+    franchiseMembers: str
+    firstRealCompetitionMatchDay: Optional[int] = None
+    lastRealCompetitionMatchDay: Optional[int] = None
+    waiverStatus: int
+    matchDay: Optional[int] = None
+    isCupMatchDay: Optional[int] = Field(default=None, sa_type=TINYINT)
+    isDivisionCupMatchDay: Optional[int] = Field(default=None, sa_type=TINYINT)
+    totalTeams: int
+    numTeams: int
+    availableTeams: int
+    divisionType: str = Field(max_length=1)
+    createdBy: int
+    createdIn: datetime
+    updatedBy: Optional[int] = None
+    updatedIn: Optional[datetime] = None
 
 
-class Team(Base):
+class Team(SQLModel, table=True):
     __tablename__ = "Teams"
 
-    teamID: Mapped[int] = mapped_column(Integer, primary_key=True)
-    baseRealCompetitionID: Mapped[int] = mapped_column(Integer, nullable=False)
-    extraRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    matchDayMapKey: Mapped[str | None] = mapped_column(String(20))
-    leagueID: Mapped[int] = mapped_column(Integer, nullable=False)
-    divisionID: Mapped[int] = mapped_column(Integer, ForeignKey("Divisions.divisionID"), nullable=False)
-    commissionerID: Mapped[int] = mapped_column(Integer, nullable=False)
-    userID: Mapped[int | None] = mapped_column(Integer)
-    prevLeagueID: Mapped[int | None] = mapped_column(Integer)
-    nextLeagueID: Mapped[int | None] = mapped_column(Integer)
-    prevDivisionID: Mapped[int | None] = mapped_column(Integer)
-    nextDivisionID: Mapped[int | None] = mapped_column(Integer)
-    prevTeamID: Mapped[int | None] = mapped_column(Integer)
-    nextTeamID: Mapped[int | None] = mapped_column(Integer)
-    season: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    seasonNum: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    leagueMatches: Mapped[int] = mapped_column(TINYINT, default=0)
-    divisionMatches: Mapped[int] = mapped_column(TINYINT, default=0)
-    draftOrder: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    randomOrder: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    waiversOrder: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    teamName: Mapped[str] = mapped_column(String(128), nullable=False)
-    teamAvatar: Mapped[str | None] = mapped_column(String(128))
-    teamMembers: Mapped[str] = mapped_column(Text, nullable=False)
-    draftMembers: Mapped[str] = mapped_column(Text, nullable=False)
-    membersRanking: Mapped[str] = mapped_column(Text, nullable=False)
-    membersWaivers: Mapped[str] = mapped_column(Text, nullable=False)
-    membersWishList: Mapped[str] = mapped_column(Text, nullable=False)
-    franchiseWishList: Mapped[str] = mapped_column(Text, nullable=False)
-    fantasyPoints: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    teamRanking: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    locked: Mapped[bool] = mapped_column(TINYINT, nullable=False)
-    isCommissioner: Mapped[bool] = mapped_column(TINYINT, nullable=False)
-    cntEPLTeam: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    cntPlayer: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    cntGoalkeeper: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    cntDefender: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    cntMidfielder: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    cntStriker: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    cntAdd: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    cntDrop: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    cntWaiver: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    notes: Mapped[str | None] = mapped_column(Text)
-    place: Mapped[int | None] = mapped_column(SmallInteger)
-    points: Mapped[int | None] = mapped_column(SmallInteger)
-    statusC1: Mapped[int] = mapped_column(TINYINT, default=0)
-    statusC2: Mapped[int] = mapped_column(TINYINT, default=0)
-    statusC3: Mapped[int] = mapped_column(TINYINT, default=0)
-    seedingC1: Mapped[int] = mapped_column(TINYINT, default=0)
-    seedingC2: Mapped[int] = mapped_column(TINYINT, default=0)
-    seedingC3: Mapped[int] = mapped_column(TINYINT, default=0)
-    createdBy: Mapped[int] = mapped_column(Integer, nullable=False)
-    createdIn: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    updatedBy: Mapped[int | None] = mapped_column(Integer)
-    updatedIn: Mapped[datetime | None] = mapped_column(DateTime)
+    teamID: Optional[int] = Field(default=None, primary_key=True)
+    baseRealCompetitionID: int
+    extraRealCompetitionID: Optional[int] = None
+    matchDayMapKey: Optional[str] = Field(default=None, max_length=20)
+    leagueID: int
+    divisionID: int
+    commissionerID: int
+    userID: Optional[int] = None
+    prevLeagueID: Optional[int] = None
+    nextLeagueID: Optional[int] = None
+    prevDivisionID: Optional[int] = None
+    nextDivisionID: Optional[int] = None
+    prevTeamID: Optional[int] = None
+    nextTeamID: Optional[int] = None
+    season: int
+    seasonNum: int
+    leagueMatches: int = Field(default=0, sa_type=TINYINT)
+    divisionMatches: int = Field(default=0, sa_type=TINYINT)
+    draftOrder: int
+    randomOrder: int
+    waiversOrder: int
+    teamName: str = Field(max_length=128)
+    teamAvatar: Optional[str] = Field(default=None, max_length=128)
+    teamMembers: str
+    draftMembers: str
+    membersRanking: str
+    membersWaivers: str
+    membersWishList: str
+    franchiseWishList: str
+    fantasyPoints: int
+    teamRanking: int
+    locked: int = Field(sa_type=TINYINT)
+    isCommissioner: int = Field(sa_type=TINYINT)
+    cntEPLTeam: int
+    cntPlayer: int
+    cntGoalkeeper: int
+    cntDefender: int
+    cntMidfielder: int
+    cntStriker: int
+    cntAdd: int
+    cntDrop: int
+    cntWaiver: int
+    notes: Optional[str] = None
+    place: Optional[int] = None
+    points: Optional[int] = None
+    statusC1: int = Field(default=0, sa_type=TINYINT)
+    statusC2: int = Field(default=0, sa_type=TINYINT)
+    statusC3: int = Field(default=0, sa_type=TINYINT)
+    seedingC1: int = Field(default=0, sa_type=TINYINT)
+    seedingC2: int = Field(default=0, sa_type=TINYINT)
+    seedingC3: int = Field(default=0, sa_type=TINYINT)
+    createdBy: int
+    createdIn: datetime
+    updatedBy: Optional[int] = None
+    updatedIn: Optional[datetime] = None
 
 
-class MatchDaysMap(Base):
+class MatchDaysMap(SQLModel, table=True):
     __tablename__ = "MatchDaysMap"
 
-    matchDayMapID: Mapped[int] = mapped_column(Integer, primary_key=True)
-    baseRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    extraRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    competitionType: Mapped[int] = mapped_column(TINYINT, nullable=False)
-    minNumTeams: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    maxNumTeams: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    totalMatchDays: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    rounds: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    firstRealCompetitionMatchDay: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    firstRealCompetitionMatchDaySort: Mapped[int | None] = mapped_column(SmallInteger)
-    matchDay: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    realCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    realCompetitionSYMID: Mapped[str] = mapped_column(String(20), nullable=False)
-    realCompetitionSeasonId: Mapped[str] = mapped_column(String(20), nullable=False)
-    realCompetitionMatchDay: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    realCompetitionMatchDaySort: Mapped[int | None] = mapped_column(SmallInteger)
-    createdBy: Mapped[int] = mapped_column(Integer, nullable=False)
-    createdIn: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    updatedBy: Mapped[int | None] = mapped_column(Integer)
-    updatedIn: Mapped[datetime | None] = mapped_column(DateTime)
+    matchDayMapID: Optional[int] = Field(default=None, primary_key=True)
+    baseRealCompetitionID: Optional[int] = None
+    extraRealCompetitionID: Optional[int] = None
+    competitionType: int = Field(sa_type=TINYINT)
+    minNumTeams: int
+    maxNumTeams: int
+    totalMatchDays: int
+    rounds: int
+    firstRealCompetitionMatchDay: int
+    firstRealCompetitionMatchDaySort: Optional[int] = None
+    matchDay: int
+    realCompetitionID: Optional[int] = None
+    realCompetitionSYMID: str = Field(max_length=20)
+    realCompetitionSeasonId: str = Field(max_length=20)
+    realCompetitionMatchDay: int
+    realCompetitionMatchDaySort: Optional[int] = None
+    createdBy: int
+    createdIn: datetime
+    updatedBy: Optional[int] = None
+    updatedIn: Optional[datetime] = None
 
 
-class MatchDaysStatus(Base):
+class MatchDaysStatus(SQLModel, table=True):
     __tablename__ = "MatchDaysStatus"
 
-    matchDayStatusID: Mapped[int] = mapped_column(Integer, primary_key=True)
-    baseRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    extraRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    matchDayMapKey: Mapped[str | None] = mapped_column(String(20))
-    realCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    realCompetitionSYMID: Mapped[str] = mapped_column(String(20), nullable=False)
-    realCompetitionSeasonId: Mapped[str] = mapped_column(String(20), nullable=False)
-    realCompetitionMatchDay: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    realCompetitionMatchDaySort: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    prevActiveMatchDayStatusID: Mapped[int | None] = mapped_column(Integer)
-    prevActiveRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    prevActiveRealCompetitionSYMID: Mapped[str | None] = mapped_column(String(20))
-    prevActiveRealCompetitionSeasonId: Mapped[str | None] = mapped_column(String(20))
-    prevActiveRealCompetitionMatchDay: Mapped[int | None] = mapped_column(Integer)
-    nextActiveMatchDayStatusID: Mapped[int | None] = mapped_column(Integer)
-    nextActiveRealCompetitionID: Mapped[int | None] = mapped_column(Integer)
-    nextActiveRealCompetitionSYMID: Mapped[str | None] = mapped_column(String(20))
-    nextActiveRealCompetitionSeasonId: Mapped[str | None] = mapped_column(String(20))
-    nextActiveRealCompetitionMatchDay: Mapped[int | None] = mapped_column(Integer)
-    scriptsStatus: Mapped[str | None] = mapped_column(String(20))
-    active: Mapped[bool] = mapped_column(TINYINT, nullable=False)
-    locked: Mapped[bool] = mapped_column(TINYINT, default=0)
-    overlapped: Mapped[bool] = mapped_column(TINYINT, default=0)
-    minAllowedRealMatchDate: Mapped[datetime | None] = mapped_column(DateTime)
-    maxAllowedRealMatchDate: Mapped[datetime | None] = mapped_column(DateTime)
-    minRealMatchDate: Mapped[datetime | None] = mapped_column(DateTime)
-    maxRealMatchDate: Mapped[datetime | None] = mapped_column(DateTime)
-    startWaivers: Mapped[datetime | None] = mapped_column(DateTime)
-    finishWaivers: Mapped[datetime | None] = mapped_column(DateTime)
-    startWaiversSettle: Mapped[datetime | None] = mapped_column(DateTime)
-    finishWaiversSettle: Mapped[datetime | None] = mapped_column(DateTime)
-    startOpenWaivers: Mapped[datetime | None] = mapped_column(DateTime)
-    finishOpenWaivers: Mapped[datetime | None] = mapped_column(DateTime)
-    startOpenWaiversSettle: Mapped[datetime | None] = mapped_column(DateTime)
-    finishOpenWaiversSettle: Mapped[datetime | None] = mapped_column(DateTime)
-    startPreMatch: Mapped[datetime | None] = mapped_column(DateTime)
-    finishPreMatch: Mapped[datetime | None] = mapped_column(DateTime)
-    startMatch: Mapped[datetime | None] = mapped_column(DateTime)
-    finishMatch: Mapped[datetime | None] = mapped_column(DateTime)
-    startPostMatch: Mapped[datetime | None] = mapped_column(DateTime)
-    finishPostMatch: Mapped[datetime | None] = mapped_column(DateTime)
-    startMatchDay: Mapped[datetime | None] = mapped_column(DateTime)
-    finishMatchDay: Mapped[datetime | None] = mapped_column(DateTime)
-    finishBaseMatchDay: Mapped[datetime | None] = mapped_column(DateTime)
+    matchDayStatusID: Optional[int] = Field(default=None, primary_key=True)
+    baseRealCompetitionID: Optional[int] = None
+    extraRealCompetitionID: Optional[int] = None
+    matchDayMapKey: Optional[str] = Field(default=None, max_length=20)
+    realCompetitionID: Optional[int] = None
+    realCompetitionSYMID: str = Field(max_length=20)
+    realCompetitionSeasonId: str = Field(max_length=20)
+    realCompetitionMatchDay: int
+    realCompetitionMatchDaySort: int
+    prevActiveMatchDayStatusID: Optional[int] = None
+    prevActiveRealCompetitionID: Optional[int] = None
+    prevActiveRealCompetitionSYMID: Optional[str] = Field(default=None, max_length=20)
+    prevActiveRealCompetitionSeasonId: Optional[str] = Field(default=None, max_length=20)
+    prevActiveRealCompetitionMatchDay: Optional[int] = None
+    nextActiveMatchDayStatusID: Optional[int] = None
+    nextActiveRealCompetitionID: Optional[int] = None
+    nextActiveRealCompetitionSYMID: Optional[str] = Field(default=None, max_length=20)
+    nextActiveRealCompetitionSeasonId: Optional[str] = Field(default=None, max_length=20)
+    nextActiveRealCompetitionMatchDay: Optional[int] = None
+    scriptsStatus: Optional[str] = Field(default=None, max_length=20)
+    active: int = Field(sa_type=TINYINT)
+    locked: int = Field(default=0, sa_type=TINYINT)
+    overlapped: int = Field(default=0, sa_type=TINYINT)
+    minAllowedRealMatchDate: Optional[datetime] = None
+    maxAllowedRealMatchDate: Optional[datetime] = None
+    minRealMatchDate: Optional[datetime] = None
+    maxRealMatchDate: Optional[datetime] = None
+    startWaivers: Optional[datetime] = None
+    finishWaivers: Optional[datetime] = None
+    startWaiversSettle: Optional[datetime] = None
+    finishWaiversSettle: Optional[datetime] = None
+    startOpenWaivers: Optional[datetime] = None
+    finishOpenWaivers: Optional[datetime] = None
+    startOpenWaiversSettle: Optional[datetime] = None
+    finishOpenWaiversSettle: Optional[datetime] = None
+    startPreMatch: Optional[datetime] = None
+    finishPreMatch: Optional[datetime] = None
+    startMatch: Optional[datetime] = None
+    finishMatch: Optional[datetime] = None
+    startPostMatch: Optional[datetime] = None
+    finishPostMatch: Optional[datetime] = None
+    startMatchDay: Optional[datetime] = None
+    finishMatchDay: Optional[datetime] = None
+    finishBaseMatchDay: Optional[datetime] = None

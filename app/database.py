@@ -1,6 +1,7 @@
 from google.cloud.sql.connector import Connector
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import sessionmaker
+from sqlmodel import SQLModel
 
 from app.config import settings
 
@@ -21,8 +22,8 @@ engine = create_engine("mysql+pymysql://", creator=_get_connection, pool_pre_pin
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-class Base(DeclarativeBase):
-    pass
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
 
 
 def get_db():

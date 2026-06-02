@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas import SignInRequest, SignInResponse, ErrorResponse
+from app.schemas import SignInRequest
 from app.actions.sign import SignInAction, SignOutAction, SignInfoAction
 from app.context import RequestContext
 
