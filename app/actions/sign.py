@@ -35,11 +35,12 @@ class SignInAction:
         } if rc else None
 
     @staticmethod
-    def _get_current_match_day_status(db: Session, base_real_competition_id: int) -> dict | None:
+    def _get_current_match_day_status(db: Session, base_real_competition_id: int, current_datetime: datetime) -> dict | None:
         """Get current MatchDayStatus for the base competition."""
         mds = db.query(MatchDaysStatus).filter(
-            MatchDaysStatus.baseRealCompetitionID == base_real_competition_id,
-            MatchDaysStatus.active == True
+            MatchDaysStatus.matchDayMapKey == str(base_real_competition_id),
+            MatchDaysStatus.startWaivers <= current_datetime,
+            MatchDaysStatus.finishPostMatch > current_datetime
         ).first()
 
         if not mds:
@@ -77,6 +78,9 @@ class SignInAction:
     @staticmethod
     def execute(db: Session, user_email: str, user_password: str, client_ip: str) -> dict:
         """Authenticate user and return signed-in data."""
+        # Cache datetime for consistent use throughout request
+        request_datetime = datetime.utcnow()
+
         user = db.query(User).filter(User.userEmail == user_email).first()
 
         if not user or not verify_password(user_password, user.userPassword):
@@ -86,7 +90,7 @@ class SignInAction:
             )
 
         # Update last sign in
-        user.lastSignInDate = datetime.utcnow()
+        user.lastSignInDate = request_datetime
         user.lastSignInIP = client_ip
         db.commit()
         db.refresh(user)
@@ -122,7 +126,7 @@ class SignInAction:
 
         # Add MatchDayStatus context
         if "baseRealCompetitionID" in session_data:
-            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"])
+            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"], request_datetime)
             if mds_data:
                 session_data.update(mds_data)
 
@@ -134,7 +138,7 @@ class SignInAction:
         # Return in PHP-compatible format
         return {
             "table": "Session",
-            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
             "values": session_data
         }
 
@@ -154,6 +158,9 @@ class SignInfoAction:
     @staticmethod
     def execute(db: Session, user_id: int) -> dict:
         """Return current user information with context."""
+        # Cache datetime for consistent use throughout request
+        request_datetime = datetime.utcnow()
+
         user = db.query(User).filter(User.userID == user_id).first()
 
         if not user:
@@ -192,7 +199,7 @@ class SignInfoAction:
 
         # Add MatchDayStatus context
         if "baseRealCompetitionID" in session_data:
-            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"])
+            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"], request_datetime)
             if mds_data:
                 session_data.update(mds_data)
 
@@ -204,7 +211,7 @@ class SignInfoAction:
         # Return in PHP-compatible format
         return {
             "table": "Session",
-            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
             "values": session_data
         }
 
@@ -229,6 +236,9 @@ class SignUpAction:
         favorite_team: str | None = None,
     ) -> dict:
         """Create new user and return signed-in data."""
+        # Cache datetime for consistent use throughout request
+        request_datetime = datetime.utcnow()
+
         # Check if user exists
         existing_user = db.query(User).filter(User.userEmail == user_email).first()
         if existing_user:
@@ -253,7 +263,7 @@ class SignUpAction:
             timeZone=time_zone,
             userAvatar=None,
             favoriteTeam=favorite_team,
-            createdIn=datetime.utcnow(),
+            createdIn=request_datetime,
         )
         db.add(new_user)
         db.commit()
@@ -293,7 +303,7 @@ class SignUpAction:
 
         # Add MatchDayStatus context
         if "baseRealCompetitionID" in session_data:
-            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"])
+            mds_data = SignInAction._get_current_match_day_status(db, session_data["baseRealCompetitionID"], request_datetime)
             if mds_data:
                 session_data.update(mds_data)
 
@@ -305,6 +315,6 @@ class SignUpAction:
         # Return in PHP-compatible format
         return {
             "table": "Session",
-            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
             "values": session_data
         }
