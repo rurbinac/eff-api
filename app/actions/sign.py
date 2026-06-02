@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from app.models import User, RealCompetition, MatchDaysStatus
 from app.security import verify_password, create_access_token, hash_password
 from fastapi import HTTPException, status
@@ -61,11 +62,11 @@ class SignInAction:
         }
 
     @staticmethod
-    def _get_show_data(db: Session) -> dict | None:
+    def _get_show_data(db: Session, current_datetime: datetime) -> dict | None:
         """Get current show data (what to display)."""
         sd = db.query(MatchDaysStatus).filter(
-            MatchDaysStatus.active == True
-        ).first()
+            MatchDaysStatus.finishBaseMatchDay <= current_datetime
+        ).order_by(MatchDaysStatus.finishBaseMatchDay.desc()).first()
 
         if not sd:
             return None
@@ -131,7 +132,7 @@ class SignInAction:
                 session_data.update(mds_data)
 
         # Add show data
-        sd_data = SignInAction._get_show_data(db)
+        sd_data = SignInAction._get_show_data(db, request_datetime)
         if sd_data:
             session_data.update(sd_data)
 
@@ -204,7 +205,7 @@ class SignInfoAction:
                 session_data.update(mds_data)
 
         # Add show data
-        sd_data = SignInAction._get_show_data(db)
+        sd_data = SignInAction._get_show_data(db, request_datetime)
         if sd_data:
             session_data.update(sd_data)
 
@@ -308,7 +309,7 @@ class SignUpAction:
                 session_data.update(mds_data)
 
         # Add show data
-        sd_data = SignInAction._get_show_data(db)
+        sd_data = SignInAction._get_show_data(db, request_datetime)
         if sd_data:
             session_data.update(sd_data)
 
