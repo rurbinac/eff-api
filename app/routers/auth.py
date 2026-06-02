@@ -8,7 +8,7 @@ from app.actions.sign import SignInAction, SignOutAction, SignInfoAction
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-@router.post("/signin", response_model=SignInResponse)
+@router.post("/signin")
 def rest_signin(payload: SignInRequest, http_request: Request, db: Session = Depends(get_db)) -> dict:
     """REST endpoint: Sign in user."""
     # Get client IP
