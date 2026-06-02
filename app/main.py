@@ -1,9 +1,5 @@
 from fastapi import FastAPI
 from app.routers import auth, legacy
-from app.database import Base, engine
-
-# Create tables
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="EFF API")
 

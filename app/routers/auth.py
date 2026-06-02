@@ -9,11 +9,11 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/signin", response_model=SignInResponse)
-def rest_signin(request: SignInRequest, db: Session = Depends(get_db)) -> dict:
+def rest_signin(payload: SignInRequest, http_request: Request, db: Session = Depends(get_db)) -> dict:
     """REST endpoint: Sign in user."""
     # Get client IP
-    client_ip = request.client.host if hasattr(request, "client") else "0.0.0.0"
-    return SignInAction.execute(db, request.userEmail, request.userPassword, client_ip)
+    client_ip = http_request.client.host if http_request.client else "0.0.0.0"
+    return SignInAction.execute(db, payload.userEmail, payload.userPassword, client_ip)
 
 
 @router.post("/signout")
