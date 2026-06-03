@@ -6,3 +6,6 @@ venv/
 *.egg-info/
 dist/
 .pytest_cache/
+# Database dumps
+*.sql
+lt3cil7v_eff_new.sql
