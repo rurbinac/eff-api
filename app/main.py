@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import auth, legacy, leagues, divisions, teams, division_notes, lookups, real_matches, team_standings
+from app.routers import auth, legacy, leagues, divisions, teams, division_notes, lookups, real_matches, team_standings, real_standings
 
 app = FastAPI(title="EFF API")
 
@@ -13,6 +13,7 @@ app.include_router(division_notes.router)
 app.include_router(lookups.router)
 app.include_router(real_matches.router)
 app.include_router(team_standings.router)
+app.include_router(real_standings.router)
 
 
 @app.get("/health")

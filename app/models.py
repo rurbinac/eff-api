@@ -356,6 +356,115 @@ class TeamStanding(SQLModel, table=True):
     updatedIn: Optional[datetime] = None
 
 
+class RealStanding(SQLModel, table=True):
+    __tablename__ = "RealStandings"
+
+    realStandingID: Optional[int] = Field(default=None, primary_key=True)
+    realTeamMemberID: int
+    realTeamMemberKey: str = Field(max_length=10)
+    prevRealTeamMemberKey: Optional[str] = Field(default=None, max_length=10)
+    nextRealTeamMemberKey: Optional[str] = Field(default=None, max_length=10)
+    realCompetitionID: int
+    realCompetitionUID: str = Field(max_length=20)
+    realCompetitionSYMID: str = Field(max_length=20)
+    realCompetitionSeasonId: str = Field(max_length=20)
+    realCompetitionMatchDay: int
+    realCompetitionLastMatchDay: Optional[int] = None
+    baseRealCompetitionID: Optional[int] = None
+    extraRealCompetitionID: Optional[int] = None
+    isTeam: int = Field(sa_type=TINYINT)
+    isPlayer: int = Field(sa_type=TINYINT)
+    baseMatchDay: Optional[int] = None
+    realMatchID: Optional[int] = None
+    realMatchTeamID: Optional[int] = None
+    realMatchDate: Optional[datetime] = None
+    realMatchTime: Optional[int] = None
+    realMatchStatus: Optional[int] = Field(default=None, sa_type=TINYINT)
+    realTeamID: Optional[int] = None
+    realTeamUID: Optional[str] = Field(default=None, max_length=20)
+    realTeamName: Optional[str] = Field(default=None, max_length=128)
+    realTeamShortName: Optional[str] = Field(default=None, max_length=10)
+    realTeamScore: Optional[int] = None
+    realTeamSide: Optional[str] = Field(default=None, max_length=20)
+    oppositeRealTeamID: Optional[int] = None
+    oppositeRealTeamUID: Optional[str] = Field(default=None, max_length=20)
+    oppositeRealTeamName: Optional[str] = Field(default=None, max_length=128)
+    oppositeRealTeamShortName: Optional[str] = Field(default=None, max_length=10)
+    oppositeRealTeamScore: Optional[int] = None
+    realPlayerID: Optional[int] = None
+    realPlayerUID: Optional[str] = Field(default=None, max_length=20)
+    firstName: Optional[str] = Field(default=None, max_length=100)
+    lastName: Optional[str] = Field(default=None, max_length=100)
+    knownName: Optional[str] = Field(default=None, max_length=100)
+    name: Optional[str] = Field(default=None, max_length=100)
+    sortName: Optional[str] = Field(default=None, max_length=100)
+    position: Optional[str] = Field(default=None, max_length=20)
+    draftPosition: Optional[str] = Field(default=None, max_length=20)
+    draftPositionOrder: Optional[int] = Field(default=None, sa_type=TINYINT)
+    timePlayed: Optional[int] = None
+    gamePlayed: Optional[int] = None
+    goals: Optional[int] = None
+    assists: Optional[int] = None
+    yellowCards: Optional[int] = None
+    redCards: Optional[int] = None
+    goalsConceded: Optional[int] = None
+    cleanSheet: Optional[int] = None
+    matchTimePlayed: Optional[int] = None
+    matchGamePlayed: Optional[int] = None
+    matchGoals: Optional[int] = None
+    matchAssists: Optional[int] = None
+    matchYellowCards: Optional[int] = None
+    matchRedCards: Optional[int] = None
+    matchGoalsConceded: Optional[int] = None
+    matchCleanSheet: Optional[int] = None
+    matchDayPlayed: Optional[int] = None
+    matchWon: Optional[int] = None
+    matchDraw: Optional[int] = None
+    matchLost: Optional[int] = None
+    played: Optional[int] = None
+    won: Optional[int] = None
+    draw: Optional[int] = None
+    lost: Optional[int] = None
+    goalsFor: Optional[int] = None
+    goalsAgainst: Optional[int] = None
+    place: Optional[int] = None
+    playedHome: Optional[int] = None
+    wonHome: Optional[int] = None
+    drawHome: Optional[int] = None
+    lostHome: Optional[int] = None
+    goalsForHome: Optional[int] = None
+    goalsAgainstHome: Optional[int] = None
+    placeHome: Optional[int] = None
+    playedAway: Optional[int] = None
+    wonAway: Optional[int] = None
+    drawAway: Optional[int] = None
+    lostAway: Optional[int] = None
+    goalsForAway: Optional[int] = None
+    goalsAgainstAway: Optional[int] = None
+    placeAway: Optional[int] = None
+    matchPointsL1Played: Optional[float] = None
+    matchPointsL1GoalsAllowed: Optional[float] = None
+    matchPointsL1CleanSheet: Optional[float] = None
+    matchPointsL1Cards: Optional[float] = None
+    matchPointsL1Goals: Optional[float] = None
+    matchPointsL1Assists: Optional[float] = None
+    matchPointsL1OwnGoals: Optional[float] = None
+    matchPointsL1: Optional[float] = None
+    pointsL1Played: Optional[float] = None
+    pointsL1GoalsAllowed: Optional[float] = None
+    pointsL1CleanSheet: Optional[float] = None
+    pointsL1Cards: Optional[float] = None
+    pointsL1Goals: Optional[float] = None
+    pointsL1Assists: Optional[float] = None
+    pointsL1OwnGoals: Optional[float] = None
+    pointsL1: Optional[float] = None
+    livePointsL1: Optional[float] = None
+    ranking: Optional[int] = None
+    processed: int = Field(sa_type=TINYINT)
+    createdIn: datetime
+    updatedIn: Optional[datetime] = None
+
+
 class RealMatch(SQLModel, table=True):
     __tablename__ = "RealMatches"
 
