@@ -13,7 +13,8 @@ async def legacy_teams(
     f: str = Query(..., description="Action name"),
     format: str | None = Query("json", alias="_format"),
     type: str | None = Query(None, alias="_type"),
-    leagueID: int = Form(...),
+    leagueID: int | None = Form(None),
+    divisionID: int | None = Form(None),
     request: Request = None,
     db: Session = Depends(get_db),
 ):
@@ -22,7 +23,10 @@ async def legacy_teams(
 
     try:
         if f == "ReadList":
-            result = TeamsReadListAction.execute(db, leagueID)
+            if type == "byDivisionID":
+                result = TeamsReadListAction.execute(db, division_id=divisionID)
+            else:
+                result = TeamsReadListAction.execute(db, league_id=leagueID)
             return result
         else:
             return {"error": f"Unknown action: {f}"}, 400
@@ -31,11 +35,15 @@ async def legacy_teams(
 
 
 @router.post("/api/teams/readlist")
-def rest_teams(leagueID: int, db: Session = Depends(get_db)):
-    """REST endpoint: Get teams for league."""
+def rest_teams(
+    leagueID: int | None = None,
+    divisionID: int | None = None,
+    db: Session = Depends(get_db)
+):
+    """REST endpoint: Get teams for league or division."""
     RequestContext.set_datetime()
     try:
-        result = TeamsReadListAction.execute(db, leagueID)
+        result = TeamsReadListAction.execute(db, league_id=leagueID, division_id=divisionID)
         # For REST API, return simplified format (no items wrapper)
         return {
             "teams": [item["values"] for item in result["items"]],
