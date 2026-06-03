@@ -249,10 +249,17 @@ class MatchDaysMap(SQLModel, table=True):
 class DivisionNotes(SQLModel, table=True):
     __tablename__ = "DivisionNotes"
 
-    divisionNotesID: Optional[int] = Field(default=None, primary_key=True)
+    divisionNoteID: Optional[int] = Field(default=None, primary_key=True)
+    leagueID: int
     divisionID: int
+    teamID: int
+    userID: int
     commissionerID: int
+    parentDivisionNoteID: Optional[int] = None
+    userName: str
+    title: str
     notes: Optional[str] = None
+    divisionNoteType: str
     createdBy: int
     createdIn: datetime
     updatedBy: Optional[int] = None

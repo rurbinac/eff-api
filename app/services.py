@@ -451,15 +451,22 @@ class QueryService:
         try:
             query = db.query(DivisionNotes).filter(
                 DivisionNotes.divisionID == division_id
-            ).order_by(DivisionNotes.divisionNotesID)
+            ).order_by(DivisionNotes.divisionNoteID)
 
             results = []
             for note in query.all():
                 row_dict = {
-                    'divisionNotesID': note.divisionNotesID,
+                    'divisionNoteID': note.divisionNoteID,
+                    'leagueID': note.leagueID,
                     'divisionID': note.divisionID,
+                    'teamID': note.teamID,
+                    'userID': note.userID,
                     'commissionerID': note.commissionerID,
+                    'parentDivisionNoteID': note.parentDivisionNoteID,
+                    'userName': note.userName,
+                    'title': note.title,
                     'notes': note.notes,
+                    'divisionNoteType': note.divisionNoteType,
                     'createdBy': note.createdBy,
                     'createdIn': note.createdIn.isoformat() if note.createdIn else None,
                     'updatedBy': note.updatedBy,
