@@ -2,7 +2,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.security import verify_password, create_access_token, hash_password
+from app.security import verify_password, create_access_token, hash_password, decode_token
 from app.services import QueryService
 from app.context import RequestContext
 from fastapi import HTTPException, status
@@ -121,6 +121,48 @@ class SignInfoAction:
             )
 
         # Build session data (no token for SignInfo)
+        session_data = SignInAction._build_session_data(user)
+
+        # Add context data
+        SignInAction._add_context_data(db, session_data)
+
+        # Return in PHP-compatible format
+        return {
+            "table": "Session",
+            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+            "values": session_data
+        }
+
+    @staticmethod
+    def execute_with_token(db: Session, token: str) -> dict:
+        """
+        Verify token and return current user information with context.
+
+        Used by /gaming/api/SignInfo.php endpoint.
+        """
+        request_datetime = RequestContext.get_datetime()
+
+        # Decode and verify token
+        payload = decode_token(token)
+
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token"
+            )
+
+        # Get user ID from token
+        user_id = int(payload.get("sub"))
+
+        user = db.query(User).filter(User.userID == user_id).first()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Build session data (no token in response for token-based SignInfo)
         session_data = SignInAction._build_session_data(user)
 
         # Add context data
