@@ -465,6 +465,57 @@ class RealStanding(SQLModel, table=True):
     updatedIn: Optional[datetime] = None
 
 
+class MatchTeam(SQLModel, table=True):
+    __tablename__ = "MatchTeams"
+
+    matchTeamID: Optional[int] = Field(default=None, primary_key=True)
+    matchID: int
+    matchTeamNum: int = Field(sa_type=TINYINT)
+    matchStatus: int = Field(sa_type=TINYINT)
+    leagueID: int
+    divisionID: int
+    season: int
+    seasonNum: int
+    realCompetitionID: Optional[int] = None
+    realCompetitionMatchDay: Optional[int] = None
+    realCompetitionMatchDaySort: Optional[int] = None
+    competitionType: int = Field(sa_type=TINYINT)
+    competitionMatchDay: Optional[int] = None
+    competitionLastMatchDay: Optional[int] = None
+    competitionMatchNumber: Optional[int] = None
+    competitionMatchGroup: Optional[int] = None
+    competitionMatchNextGroup: Optional[int] = None
+    competitionMatchRound: Optional[int] = None
+    competitionMatchLastRound: Optional[int] = None
+    matchGroupWinnerTeamID: Optional[int] = None
+    userID: Optional[int] = None
+    teamID: Optional[int] = None
+    teamName: Optional[str] = Field(default=None, max_length=128)
+    teamScore: Optional[float] = None
+    teamPoints: Optional[int] = None
+    teamSeeding: Optional[int] = Field(default=None, sa_type=TINYINT)
+    matchDayMapKey: Optional[str] = Field(default=None, max_length=20)
+    oppositeUserID: Optional[int] = None
+    oppositeTeamID: Optional[int] = None
+    oppositeTeamName: Optional[str] = Field(default=None, max_length=128)
+    oppositeTeamScore: Optional[float] = None
+    oppositeTeamPoints: Optional[int] = None
+    oppositeTeamSeeding: Optional[int] = Field(default=None, sa_type=TINYINT)
+    oppositeMatchDayMapKey: Optional[str] = Field(default=None, max_length=20)
+    lineup: Optional[str] = Field(default=None, max_length=240)
+    cntEPLTeam: Optional[int] = Field(default=None, sa_type=TINYINT)
+    cntGoalkeeper: Optional[int] = Field(default=None, sa_type=TINYINT)
+    cntDefender: Optional[int] = Field(default=None, sa_type=TINYINT)
+    cntMidfielder: Optional[int] = Field(default=None, sa_type=TINYINT)
+    cntStriker: Optional[int] = Field(default=None, sa_type=TINYINT)
+    cntSubstitute: Optional[int] = Field(default=None, sa_type=TINYINT)
+    cntInactive: Optional[int] = Field(default=None, sa_type=TINYINT)
+    createdBy: Optional[int] = None
+    createdIn: datetime
+    updatedBy: Optional[int] = None
+    updatedIn: Optional[datetime] = None
+
+
 class Match(SQLModel, table=True):
     __tablename__ = "Matches"
 
