@@ -465,6 +465,47 @@ class RealStanding(SQLModel, table=True):
     updatedIn: Optional[datetime] = None
 
 
+class Match(SQLModel, table=True):
+    __tablename__ = "Matches"
+
+    matchID: Optional[int] = Field(default=None, primary_key=True)
+    matchStatus: int = Field(sa_type=TINYINT)
+    leagueID: int
+    divisionID: int
+    season: int
+    seasonNum: int
+    realCompetitionID: Optional[int] = None
+    realCompetitionMatchDay: Optional[int] = None
+    realCompetitionMatchDaySort: Optional[int] = None
+    competitionType: int = Field(sa_type=TINYINT)
+    competitionMatchDay: Optional[int] = None
+    competitionLastMatchDay: Optional[int] = None
+    competitionMatchNumber: Optional[int] = None
+    competitionMatchGroup: Optional[int] = None
+    competitionMatchNextGroup: Optional[int] = None
+    competitionMatchRound: Optional[int] = None
+    competitionMatchLastRound: Optional[int] = None
+    matchGroupWinnerTeamID: Optional[int] = None
+    firstUserID: Optional[int] = None
+    firstTeamID: Optional[int] = None
+    firstTeamName: Optional[str] = Field(default=None, max_length=128)
+    firstTeamScore: Optional[float] = None
+    firstTeamPoints: Optional[int] = None
+    firstTeamSeeding: Optional[int] = Field(default=None, sa_type=TINYINT)
+    firstMatchDayMapKey: Optional[str] = Field(default=None, max_length=20)
+    secondUserID: Optional[int] = None
+    secondTeamID: Optional[int] = None
+    secondTeamName: Optional[str] = Field(default=None, max_length=128)
+    secondTeamScore: Optional[float] = None
+    secondTeamPoints: Optional[int] = None
+    secondTeamSeeding: Optional[int] = Field(default=None, sa_type=TINYINT)
+    secondMatchDayMapKey: Optional[str] = Field(default=None, max_length=20)
+    createdBy: Optional[int] = None
+    createdIn: datetime
+    updatedBy: Optional[int] = None
+    updatedIn: Optional[datetime] = None
+
+
 class RealMatch(SQLModel, table=True):
     __tablename__ = "RealMatches"
 
