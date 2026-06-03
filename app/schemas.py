@@ -1,9 +1,25 @@
 from pydantic import BaseModel, EmailStr
+from datetime import datetime
 
 
 class SignInRequest(BaseModel):
     userEmail: EmailStr
     userPassword: str
+
+
+class SignUpRequest(BaseModel):
+    userEmail: EmailStr
+    userPassword: str
+    userName: str = ""
+    firstName: str
+    lastName: str
+    birthday: datetime | None = None
+    country: str | None = None
+    state: str | None = None
+    city: str | None = None
+    phoneNumber: str | None = None
+    timeZone: str | None = None
+    favoriteTeam: str | None = None
 
 
 class ErrorResponse(BaseModel):

@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas import SignInRequest
-from app.actions.sign import SignInAction, SignOutAction, SignInfoAction
+from app.schemas import SignInRequest, SignUpRequest
+from app.actions.sign import SignInAction, SignOutAction, SignInfoAction, SignUpAction
 from app.context import RequestContext
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -24,3 +24,28 @@ def rest_signin(payload: SignInRequest, http_request: Request, db: Session = Dep
 def rest_signout() -> dict:
     """REST endpoint: Sign out user."""
     return SignOutAction.execute(0)
+
+
+@router.post("/signup")
+def rest_signup(payload: SignUpRequest, db: Session = Depends(get_db)) -> dict:
+    """REST endpoint: Create new user account."""
+    RequestContext.set_datetime()
+    try:
+        result = SignUpAction.execute(
+            db=db,
+            user_email=payload.userEmail,
+            user_password=payload.userPassword,
+            user_name=payload.userName,
+            first_name=payload.firstName,
+            last_name=payload.lastName,
+            birthday=payload.birthday,
+            country=payload.country,
+            state=payload.state,
+            city=payload.city,
+            phone_number=payload.phoneNumber,
+            time_zone=payload.timeZone,
+            favorite_team=payload.favoriteTeam,
+        )
+        return result
+    finally:
+        RequestContext.reset()

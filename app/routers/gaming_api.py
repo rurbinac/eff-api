@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Form, Depends, Header
+from fastapi import APIRouter, Form, Depends, Header, Request
 from sqlalchemy.orm import Session
+from datetime import datetime
 from app.database import get_db
 from app.context import RequestContext
-from app.actions.sign import SignInfoAction, SignOutAction
+from app.actions.sign import SignInfoAction, SignOutAction, SignUpAction
 from app.security import decode_token
 
 router = APIRouter()
@@ -62,6 +63,62 @@ async def gaming_api_sign_out(
 
         # Return success (token invalidation happens on client side)
         return SignOutAction.execute(0)
+
+    finally:
+        RequestContext.reset()
+
+
+@router.post("/gaming/api/SignUp.php")
+async def gaming_api_sign_up(
+    format: str = Form("json", alias="_format"),
+    userEmail: str = Form(...),
+    userPassword: str = Form(...),
+    userName: str = Form(default=""),
+    firstName: str = Form(...),
+    lastName: str = Form(...),
+    birthday: str = Form(default=None),
+    country: str = Form(default=None),
+    state: str = Form(default=None),
+    city: str = Form(default=None),
+    phoneNumber: str = Form(default=None),
+    timeZone: str = Form(default=None),
+    favoriteTeam: str = Form(default=None),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Gaming API SignUp endpoint - create new user account."""
+    RequestContext.set_datetime()
+    try:
+        # Parse birthday if provided
+        birthday_dt = None
+        if birthday:
+            try:
+                birthday_dt = datetime.fromisoformat(birthday)
+            except ValueError:
+                return {"error": "Invalid birthday format, use YYYY-MM-DD"}
+
+        # Get client IP
+        client_ip = request.client.host if request.client else "0.0.0.0"
+
+        # Create user and return session
+        return SignUpAction.execute(
+            db=db,
+            user_email=userEmail,
+            user_password=userPassword,
+            user_name=userName,
+            first_name=firstName,
+            last_name=lastName,
+            birthday=birthday_dt,
+            country=country if country else None,
+            state=state if state else None,
+            city=city if city else None,
+            phone_number=phoneNumber if phoneNumber else None,
+            time_zone=timeZone if timeZone else None,
+            favorite_team=favoriteTeam if favoriteTeam else None,
+        )
+
+    except Exception as e:
+        return {"error": str(e)}
 
     finally:
         RequestContext.reset()
