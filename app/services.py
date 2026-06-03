@@ -316,3 +316,61 @@ class QueryService:
             results.append(row_dict)
 
         return results
+
+    @staticmethod
+    def get_divisions_by_league(db: Session, league_id: int) -> list[dict]:
+        """Get all divisions for a league."""
+        query = db.query(Division).filter(
+            Division.leagueID == league_id
+        ).order_by(Division.divisionID)
+
+        results = []
+        for division in query.all():
+            row_dict = {
+                'divisionID': division.divisionID,
+                'baseRealCompetitionID': division.baseRealCompetitionID,
+                'extraRealCompetitionID': division.extraRealCompetitionID,
+                'matchDayMapKey': division.matchDayMapKey,
+                'leagueID': division.leagueID,
+                'commissionerID': division.commissionerID,
+                'prevLeagueID': division.prevLeagueID,
+                'nextLeagueID': division.nextLeagueID,
+                'prevDivisionID': division.prevDivisionID,
+                'nextDivisionID': division.nextDivisionID,
+                'season': division.season,
+                'seasonNum': division.seasonNum,
+                'leagueMatches': division.leagueMatches,
+                'divisionMatches': division.divisionMatches,
+                'draftType': division.draftType,
+                'draftDate': division.draftDate.isoformat() if division.draftDate else None,
+                'draftCompleteDate': division.draftCompleteDate.isoformat() if division.draftCompleteDate else None,
+                'draftStatus': division.draftStatus,
+                'draftTime': division.draftTime,
+                'draftingStart': division.draftingStart.isoformat() if division.draftingStart else None,
+                'draftingFinish': division.draftingFinish.isoformat() if division.draftingFinish else None,
+                'draftingLimit': division.draftingLimit.isoformat() if division.draftingLimit else None,
+                'draftingRound': division.draftingRound,
+                'draftingMemberOrder': division.draftingMemberOrder,
+                'draftingTeamOrder': division.draftingTeamOrder,
+                'draftingNextTeamOrder': division.draftingNextTeamOrder,
+                'draftingUsers': division.draftingUsers,
+                'draftingHooks': division.draftingHooks,
+                'franchiseMembers': division.franchiseMembers,
+                'firstRealCompetitionMatchDay': division.firstRealCompetitionMatchDay,
+                'lastRealCompetitionMatchDay': division.lastRealCompetitionMatchDay,
+                'waiverStatus': division.waiverStatus,
+                'matchDay': division.matchDay,
+                'isCupMatchDay': division.isCupMatchDay,
+                'isDivisionCupMatchDay': division.isDivisionCupMatchDay,
+                'totalTeams': division.totalTeams,
+                'numTeams': division.numTeams,
+                'availableTeams': division.availableTeams,
+                'divisionType': division.divisionType,
+                'createdBy': division.createdBy,
+                'createdIn': division.createdIn.isoformat() if division.createdIn else None,
+                'updatedBy': division.updatedBy,
+                'updatedIn': division.updatedIn.isoformat() if division.updatedIn else None,
+            }
+            results.append(row_dict)
+
+        return results
