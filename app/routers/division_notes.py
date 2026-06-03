@@ -11,8 +11,8 @@ router = APIRouter(tags=["division-notes"])
 @router.post("/eff/eff_api/DivisionNotes.php")
 async def legacy_division_notes(
     f: str = Query(..., description="Action name"),
-    _format: str | None = Query("json"),
-    _type: str | None = Query(None),
+    format: str | None = Query("json", alias="_format"),
+    type: str | None = Query(None, alias="_type"),
     divisionID: int = Form(...),
     request: Request = None,
     db: Session = Depends(get_db),

@@ -10,8 +10,8 @@ router = APIRouter(tags=["legacy"])
 @router.post("/eff/eff_api/Users.php")
 async def legacy_users(
     f: str = Query(..., description="Action name"),
-    _type: str | None = Query(None, description="Action type"),
-    _format: str | None = Query("json", description="Response format"),
+    type: str | None = Query(None, description="Action type", alias="_type"),
+    format: str | None = Query("json", description="Response format", alias="_format"),
     userEmail: str = Form(None),
     userPassword: str = Form(None),
     request: Request = None,
@@ -28,7 +28,7 @@ async def legacy_users(
 
         elif f == "SignOut":
             result = SignOutAction.execute(0)
-            return {"table": "success", "values": result, "_format": _format}
+            return {"table": "success", "values": result, "_format": format}
 
         elif f == "SignInfo":
             # Parse user ID from token or request
@@ -44,7 +44,7 @@ async def legacy_users(
 async def legacy_signin(
     userEmail: str = Form(...),
     userPassword: str = Form(...),
-    _format: str | None = Query("json"),
+    format: str | None = Query("json", alias="_format"),
     request: Request = None,
     db: Session = Depends(get_db),
 ):
@@ -57,15 +57,15 @@ async def legacy_signin(
 
 
 @router.post("/eff/eff_api/SignOut.php")
-async def legacy_signout(_format: str | None = Query("json")):
+async def legacy_signout(format: str | None = Query("json", alias="_format")):
     """Legacy SignOut endpoint (shortcut)."""
     result = SignOutAction.execute(0)
-    return {"table": "success", "values": result, "_format": _format}
+    return {"table": "success", "values": result, "_format": format}
 
 
 @router.post("/eff/eff_api/SignInfo.php")
 async def legacy_signinfo(
-    _format: str | None = Query("json"),
+    format: str | None = Query("json", alias="_format"),
     request: Request = None,
     db: Session = Depends(get_db),
 ):

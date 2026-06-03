@@ -18,8 +18,8 @@ def get_db():
 @router.post("/eff/eff_api/Lookups.php")
 async def legacy_lookups(
     f: str = Query(...),
-    _format: str = Form("json"),
-    _type: str = Form(None),
+    format: str = Form("json", alias="_format"),
+    type: str = Form(None, alias="_type"),
     lookupNum: int = Form(None),
     db: Session = Depends(get_db),
 ):
@@ -27,7 +27,7 @@ async def legacy_lookups(
     RequestContext.set_datetime()
     try:
         if f == "ReadList":
-            if _type == "byLookupNum" and lookupNum is not None:
+            if type == "byLookupNum" and lookupNum is not None:
                 return LookupsReadListAction.execute(db, lookup_num=lookupNum)
             else:
                 # Return all lookups if no filter specified

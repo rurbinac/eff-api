@@ -11,8 +11,8 @@ router = APIRouter(tags=["teams"])
 @router.post("/eff/eff_api/Teams.php")
 async def legacy_teams(
     f: str = Query(..., description="Action name"),
-    _format: str | None = Query("json"),
-    _type: str | None = Query(None),
+    format: str | None = Query("json", alias="_format"),
+    type: str | None = Query(None, alias="_type"),
     leagueID: int = Form(...),
     request: Request = None,
     db: Session = Depends(get_db),
