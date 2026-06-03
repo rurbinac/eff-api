@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas import SignInRequest, SignUpRequest
-from app.actions.sign import SignInAction, SignOutAction, SignInfoAction, SignUpAction
+from app.actions.sign import SignInAction, SignOutAction, SignInfoAction, SignUpAction, UpdateUserAction
 from app.context import RequestContext
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -47,5 +47,31 @@ def rest_signup(payload: SignUpRequest, db: Session = Depends(get_db)) -> dict:
             favorite_team=payload.favoriteTeam,
         )
         return result
+    finally:
+        RequestContext.reset()
+
+
+@router.patch("/users/{user_id}")
+def rest_update_user(
+    user_id: int,
+    payload: SignUpRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    """REST endpoint: Update user profile."""
+    RequestContext.set_datetime()
+    try:
+        return UpdateUserAction.execute(
+            db=db,
+            user_id=user_id,
+            first_name=payload.firstName,
+            last_name=payload.lastName,
+            birthday=payload.birthday,
+            country=payload.country,
+            state=payload.state,
+            city=payload.city,
+            phone_number=payload.phoneNumber,
+            time_zone=payload.timeZone,
+            favorite_team=payload.favoriteTeam,
+        )
     finally:
         RequestContext.reset()

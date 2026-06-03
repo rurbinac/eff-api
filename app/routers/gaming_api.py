@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from app.database import get_db
 from app.context import RequestContext
-from app.actions.sign import SignInfoAction, SignOutAction, SignUpAction
+from app.actions.sign import SignInfoAction, SignOutAction, SignUpAction, UpdateUserAction
 from app.security import decode_token
 
 router = APIRouter()
@@ -63,6 +63,78 @@ async def gaming_api_sign_out(
 
         # Return success (token invalidation happens on client side)
         return SignOutAction.execute(0)
+
+    finally:
+        RequestContext.reset()
+
+
+@router.post("/gaming/api/Users.php")
+async def gaming_api_users(
+    f: str = None,
+    format: str = Form("json", alias="_format"),
+    userID: int = Form(None),
+    firstName: str = Form(None),
+    lastName: str = Form(None),
+    birthday: str = Form(default=None),
+    country: str = Form(default=None),
+    state: str = Form(default=None),
+    city: str = Form(default=None),
+    phoneNumber: str = Form(default=None),
+    timeZone: str = Form(default=None),
+    favoriteTeam: str = Form(default=None),
+    authorization: str = Header(None),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Gaming API Users endpoint - update user profile."""
+    RequestContext.set_datetime()
+    try:
+        if f != "Update":
+            return {"error": f"Unknown function: {f}"}
+
+        # If userID not provided, try to get from token
+        if not userID:
+            token = None
+            if authorization:
+                if authorization.startswith("Bearer "):
+                    token = authorization[7:]
+                else:
+                    token = authorization
+
+            if not token:
+                return {"error": "Missing userID or authentication token"}
+
+            payload = decode_token(token)
+            if not payload:
+                return {"error": "Invalid or expired token"}
+
+            userID = int(payload.get("sub"))
+
+        # Parse birthday if provided
+        birthday_dt = None
+        if birthday:
+            try:
+                birthday_dt = datetime.fromisoformat(birthday)
+            except ValueError:
+                return {"error": "Invalid birthday format, use YYYY-MM-DD"}
+
+        # Update user
+        return UpdateUserAction.execute(
+            db=db,
+            user_id=userID,
+            first_name=firstName,
+            last_name=lastName,
+            birthday=birthday_dt,
+            country=country,
+            state=state,
+            city=city,
+            phone_number=phoneNumber,
+            time_zone=timeZone,
+            favorite_team=favoriteTeam,
+        )
+
+    except Exception as e:
+        return {"error": str(e)}
 
     finally:
         RequestContext.reset()

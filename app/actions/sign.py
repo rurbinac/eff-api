@@ -176,6 +176,72 @@ class SignInfoAction:
         }
 
 
+class UpdateUserAction:
+    """Update user profile information."""
+
+    @staticmethod
+    def execute(
+        db: Session,
+        user_id: int,
+        first_name: str | None = None,
+        last_name: str | None = None,
+        birthday: datetime | None = None,
+        country: str | None = None,
+        state: str | None = None,
+        city: str | None = None,
+        phone_number: str | None = None,
+        time_zone: str | None = None,
+        favorite_team: str | None = None,
+    ) -> dict:
+        """Update user profile and return updated user info with context."""
+        request_datetime = RequestContext.get_datetime()
+
+        user = db.query(User).filter(User.userID == user_id).first()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Update only the provided fields
+        if first_name is not None:
+            user.firstName = first_name
+        if last_name is not None:
+            user.lastName = last_name
+        if birthday is not None:
+            user.birthday = birthday
+        if country is not None:
+            user.country = country if country else None
+        if state is not None:
+            user.state = state if state else None
+        if city is not None:
+            user.city = city if city else None
+        if phone_number is not None:
+            user.phoneNumber = phone_number if phone_number else None
+        if time_zone is not None:
+            user.timeZone = time_zone if time_zone else None
+        if favorite_team is not None:
+            user.favoriteTeam = favorite_team if favorite_team else None
+
+        user.updatedIn = request_datetime
+        db.commit()
+        db.refresh(user)
+
+        # Build session data (no token for update response)
+        session_data = SignInAction._build_session_data(user)
+
+        # Add context data
+        SignInAction._add_context_data(db, session_data)
+
+        # Return in PHP-compatible format
+        return {
+            "table": "Session",
+            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+            "values": session_data
+        }
+
+
 class SignUpAction:
     """Create a new user account."""
 
