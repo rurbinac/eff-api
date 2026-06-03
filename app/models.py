@@ -313,3 +313,67 @@ class MatchDaysStatus(SQLModel, table=True):
     startMatchDay: Optional[datetime] = None
     finishMatchDay: Optional[datetime] = None
     finishBaseMatchDay: Optional[datetime] = None
+
+
+class RealMatch(SQLModel, table=True):
+    __tablename__ = "RealMatches"
+
+    realMatchID: Optional[int] = Field(default=None, primary_key=True)
+    realMatchStatus: int = Field(sa_type=TINYINT)
+    realMatchType: str = Field(max_length=20)
+    realMatchPeriod: Optional[str] = Field(default=None, max_length=20)
+    realMatchRealPeriod: Optional[str] = Field(default=None, max_length=20)
+    realMatchAttendance: Optional[int] = None
+    realMatchDate: datetime
+    realMatchDateOffset: Optional[int] = None
+    realMatchResultType: Optional[str] = Field(default=None, max_length=20)
+    realMatchTime: Optional[int] = None
+    realMatchFirstHalfTime: Optional[int] = None
+    realMatchSecondHalfTime: Optional[int] = None
+    realMatchFirstHalfExtraTime: Optional[int] = None
+    realMatchSecondHalfExtraTime: Optional[int] = None
+    realMatchEnded: int = Field(sa_type=TINYINT)
+    realMatchIgnore: int = Field(sa_type=TINYINT)
+    realCompetitionID: int
+    realCompetitionUID: str = Field(max_length=20)
+    realCompetitionSYMID: str = Field(max_length=20)
+    realCompetitionSeasonId: str = Field(max_length=20)
+    realCompetitionMatchDay: int
+    realCompetitionFirstMatchDay: Optional[int] = None
+    realCompetitionLastMatchDay: Optional[int] = None
+    baseRealCompetitionID: Optional[int] = None
+    extraRealCompetitionID: Optional[int] = None
+    realVenueID: Optional[int] = None
+    realVenueUID: Optional[str] = Field(default=None, max_length=20)
+    firstRealTeamMemberID: Optional[int] = None
+    firstRealTeamMemberKey: Optional[str] = Field(default=None, max_length=10)
+    firstRealTeamID: Optional[int] = None
+    firstRealTeamUID: Optional[str] = Field(default=None, max_length=20)
+    firstRealTeamName: Optional[str] = Field(default=None, max_length=128)
+    firstRealTeamShortName: Optional[str] = Field(default=None, max_length=10)
+    firstRealTeamScore: Optional[int] = None
+    firstRealTeamRealScore: Optional[int] = None
+    firstRealTeamSide: Optional[str] = Field(default=None, max_length=20)
+    firstRealTeamCleanSheet: Optional[int] = Field(default=None, sa_type=TINYINT)
+    firstRealTeamResult: Optional[int] = Field(default=None, sa_type=TINYINT)
+    firstRealTeamPoints: Optional[int] = Field(default=None, sa_type=TINYINT)
+    firstRealTeamNumber: Optional[int] = Field(default=None, sa_type=TINYINT)
+    secondRealTeamMemberID: Optional[int] = None
+    secondRealTeamMemberKey: Optional[str] = Field(default=None, max_length=10)
+    secondRealTeamID: Optional[int] = None
+    secondRealTeamUID: Optional[str] = Field(default=None, max_length=20)
+    secondRealTeamName: Optional[str] = Field(default=None, max_length=128)
+    secondRealTeamShortName: Optional[str] = Field(default=None, max_length=10)
+    secondRealTeamScore: Optional[int] = None
+    secondRealTeamRealScore: Optional[int] = None
+    secondRealTeamSide: Optional[str] = Field(default=None, max_length=20)
+    secondRealTeamCleanSheet: Optional[int] = Field(default=None, sa_type=TINYINT)
+    secondRealTeamResult: Optional[int] = Field(default=None, sa_type=TINYINT)
+    secondRealTeamPoints: Optional[int] = Field(default=None, sa_type=TINYINT)
+    secondRealTeamNumber: Optional[int] = Field(default=None, sa_type=TINYINT)
+    enabled: int = Field(sa_type=TINYINT)
+    lastF7Date: Optional[datetime] = None
+    lastF42Date: Optional[datetime] = None
+    lastFDate: Optional[datetime] = None
+    createdIn: datetime
+    updatedIn: Optional[datetime] = None
