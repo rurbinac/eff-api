@@ -2,7 +2,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from app.models import RealCompetition, MatchDaysStatus, League, Division, Team, User
+from app.models import RealCompetition, MatchDaysStatus, League, Division, Team, User, DivisionNotes
 from app.context import RequestContext
 
 
@@ -444,3 +444,30 @@ class QueryService:
             results.append(row_dict)
 
         return results
+
+    @staticmethod
+    def get_division_notes(db: Session, division_id: int) -> list[dict]:
+        """Get all notes for a division."""
+        try:
+            query = db.query(DivisionNotes).filter(
+                DivisionNotes.divisionID == division_id
+            ).order_by(DivisionNotes.divisionNotesID)
+
+            results = []
+            for note in query.all():
+                row_dict = {
+                    'divisionNotesID': note.divisionNotesID,
+                    'divisionID': note.divisionID,
+                    'commissionerID': note.commissionerID,
+                    'notes': note.notes,
+                    'createdBy': note.createdBy,
+                    'createdIn': note.createdIn.isoformat() if note.createdIn else None,
+                    'updatedBy': note.updatedBy,
+                    'updatedIn': note.updatedIn.isoformat() if note.updatedIn else None,
+                }
+                results.append(row_dict)
+
+            return results
+        except Exception:
+            # Table may not exist yet - return empty list
+            return []

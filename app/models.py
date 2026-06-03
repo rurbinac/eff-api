@@ -246,6 +246,19 @@ class MatchDaysMap(SQLModel, table=True):
     updatedIn: Optional[datetime] = None
 
 
+class DivisionNotes(SQLModel, table=True):
+    __tablename__ = "DivisionNotes"
+
+    divisionNotesID: Optional[int] = Field(default=None, primary_key=True)
+    divisionID: int
+    commissionerID: int
+    notes: Optional[str] = None
+    createdBy: int
+    createdIn: datetime
+    updatedBy: Optional[int] = None
+    updatedIn: Optional[datetime] = None
+
+
 class MatchDaysStatus(SQLModel, table=True):
     __tablename__ = "MatchDaysStatus"
 
