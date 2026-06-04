@@ -1,0 +1,63 @@
+### League Build Tests
+
+@leagueToken =
+@leagueID =
+
+### 1. SignIn to get token for league creation
+POST {{baseUrl}}/api/auth/signin
+Content-Type: application/json
+
+{
+  "userEmail": "{{testEmail}}",
+  "userPassword": "{{testPassword}}"
+}
+
+> {%
+  client.global.set("leagueToken", response.body.values.token);
+%}
+
+### 2. Build League - Gaming API (Token-based)
+POST {{baseUrl}}/gaming/api/Leagues.php?f=Build
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{leagueToken}}
+
+_format=json&leagueName=Test+League&leaguePassword=TestPassword&leagueType=1&gameType=2&scoringSystem=1&tradeDeadline=2026-06-15+14%3A00%3A00&publishLeague=1&seasonStatus=1&teamsPerDivision=8%2C10%2C8
+
+> {%
+  client.global.set("leagueID", response.body.values.leagueID);
+%}
+
+### 3. Build League - Different Division Configuration
+POST {{baseUrl}}/gaming/api/Leagues.php?f=Build
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{leagueToken}}
+
+_format=json&leagueName=Test+League+2&leaguePassword=Password2&leagueType=2&gameType=1&scoringSystem=2&tradeDeadline=2026-07-01+20%3A00%3A00&publishLeague=0&seasonStatus=1&teamsPerDivision=10%2C10
+
+### 4. Build League - Single Large Division
+POST {{baseUrl}}/gaming/api/Leagues.php?f=Build
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{leagueToken}}
+
+_format=json&leagueName=Single+Div&leaguePassword=SingleDiv&leagueType=1&gameType=2&scoringSystem=1&tradeDeadline=2026-06-20+12%3A00%3A00&publishLeague=1&seasonStatus=1&teamsPerDivision=10
+
+### 5. Build League - Maximum Divisions (6)
+POST {{baseUrl}}/gaming/api/Leagues.php?f=Build
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{leagueToken}}
+
+_format=json&leagueName=Max+Divs&leaguePassword=MaxDivs&leagueType=1&gameType=2&scoringSystem=1&tradeDeadline=2026-06-30+18%3A00%3A00&publishLeague=1&seasonStatus=1&teamsPerDivision=8%2C8%2C8%2C8%2C8%2C8
+
+### 6. Build League - Invalid teamsPerDivision (should fail - value 5 not allowed)
+POST {{baseUrl}}/gaming/api/Leagues.php?f=Build
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{leagueToken}}
+
+_format=json&leagueName=Invalid&leaguePassword=Invalid&leagueType=1&gameType=2&scoringSystem=1&tradeDeadline=2026-06-20+12%3A00%3A00&publishLeague=1&seasonStatus=1&teamsPerDivision=5%2C10
+
+### 7. Build League - Too many divisions (should fail - more than 6)
+POST {{baseUrl}}/gaming/api/Leagues.php?f=Build
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{leagueToken}}
+
+_format=json&leagueName=TooMany&leaguePassword=TooMany&leagueType=1&gameType=2&scoringSystem=1&tradeDeadline=2026-06-20+12%3A00%3A00&publishLeague=1&seasonStatus=1&teamsPerDivision=8%2C8%2C8%2C8%2C8%2C8%2C8

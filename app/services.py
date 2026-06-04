@@ -2,7 +2,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from app.models import RealCompetition, MatchDaysStatus, League, Division, Team, User, DivisionNotes
+from app.models import RealCompetition, MatchDaysStatus, League, Division, Team, User, DivisionNotes, Lookup
 from app.context import RequestContext
 
 
@@ -478,3 +478,22 @@ class QueryService:
         except Exception:
             # Table may not exist yet - return empty list
             return []
+
+    @staticmethod
+    def validate_lookup(db: Session, lookup_num: int, lookup_key: str | int) -> bool:
+        """
+        Validate a value against the Lookups table.
+
+        Args:
+            db: Database session
+            lookup_num: The lookup number (category)
+            lookup_key: The value to validate (stored in lookupKey field)
+
+        Returns:
+            True if the lookup exists, False otherwise
+        """
+        result = db.query(Lookup).filter(
+            Lookup.lookupNum == lookup_num,
+            Lookup.lookupKey == str(lookup_key)
+        ).first()
+        return result is not None
