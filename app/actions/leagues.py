@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models import League
 from app.services import QueryService
 from app.context import RequestContext, extract_match_day_status
+from app.constants import LookupNum
 from fastapi import HTTPException, status
 
 
@@ -56,12 +57,6 @@ class LeaguesReadListAction:
 
 class LeaguesBuildAction:
     """Create a new league with divisions and teams."""
-
-    # Lookups validation
-    LOOKUP_LEAGUE_TYPE = 12
-    LOOKUP_GAME_TYPE = 13
-    LOOKUP_SCORING_SYSTEM = 5
-    LOOKUP_SEASON_STATUS = 6
 
     # Constants for league creation
     MAX_DIVISIONS = 6
@@ -137,25 +132,25 @@ class LeaguesBuildAction:
         request_datetime = RequestContext.get_datetime()
 
         # Validate lookup fields against Lookups table
-        if not QueryService.validate_lookup(db, LeaguesBuildAction.LOOKUP_LEAGUE_TYPE, league_type):
+        if not QueryService.validate_lookup(db, LookupNum.LEAGUE_TYPE, league_type):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid leagueType: {league_type}"
             )
 
-        if not QueryService.validate_lookup(db, LeaguesBuildAction.LOOKUP_GAME_TYPE, game_type):
+        if not QueryService.validate_lookup(db, LookupNum.GAME_TYPE, game_type):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid gameType: {game_type}"
             )
 
-        if not QueryService.validate_lookup(db, LeaguesBuildAction.LOOKUP_SCORING_SYSTEM, scoring_system):
+        if not QueryService.validate_lookup(db, LookupNum.LEAGUE_SCORING_SYSTEM, scoring_system):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid scoringSystem: {scoring_system}"
             )
 
-        if not QueryService.validate_lookup(db, LeaguesBuildAction.LOOKUP_SEASON_STATUS, season_status):
+        if not QueryService.validate_lookup(db, LookupNum.SEASON_STATUS, season_status):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid seasonStatus: {season_status}"
