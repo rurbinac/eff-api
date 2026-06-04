@@ -22,30 +22,24 @@ async def legacy_division_notes(
 
     try:
         if f == "ReadList":
-            items = DivisionNotesReadListAction.execute(
-            db, **filter_params
-        )
-        return {
-            "table": "DivisionNotes",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-            "items": [{"values": item} for item in items]
-        }
+            items = DivisionNotesReadListAction.execute(db, division_id=divisionID)
+            return {
+                "table": "DivisionNotes",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "items": [{"values": item} for item in items]
+            }
         else:
             return {"error": f"Unknown action: {f}"}, 400
     finally:
         RequestContext.reset()
 
 
-@router.post("/api/division-notes/readlist")
+@router.post("/api/divisionnotes/readlist")
 def rest_division_notes(divisionID: int, db: Session = Depends(get_db)):
     """REST endpoint: Get notes for division."""
     RequestContext.set_datetime()
     try:
-        result = DivisionNotesReadListAction.execute(db, divisionID)
-        # For REST API, return simplified format (no items wrapper)
-        return {
-            "notes": [item["values"] for item in result["items"]],
-            "timestamp": result["timestamp"],
-        }
+        result = DivisionNotesReadListAction.execute(db, division_id=divisionID)
+        return result
     finally:
         RequestContext.reset()

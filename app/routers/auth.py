@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas import SignInRequest, SignUpRequest
+from app.schemas import SignInRequest, SignUpRequest, UpdateUserRequest
 from app.actions.sign import SignInAction, SignOutAction, SignInfoAction, SignUpAction, UpdateUserAction
 from app.context import RequestContext
 
@@ -60,7 +60,7 @@ def rest_signup(payload: SignUpRequest, db: Session = Depends(get_db)) -> dict:
 @router.patch("/users/{user_id}")
 def rest_update_user(
     user_id: int,
-    payload: SignUpRequest,
+    payload: UpdateUserRequest,
     db: Session = Depends(get_db),
 ) -> dict:
     """REST endpoint: Update user profile."""

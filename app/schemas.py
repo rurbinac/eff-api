@@ -22,6 +22,18 @@ class SignUpRequest(BaseModel):
     favoriteTeam: str | None = None
 
 
+class UpdateUserRequest(BaseModel):
+    firstName: str | None = None
+    lastName: str | None = None
+    birthday: datetime | None = None
+    country: str | None = None
+    state: str | None = None
+    city: str | None = None
+    phoneNumber: str | None = None
+    timeZone: str | None = None
+    favoriteTeam: str | None = None
+
+
 class LeaguesBuildRequest(BaseModel):
     leagueName: str
     leaguePassword: str
