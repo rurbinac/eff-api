@@ -32,11 +32,20 @@ async def legacy_lookups(
     RequestContext.set_datetime()
     try:
         if f == "ReadList":
+            # Get lookups from action
+            lookup_items = None
             if type == "byLookupNum" and lookupNum is not None:
-                return LookupsReadListAction.execute(db, lookup_num=lookupNum)
+                lookup_items = LookupsReadListAction.execute(db, lookup_num=lookupNum)
             else:
-                # Return all lookups if no filter specified
-                return LookupsReadListAction.execute(db)
+                lookup_items = LookupsReadListAction.execute(db)
+
+            # Format as legacy PHP response
+            items = [{"values": item} for item in lookup_items]
+            return {
+                "table": "Lookups",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "items": items,
+            }
         else:
             return {"error": f"Unknown function: {f}"}
     finally:
@@ -51,6 +60,7 @@ async def rest_lookups(
     """REST endpoint for Lookups ReadList."""
     RequestContext.set_datetime()
     try:
+        # Get lookups from action and return as REST array
         return LookupsReadListAction.execute(db, lookup_num=payload.lookupNum)
     finally:
         RequestContext.reset()
