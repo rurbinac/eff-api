@@ -6,6 +6,7 @@ from app.models import League, Division, Team
 from app.services import QueryService
 from app.context import RequestContext, extract_match_day_status
 from app.constants import LookupNum, DraftConstants
+from app.security import verify_password
 from fastapi import HTTPException, status
 
 
@@ -408,4 +409,109 @@ class LeaguesBuildAction:
             "table": "Leagues",
             "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
             "values": league_data
+        }
+
+
+class LeaguesJoinAction:
+    """Join an existing league."""
+
+    @staticmethod
+    def execute(
+        db: Session,
+        user_id: int,
+        league_id: int,
+        league_password: str,
+    ) -> dict:
+        """
+        Join a league by assigning user to an available team.
+
+        Args:
+            db: Database session
+            user_id: Current user ID
+            league_id: League to join
+            league_password: Password to verify league access
+
+        Returns:
+            Dict with team, division, and league info
+        """
+        request_datetime = RequestContext.get_datetime()
+
+        # Get the league
+        league = db.query(League).filter(League.leagueID == league_id).first()
+
+        if not league:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="League not found"
+            )
+
+        # Verify password
+        if not verify_password(league_password, league.leaguePassword):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid league password"
+            )
+
+        # Check for available teams
+        available_team = db.query(Team).filter(
+            Team.leagueID == league_id,
+            Team.userID == None
+        ).order_by(Team.divisionID, Team.teamID).first()
+
+        if not available_team:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No available teams in this league"
+            )
+
+        # Get the division
+        division = db.query(Division).filter(
+            Division.divisionID == available_team.divisionID
+        ).first()
+
+        if not division:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Division not found"
+            )
+
+        # Assign team to user
+        available_team.userID = user_id
+        available_team.updatedIn = request_datetime
+
+        # Decrement availableTeams in division
+        division.availableTeams -= 1
+        division.updatedIn = request_datetime
+
+        # Decrement availableTeams in league
+        league.availableTeams -= 1
+        league.updatedIn = request_datetime
+
+        # Commit transaction
+        db.commit()
+        db.refresh(available_team)
+        db.refresh(division)
+        db.refresh(league)
+
+        # Build response
+        team_data = {
+            "teamID": available_team.teamID,
+            "teamName": available_team.teamName,
+            "userID": available_team.userID,
+            "isCommissioner": available_team.isCommissioner,
+            "leagueID": league.leagueID,
+            "leagueName": league.leagueName,
+            "divisionID": division.divisionID,
+            "divisionType": division.divisionType,
+            "numTeams": division.numTeams,
+            "availableTeamsDivision": division.availableTeams,
+            "availableTeamsLeague": league.availableTeams,
+            "season": league.season,
+            "seasonNum": league.seasonNum,
+        }
+
+        return {
+            "table": "Teams",
+            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+            "values": team_data
         }

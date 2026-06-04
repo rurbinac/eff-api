@@ -4,7 +4,7 @@ from datetime import datetime
 from app.database import get_db
 from app.context import RequestContext
 from app.actions.sign import SignInfoAction, SignOutAction, SignUpAction, UpdateUserAction
-from app.actions.leagues import LeaguesBuildAction
+from app.actions.leagues import LeaguesBuildAction, LeaguesJoinAction
 from app.security import decode_token
 
 router = APIRouter()
@@ -201,22 +201,23 @@ async def gaming_api_sign_up(
 async def gaming_api_leagues(
     f: str = None,
     format: str = Form("json", alias="_format"),
-    leagueName: str = Form(...),
-    leaguePassword: str = Form(...),
-    leagueType: int = Form(...),
-    gameType: int = Form(...),
-    scoringSystem: int = Form(...),
-    tradeDeadline: str = Form(...),
-    publishLeague: int = Form(...),
-    seasonStatus: int = Form(...),
-    teamsPerDivision: str = Form(...),
+    leagueName: str = Form(None),
+    leaguePassword: str = Form(None),
+    leagueType: int = Form(None),
+    gameType: int = Form(None),
+    scoringSystem: int = Form(None),
+    tradeDeadline: str = Form(None),
+    publishLeague: int = Form(None),
+    seasonStatus: int = Form(None),
+    teamsPerDivision: str = Form(None),
+    leagueID: int = Form(None),
     authorization: str = Header(None),
     db: Session = Depends(get_db),
 ):
-    """Gaming API Leagues endpoint - create new league."""
+    """Gaming API Leagues endpoint - build or join league."""
     RequestContext.set_datetime()
     try:
-        if f != "Build":
+        if f not in ("Build", "Join"):
             return {"error": f"Unknown function: {f}"}
 
         # Extract token from Authorization header
@@ -237,27 +238,37 @@ async def gaming_api_leagues(
 
         user_id = int(payload.get("sub"))
 
-        # Get user's name from database
+        # Get user from database
         from app.models import User
         user = db.query(User).filter(User.userID == user_id).first()
         if not user:
             return {"error": "User not found"}
 
-        # Create league
-        return LeaguesBuildAction.execute(
-            db=db,
-            user_id=user_id,
-            user_name=user.userName,
-            league_name=leagueName,
-            league_password=leaguePassword,
-            league_type=leagueType,
-            game_type=gameType,
-            scoring_system=scoringSystem,
-            trade_deadline=tradeDeadline,
-            publish_league=publishLeague,
-            season_status=seasonStatus,
-            teams_per_division=teamsPerDivision,
-        )
+        # Handle Build function
+        if f == "Build":
+            return LeaguesBuildAction.execute(
+                db=db,
+                user_id=user_id,
+                user_name=user.userName,
+                league_name=leagueName,
+                league_password=leaguePassword,
+                league_type=leagueType,
+                game_type=gameType,
+                scoring_system=scoringSystem,
+                trade_deadline=tradeDeadline,
+                publish_league=publishLeague,
+                season_status=seasonStatus,
+                teams_per_division=teamsPerDivision,
+            )
+
+        # Handle Join function
+        if f == "Join":
+            return LeaguesJoinAction.execute(
+                db=db,
+                user_id=user_id,
+                league_id=leagueID,
+                league_password=leaguePassword,
+            )
 
     except Exception as e:
         return {"error": str(e)}
