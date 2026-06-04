@@ -23,10 +23,16 @@ async def legacy_leagues(
 
     try:
         if f == "ReadList":
-            result = LeaguesReadListAction.execute(db, userID, season)
-            return result
+            # Get data from action
+            items = LeaguesReadListAction.execute(db, userID, season)
+            # Format as legacy PHP response
+            return {
+                "table": "Leagues",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "items": [{"values": item} for item in items]
+            }
         else:
-            return {"error": f"Unknown action: {f}"}, 400
+            return {"error": f"Unknown action: {f}"}
     finally:
         RequestContext.reset()
 
@@ -36,11 +42,7 @@ def rest_leagues(userID: int, season: int | None = None, db: Session = Depends(g
     """REST endpoint: Get leagues for user."""
     RequestContext.set_datetime()
     try:
-        result = LeaguesReadListAction.execute(db, userID, season)
-        # For REST API, return a simpler format (no items wrapper)
-        return {
-            "leagues": [item["values"] for item in result["items"]],
-            "timestamp": result["timestamp"],
-        }
+        # Get data from action and return as REST array
+        return LeaguesReadListAction.execute(db, userID, season)
     finally:
         RequestContext.reset()

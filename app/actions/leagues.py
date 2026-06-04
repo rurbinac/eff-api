@@ -22,10 +22,8 @@ class LeaguesReadListAction:
     }
 
     @staticmethod
-    def execute(db: Session, user_id: int, season: int | None = None) -> dict:
-        """Get leagues for user, with division and team info."""
-        request_datetime = RequestContext.get_datetime()
-
+    def execute(db: Session, user_id: int, season: int | None = None) -> list[dict]:
+        """Get leagues for user, with division and team info (pure data, no wrapper)."""
         # Query all leagues with user's teams
         rows = QueryService.get_leagues_by_user(db, user_id)
 
@@ -49,14 +47,11 @@ class LeaguesReadListAction:
             # Add transformed match day fields
             cleaned_row.update(match_day_transformed)
 
-            # Wrap in values dict
-            items.append({"values": cleaned_row})
+            # Add to items (no wrapper)
+            items.append(cleaned_row)
 
-        return {
-            "table": "Leagues",
-            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "items": items
-        }
+        # Return pure data (no response wrapper)
+        return items
 
 
 class LeaguesBuildAction:
@@ -406,11 +401,8 @@ class LeaguesBuildAction:
             "teamsCreated": sum(len(d['teams']) for d in divisions_created),
         }
 
-        return {
-            "table": "Leagues",
-            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "values": league_data
-        }
+        # Return pure data (no response wrapper)
+        return league_data
 
 
 class LeaguesJoinAction:
@@ -530,8 +522,5 @@ class LeaguesJoinAction:
             "seasonNum": league.seasonNum,
         }
 
-        return {
-            "table": "Teams",
-            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "values": team_data
-        }
+        # Return pure data (no response wrapper)
+        return team_data

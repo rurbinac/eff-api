@@ -273,7 +273,8 @@ async def gaming_api_leagues(
 
         # Handle Build function
         if f == "Build":
-            return LeaguesBuildAction.execute(
+            # Get data from action
+            league_data = LeaguesBuildAction.execute(
                 db=db,
                 user_id=user_id,
                 user_name=user.userName,
@@ -287,15 +288,28 @@ async def gaming_api_leagues(
                 season_status=seasonStatus,
                 teams_per_division=teamsPerDivision,
             )
+            # Format as legacy PHP response
+            return {
+                "table": "Leagues",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "values": league_data
+            }
 
         # Handle Join function
         if f == "Join":
-            return LeaguesJoinAction.execute(
+            # Get data from action
+            team_data = LeaguesJoinAction.execute(
                 db=db,
                 user_id=user_id,
                 league_id=leagueID,
                 league_password=leaguePassword,
             )
+            # Format as legacy PHP response
+            return {
+                "table": "Teams",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "values": team_data
+            }
 
     except Exception as e:
         return {"error": str(e)}

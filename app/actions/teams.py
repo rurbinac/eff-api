@@ -11,20 +11,8 @@ class TeamsReadListAction:
         db: Session,
         league_id: int | None = None,
         division_id: int | None = None,
-    ) -> dict:
-        """
-        Get teams filtered by league ID or division ID.
-
-        Args:
-            db: Database session
-            league_id: Optional filter by leagueID
-            division_id: Optional filter by divisionID
-
-        Returns:
-            PHP-compatible response dict
-        """
-        request_datetime = RequestContext.get_datetime()
-
+    ) -> list[dict]:
+        """Get teams filtered by league ID or division ID (pure data, no wrapper)."""
         # Query teams based on filter
         query = db.query(Team)
 
@@ -98,10 +86,7 @@ class TeamsReadListAction:
                 "updatedBy": team.updatedBy,
                 "updatedIn": team.updatedIn.isoformat() if team.updatedIn else None,
             }
-            items.append({"values": row})
+            items.append(row)
 
-        return {
-            "table": "Teams",
-            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "items": items
-        }
+        # Return pure data (no response wrapper)
+        return items

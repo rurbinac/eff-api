@@ -9,20 +9,9 @@ class DivisionsReadListAction:
     """Get all divisions for a league."""
 
     @staticmethod
-    def execute(db: Session, league_id: int) -> dict:
-        """Get divisions for a league."""
-        request_datetime = RequestContext.get_datetime()
-
+    def execute(db: Session, league_id: int) -> list[dict]:
+        """Get divisions for a league (pure data, no wrapper)."""
         # Query all divisions for league
         rows = QueryService.get_divisions_by_league(db, league_id)
-
-        # Wrap each division in values dict
-        items = []
-        for row in rows:
-            items.append({"values": row})
-
-        return {
-            "table": "Divisions",
-            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "items": items
-        }
+        # Return pure data (no response wrapper)
+        return rows
