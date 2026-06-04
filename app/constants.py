@@ -1,4 +1,5 @@
 """Application constants for lookups and configuration."""
+from datetime import datetime, timedelta
 
 
 class LookupNum:
@@ -25,3 +26,34 @@ class LookupNum:
     REAL_MATCH_STATUS = 19
     MATCH_TEAM_MEMBER_ROLE = 20
     REAL_TEAM_SHORT_NAME = 21
+
+
+class DraftConstants:
+    """Draft and waiver status constants."""
+
+    DRAFT_TIME = 120
+
+    DRAFT_STATUS_HOLD = 0
+    DRAFT_STATUS_NOT_DRAFTED = 1
+    DRAFT_STATUS_DRAFTING = 2
+    DRAFT_STATUS_PAUSED = 3
+    DRAFT_STATUS_DRAFTED = 4
+
+    WAIVER_STATUS_HOLD = 0
+    WAIVER_STATUS_NO_WAIVER = 1
+    WAIVER_STATUS_FIRST = 2
+    WAIVER_STATUS_SECOND = 3
+    WAIVER_STATUS_OPEN = 4
+
+
+class MatchConstants:
+    """Match-related constants."""
+
+    MATCHES_NONE = 0
+    MATCHES_READY = 1
+    MATCHES_CREATING = 2
+    MATCHES_CREATED = 3
+
+    MATCHES_DIV_RR = 2
+    MATCHES_DIV_SD = 3
+    MATCHES_LEA_SD = 4

@@ -1,9 +1,11 @@
+from datetime import timedelta
+from random import shuffle
 from sqlalchemy.orm import Session
 
-from app.models import League
+from app.models import League, Division, Team
 from app.services import QueryService
 from app.context import RequestContext, extract_match_day_status
-from app.constants import LookupNum
+from app.constants import LookupNum, DraftConstants
 from fastapi import HTTPException, status
 
 
@@ -227,8 +229,156 @@ class LeaguesBuildAction:
         )
 
         db.add(new_league)
-        db.flush()  # Get the auto-generated leagueID without committing yet
+        db.flush()
         db.refresh(new_league)
+
+        # Fetch division type and draft type lookups
+        division_types = QueryService.get_lookups_by_num(db, LookupNum.DIVISION_TYPE)
+        draft_types = QueryService.get_lookups_by_num(db, LookupNum.DRAFT_TYPE)
+
+        if not division_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No division types found in lookups"
+            )
+
+        if not draft_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No draft types found in lookups"
+            )
+
+        # Get first draft type (same for all divisions)
+        first_draft_type = draft_types[0]['lookupKey']
+
+        # Calculate draftDate (current date + 1 week)
+        draft_date = request_datetime + timedelta(days=7)
+
+        # Create Divisions and Teams
+        divisions_created = []
+        for division_index, num_teams in enumerate(teams_list):
+            # Get divisionType from ordered list
+            if division_index >= len(division_types):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Not enough division types for {len(teams_list)} divisions"
+                )
+
+            division_type = division_types[division_index]['lookupKey']
+
+            # Calculate availableTeams (first division: numTeams - 1, others: numTeams)
+            available_teams = num_teams - 1 if division_index == 0 else num_teams
+
+            # Create Division
+            new_division = Division(
+                baseRealCompetitionID=new_league.baseRealCompetitionID,
+                extraRealCompetitionID=new_league.extraRealCompetitionID,
+                leagueID=new_league.leagueID,
+                commissionerID=new_league.commissionerID,
+                season=new_league.season,
+                seasonNum=new_league.seasonNum,
+                leagueMatches=DraftConstants.MATCHES_NONE,
+                divisionMatches=DraftConstants.MATCHES_NONE,
+                draftType=first_draft_type,
+                draftDate=draft_date,
+                draftStatus=DraftConstants.DRAFT_STATUS_NOT_DRAFTED,
+                draftTime=DraftConstants.DRAFT_TIME,
+                draftingUsers='{}',
+                draftingHooks=0,
+                franchiseMembers='',
+                totalTeams=new_league.totalTeams,
+                numTeams=num_teams,
+                availableTeams=available_teams,
+                divisionType=division_type,
+                waiverStatus=DraftConstants.WAIVER_STATUS_NO_WAIVER,
+                createdBy=new_league.commissionerID,
+                createdIn=request_datetime,
+            )
+
+            db.add(new_division)
+            db.flush()
+            db.refresh(new_division)
+
+            # Generate shuffled lists for randomOrder and seedingC3
+            shuffle_list = list(range(1, num_teams + 1))
+            shuffle(shuffle_list)
+            seedingc3_shuffle = list(range(1, num_teams + 1))
+            shuffle(seedingc3_shuffle)
+
+            # Create Teams for this Division
+            teams_created = []
+            for team_index in range(num_teams):
+                sequential = team_index + 1
+
+                # First team in first division is commissioner's team
+                if division_index == 0 and team_index == 0:
+                    team_user_id = user_id
+                    is_commissioner = 1
+                    team_name = f"{user_name}'s team"
+                else:
+                    team_user_id = None
+                    is_commissioner = 0
+                    team_name = f"Team {division_type} - {sequential}"
+
+                # Create Team
+                new_team = Team(
+                    baseRealCompetitionID=new_league.baseRealCompetitionID,
+                    extraRealCompetitionID=new_league.extraRealCompetitionID,
+                    leagueID=new_league.leagueID,
+                    divisionID=new_division.divisionID,
+                    commissionerID=new_league.commissionerID,
+                    userID=team_user_id,
+                    season=new_league.season,
+                    seasonNum=new_league.seasonNum,
+                    leagueMatches=new_division.leagueMatches,
+                    divisionMatches=new_division.divisionMatches,
+                    draftOrder=sequential,
+                    randomOrder=shuffle_list[team_index],
+                    waiversOrder=num_teams - sequential + 1,
+                    teamName=team_name,
+                    teamMembers='',
+                    draftMembers='',
+                    membersRanking='',
+                    membersWaivers='',
+                    membersWishList='',
+                    franchiseWishList='',
+                    fantasyPoints=0,
+                    teamRanking=0,
+                    locked=0,
+                    isCommissioner=is_commissioner,
+                    cntEPLTeam=0,
+                    cntPlayer=0,
+                    cntGoalkeeper=0,
+                    cntDefender=0,
+                    cntMidfielder=0,
+                    cntStriker=0,
+                    cntAdd=0,
+                    cntDrop=0,
+                    cntWaiver=0,
+                    seedingC1=sequential,
+                    seedingC2=0,
+                    seedingC3=seedingc3_shuffle[team_index],
+                    createdBy=new_league.commissionerID,
+                    createdIn=request_datetime,
+                )
+
+                db.add(new_team)
+                teams_created.append({
+                    'sequential': sequential,
+                    'teamName': team_name,
+                    'userID': team_user_id,
+                    'isCommissioner': is_commissioner,
+                })
+
+            divisions_created.append({
+                'divisionIndex': division_index,
+                'divisionType': division_type,
+                'numTeams': num_teams,
+                'teams': teams_created,
+            })
+
+        # Commit all changes in transaction
+        db.commit()
 
         # Build response with league data
         league_data = {
@@ -250,6 +400,8 @@ class LeaguesBuildAction:
             "seasonStatus": new_league.seasonStatus,
             "baseRealCompetitionID": new_league.baseRealCompetitionID,
             "teamsPerDivision": teams_per_division,
+            "divisionsCreated": len(divisions_created),
+            "teamsCreated": sum(len(d['teams']) for d in divisions_created),
         }
 
         return {

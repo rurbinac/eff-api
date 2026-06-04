@@ -497,3 +497,28 @@ class QueryService:
             Lookup.lookupKey == str(lookup_key)
         ).first()
         return result is not None
+
+    @staticmethod
+    def get_lookups_by_num(db: Session, lookup_num: int) -> list[dict]:
+        """
+        Get all lookups for a given lookupNum, ordered by position.
+
+        Args:
+            db: Database session
+            lookup_num: The lookup number (category)
+
+        Returns:
+            List of dicts with lookupKey and lookupText, ordered by position
+        """
+        results = db.query(Lookup).filter(
+            Lookup.lookupNum == lookup_num
+        ).order_by(Lookup.position).all()
+
+        return [
+            {
+                'lookupKey': lookup.lookupKey,
+                'lookupText': lookup.lookupText,
+                'position': lookup.position,
+            }
+            for lookup in results
+        ]
