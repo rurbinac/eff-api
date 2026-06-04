@@ -1,27 +1,28 @@
-from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models import TeamStanding
-from app.context import RequestContext
 
 
 class TeamStandingsReadListAction:
     """Handle TeamStandings ReadList requests."""
 
     @staticmethod
-    def execute(db: Session, league_id: int | None = None) -> list[dict]:
+    def execute(db: Session, team_id: int | None = None, league_id: int | None = None) -> list[dict]:
         """
-        Get team standings filtered by league ID.
+        Get team standings filtered by team ID or league ID (pure data, no wrapper).
 
         Args:
             db: Database session
+            team_id: Filter by teamID
             league_id: Filter by leagueID
 
         Returns:
-            PHP-compatible response dict
+            List of dicts with pure data (no response wrapper)
         """
         query = db.query(TeamStanding)
 
-        if league_id is not None:
+        if team_id is not None:
+            query = query.filter(TeamStanding.teamID == team_id)
+        elif league_id is not None:
             query = query.filter(TeamStanding.leagueID == league_id)
 
         standings = query.order_by(TeamStanding.place).all()
@@ -66,10 +67,6 @@ class TeamStandingsReadListAction:
                 "updatedBy": standing.updatedBy,
                 "updatedIn": standing.updatedIn.isoformat() if standing.updatedIn else None,
             }
-            items.append({"values": values})
+            items.append(values)
 
-        return {
-            "table": "TeamStandings",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-            "items": items,
-        }
+        return items

@@ -1,66 +1,45 @@
 from fastapi import APIRouter, Query, Form, Depends
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from app.database import SessionLocal
+from app.database import get_db
 from app.context import RequestContext
 from app.actions.lookups import LookupsReadListAction
 
-
-class LookupsReadListRequest(BaseModel):
-    lookupNum: int | None = None
-
-router = APIRouter()
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+router = APIRouter(tags=["lookups"])
 
 
 @router.post("/eff/eff_api/Lookups.php")
 async def legacy_lookups(
     f: str = Query(...),
-    format: str = Form("json", alias="_format"),
-    type: str = Form(None, alias="_type"),
-    lookupNum: int = Form(None),
+    format: str | None = Query("json", alias="_format"),
+    type: str | None = Query(None, alias="_type"),
+    lookupType: int | None = Form(None),
     db: Session = Depends(get_db),
 ):
     """Legacy PHP-compatible Lookups endpoint."""
     RequestContext.set_datetime()
     try:
         if f == "ReadList":
-            # Get lookups from action
-            lookup_items = None
-            if type == "byLookupNum" and lookupNum is not None:
-                lookup_items = LookupsReadListAction.execute(db, lookup_num=lookupNum)
-            else:
-                lookup_items = LookupsReadListAction.execute(db)
-
-            # Format as legacy PHP response
-            items = [{"values": item} for item in lookup_items]
+            items = LookupsReadListAction.execute(db, lookup_num=lookupType)
             return {
                 "table": "Lookups",
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": items,
+                "items": [{"values": item} for item in items]
             }
         else:
-            return {"error": f"Unknown function: {f}"}
+            return {"error": f"Unknown function: {f}"}, 400
     finally:
         RequestContext.reset()
 
 
 @router.post("/api/lookups/readlist")
 async def rest_lookups(
-    payload: LookupsReadListRequest,
+    lookupType: int,
     db: Session = Depends(get_db),
 ):
     """REST endpoint for Lookups ReadList."""
     RequestContext.set_datetime()
     try:
-        # Get lookups from action and return as REST array
-        return LookupsReadListAction.execute(db, lookup_num=payload.lookupNum)
+        items = LookupsReadListAction.execute(db, lookup_num=lookupType)
+        return items
     finally:
         RequestContext.reset()

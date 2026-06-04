@@ -24,10 +24,14 @@ async def legacy_teams(
     try:
         if f == "ReadList":
             if type == "byDivisionID":
-                result = TeamsReadListAction.execute(db, division_id=divisionID)
+                items = TeamsReadListAction.execute(db, division_id=divisionID)
             else:
-                result = TeamsReadListAction.execute(db, league_id=leagueID)
-            return result
+                items = TeamsReadListAction.execute(db, league_id=leagueID)
+            return {
+                "table": "Teams",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "items": [{"values": item} for item in items]
+            }
         else:
             return {"error": f"Unknown action: {f}"}, 400
     finally:
@@ -43,11 +47,7 @@ def rest_teams(
     """REST endpoint: Get teams for league or division."""
     RequestContext.set_datetime()
     try:
-        result = TeamsReadListAction.execute(db, league_id=leagueID, division_id=divisionID)
-        # For REST API, return simplified format (no items wrapper)
-        return {
-            "teams": [item["values"] for item in result["items"]],
-            "timestamp": result["timestamp"],
-        }
+        items = TeamsReadListAction.execute(db, league_id=leagueID, division_id=divisionID)
+        return items
     finally:
         RequestContext.reset()

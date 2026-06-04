@@ -22,8 +22,12 @@ async def legacy_divisions(
 
     try:
         if f == "ReadList":
-            result = DivisionsReadListAction.execute(db, leagueID)
-            return result
+            items = DivisionsReadListAction.execute(db, leagueID)
+            return {
+                "table": "Divisions",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "items": [{"values": item} for item in items]
+            }
         else:
             return {"error": f"Unknown action: {f}"}, 400
     finally:
@@ -35,11 +39,7 @@ def rest_divisions(leagueID: int, db: Session = Depends(get_db)):
     """REST endpoint: Get divisions for league."""
     RequestContext.set_datetime()
     try:
-        result = DivisionsReadListAction.execute(db, leagueID)
-        # For REST API, return simplified format (no items wrapper)
-        return {
-            "divisions": [item["values"] for item in result["items"]],
-            "timestamp": result["timestamp"],
-        }
+        items = DivisionsReadListAction.execute(db, leagueID)
+        return items
     finally:
         RequestContext.reset()

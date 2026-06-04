@@ -4,43 +4,52 @@ from app.database import get_db
 from app.context import RequestContext
 from app.actions.real_standings import RealStandingsReadListAction
 
-router = APIRouter()
+router = APIRouter(tags=["real-standings"])
 
 
 @router.post("/eff/eff_api/RealStandings.php")
 async def legacy_real_standings(
     f: str = Query(...),
-    format: str = Form("json", alias="_format"),
-    type: str = Form(None, alias="_type"),
-    realCompetitionID: int = Form(...),
-    realCompetitionMatchDay: int = Form(...),
-    divisionID: int = Form(None),
+    format: str | None = Query("json", alias="_format"),
+    type: str | None = Query(None, alias="_type"),
+    realCompetitionID: int | None = Form(None),
+    realCompetitionSeasonID: int | None = Form(None),
     db: Session = Depends(get_db),
 ):
     """Legacy PHP-compatible RealStandings endpoint."""
     RequestContext.set_datetime()
     try:
         if f == "ReadList":
-            if type == "byDivisionID":
-                return RealStandingsReadListAction.execute(**filter_params)
-            else:
-                return RealStandingsReadListAction.execute(**filter_params)
+            items = RealStandingsReadListAction.execute(
+                db,
+                real_competition_id=realCompetitionID,
+                real_competition_season_id=realCompetitionSeasonID
+            )
+            return {
+                "table": "RealStandings",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "items": [{"values": item} for item in items]
+            }
         else:
-            return {"error": f"Unknown function: {f}"}
+            return {"error": f"Unknown function: {f}"}, 400
     finally:
         RequestContext.reset()
 
 
-@router.post("/api/real-standings/readlist")
+@router.post("/api/realstandings/readlist")
 async def rest_real_standings(
     realCompetitionID: int,
-    realCompetitionMatchDay: int,
-    divisionID: int = None,
+    realCompetitionSeasonID: int,
     db: Session = Depends(get_db),
 ):
     """REST endpoint for RealStandings ReadList."""
     RequestContext.set_datetime()
     try:
-        return RealStandingsReadListAction.execute(**filter_params)
+        items = RealStandingsReadListAction.execute(
+            db,
+            real_competition_id=realCompetitionID,
+            real_competition_season_id=realCompetitionSeasonID
+        )
+        return items
     finally:
         RequestContext.reset()
