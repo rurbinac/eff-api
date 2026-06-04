@@ -5,6 +5,7 @@ from app.models import User
 from app.security import verify_password, create_access_token, hash_password, decode_token
 from app.services import QueryService
 from app.context import RequestContext
+from app.constants import LookupNum
 from fastapi import HTTPException, status
 
 
@@ -204,6 +205,21 @@ class UpdateUserAction:
                 detail="User not found"
             )
 
+        # Validate country and state if provided
+        if country is not None and country:
+            if not QueryService.validate_lookup(db, LookupNum.COUNTRY_CODE, country):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid country: {country}"
+                )
+
+        if state is not None and state:
+            if not QueryService.validate_lookup(db, LookupNum.STATE_CODE, state):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid state: {state}"
+                )
+
         # Update only the provided fields
         if first_name is not None:
             user.firstName = first_name
@@ -271,6 +287,19 @@ class SignUpAction:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
+            )
+
+        # Validate country and state if provided
+        if country and not QueryService.validate_lookup(db, LookupNum.COUNTRY_CODE, country):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid country: {country}"
+            )
+
+        if state and not QueryService.validate_lookup(db, LookupNum.STATE_CODE, state):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid state: {state}"
             )
 
         # Create new user
