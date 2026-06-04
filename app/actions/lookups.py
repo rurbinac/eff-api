@@ -24,7 +24,7 @@ class LookupsReadListAction:
         if lookup_num is not None:
             query = query.filter(Lookup.lookupNum == lookup_num)
 
-        lookups = query.all()
+        lookups = query.order_by(Lookup.position).all()
 
         items = []
         for lookup in lookups:
