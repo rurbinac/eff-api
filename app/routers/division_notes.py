@@ -22,8 +22,14 @@ async def legacy_division_notes(
 
     try:
         if f == "ReadList":
-            result = DivisionNotesReadListAction.execute(db, divisionID)
-            return result
+            items = DivisionNotesReadListAction.execute(
+            db, **filter_params
+        )
+        return {
+            "table": "DivisionNotes",
+            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "items": [{"values": item} for item in items]
+        }
         else:
             return {"error": f"Unknown action: {f}"}, 400
     finally:

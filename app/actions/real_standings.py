@@ -14,7 +14,7 @@ class RealStandingsReadListAction:
         real_competition_id: int,
         real_competition_match_day: int,
         division_id: int | None = None,
-    ) -> dict:
+    ) -> list[dict]:
         """
         Get real standings filtered by competition and match day.
         If division_id is provided, enriches each row with fantasy team data.
@@ -164,7 +164,7 @@ class RealStandingsReadListAction:
         }
 
     @staticmethod
-    def _load_teams(db: Session, division_id: int) -> dict:
+    def _load_teams(db: Session, division_id: int) -> list[dict]:
         """
         Load teams for a division and create a map keyed by teamMembers string.
 
@@ -196,7 +196,7 @@ class RealStandingsReadListAction:
     @staticmethod
     def _enrich_with_team_data(
         row: dict, real_team_member_key: str, teams_map: dict
-    ) -> dict:
+    ) -> list[dict]:
         """
         Enrich a RealStandings row with fantasy team data.
         Looks for the real member key in team members strings.

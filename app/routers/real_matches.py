@@ -21,13 +21,9 @@ async def legacy_real_matches(
     try:
         if f == "ReadList":
             if type == "byMatchDay":
-                return RealMatchesReadListAction.execute(
-                    db,
-                    real_competition_id=realCompetitionID,
-                    real_competition_match_day=realCompetitionMatchDay,
-                )
+                return RealMatchesReadListAction.execute(**filter_params)
             else:
-                return RealMatchesReadListAction.execute(db)
+                return RealMatchesReadListAction.execute(**filter_params)
         else:
             return {"error": f"Unknown function: {f}"}
     finally:
@@ -43,10 +39,6 @@ async def rest_real_matches(
     """REST endpoint for RealMatches ReadList."""
     RequestContext.set_datetime()
     try:
-        return RealMatchesReadListAction.execute(
-            db,
-            real_competition_id=realCompetitionID,
-            real_competition_match_day=realCompetitionMatchDay,
-        )
+        return RealMatchesReadListAction.execute(**filter_params)
     finally:
         RequestContext.reset()

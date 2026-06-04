@@ -9,7 +9,7 @@ class MatchTeamsReadListAction:
     """Handle MatchTeams ReadList requests."""
 
     @staticmethod
-    def execute(db: Session, team_id: int | None = None) -> dict:
+    def execute(db: Session, team_id: int | None = None) -> list[dict]:
         """
         Get match teams filtered by team ID.
 

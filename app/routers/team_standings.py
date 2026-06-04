@@ -20,9 +20,9 @@ async def legacy_team_standings(
     try:
         if f == "ReadList":
             if type == "byLeagueID" and leagueID is not None:
-                return TeamStandingsReadListAction.execute(db, league_id=leagueID)
+                return TeamStandingsReadListAction.execute(**filter_params)
             else:
-                return TeamStandingsReadListAction.execute(db)
+                return TeamStandingsReadListAction.execute(**filter_params)
         else:
             return {"error": f"Unknown function: {f}"}
     finally:
@@ -37,6 +37,6 @@ async def rest_team_standings(
     """REST endpoint for TeamStandings ReadList."""
     RequestContext.set_datetime()
     try:
-        return TeamStandingsReadListAction.execute(db, league_id=leagueID)
+        return TeamStandingsReadListAction.execute(**filter_params)
     finally:
         RequestContext.reset()

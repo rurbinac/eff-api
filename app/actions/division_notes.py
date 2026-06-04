@@ -8,10 +8,8 @@ class DivisionNotesReadListAction:
     """Get all notes for a division."""
 
     @staticmethod
-    def execute(db: Session, division_id: int) -> dict:
+    def execute(db: Session, division_id: int) -> list[dict]:
         """Get notes for a division."""
-        request_datetime = RequestContext.get_datetime()
-
         # Query all notes for division
         rows = QueryService.get_division_notes(db, division_id)
 
@@ -20,8 +18,4 @@ class DivisionNotesReadListAction:
         for row in rows:
             items.append({"values": row})
 
-        return {
-            "table": "DivisionNotes",
-            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "items": items
-        }
+        return items

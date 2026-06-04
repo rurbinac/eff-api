@@ -20,11 +20,7 @@ async def legacy_real_team_standings(
     RequestContext.set_datetime()
     try:
         if f == "ReadList":
-            return RealTeamStandingsReadListAction.execute(
-                db,
-                real_competition_id=realCompetitionID,
-                real_competition_match_day=realCompetitionMatchDay,
-            )
+            return RealTeamStandingsReadListAction.execute(**filter_params)
         else:
             return {"error": f"Unknown function: {f}"}
     finally:
@@ -40,10 +36,6 @@ async def rest_real_team_standings(
     """REST endpoint for RealTeamStandings ReadList."""
     RequestContext.set_datetime()
     try:
-        return RealTeamStandingsReadListAction.execute(
-            db,
-            real_competition_id=realCompetitionID,
-            real_competition_match_day=realCompetitionMatchDay,
-        )
+        return RealTeamStandingsReadListAction.execute(**filter_params)
     finally:
         RequestContext.reset()

@@ -12,7 +12,7 @@ class RealMatchesReadListAction:
         db: Session,
         real_competition_id: int | None = None,
         real_competition_match_day: int | None = None,
-    ) -> dict:
+    ) -> list[dict]:
         """
         Get real matches filtered by competition and match day.
 

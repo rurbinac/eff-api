@@ -22,18 +22,9 @@ async def legacy_real_standings(
     try:
         if f == "ReadList":
             if type == "byDivisionID":
-                return RealStandingsReadListAction.execute(
-                    db,
-                    real_competition_id=realCompetitionID,
-                    real_competition_match_day=realCompetitionMatchDay,
-                    division_id=divisionID,
-                )
+                return RealStandingsReadListAction.execute(**filter_params)
             else:
-                return RealStandingsReadListAction.execute(
-                    db,
-                    real_competition_id=realCompetitionID,
-                    real_competition_match_day=realCompetitionMatchDay,
-                )
+                return RealStandingsReadListAction.execute(**filter_params)
         else:
             return {"error": f"Unknown function: {f}"}
     finally:
@@ -50,11 +41,6 @@ async def rest_real_standings(
     """REST endpoint for RealStandings ReadList."""
     RequestContext.set_datetime()
     try:
-        return RealStandingsReadListAction.execute(
-            db,
-            real_competition_id=realCompetitionID,
-            real_competition_match_day=realCompetitionMatchDay,
-            division_id=divisionID,
-        )
+        return RealStandingsReadListAction.execute(**filter_params)
     finally:
         RequestContext.reset()

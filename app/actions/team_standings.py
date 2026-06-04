@@ -8,7 +8,7 @@ class TeamStandingsReadListAction:
     """Handle TeamStandings ReadList requests."""
 
     @staticmethod
-    def execute(db: Session, league_id: int | None = None) -> dict:
+    def execute(db: Session, league_id: int | None = None) -> list[dict]:
         """
         Get team standings filtered by league ID.
 

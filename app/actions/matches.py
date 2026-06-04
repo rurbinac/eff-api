@@ -12,7 +12,7 @@ class MatchesReadListAction:
         db: Session,
         league_id: int | None = None,
         division_id: int | None = None,
-    ) -> dict:
+    ) -> list[dict]:
         """
         Get fantasy league matches filtered by league or division ID.
 
@@ -84,8 +84,4 @@ class MatchesReadListAction:
             }
             items.append({"values": values})
 
-        return {
-            "table": "Matches",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-            "items": items,
-        }
+        return items

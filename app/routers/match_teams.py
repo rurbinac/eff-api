@@ -20,9 +20,9 @@ async def legacy_match_teams(
     try:
         if f == "ReadList":
             if type == "byTeamID":
-                return MatchTeamsReadListAction.execute(db, team_id=teamID)
+                return MatchTeamsReadListAction.execute(**filter_params)
             else:
-                return MatchTeamsReadListAction.execute(db)
+                return MatchTeamsReadListAction.execute(**filter_params)
         else:
             return {"error": f"Unknown function: {f}"}
     finally:
@@ -37,6 +37,6 @@ async def rest_match_teams(
     """REST endpoint for MatchTeams ReadList."""
     RequestContext.set_datetime()
     try:
-        return MatchTeamsReadListAction.execute(db, team_id=teamID)
+        return MatchTeamsReadListAction.execute(**filter_params)
     finally:
         RequestContext.reset()

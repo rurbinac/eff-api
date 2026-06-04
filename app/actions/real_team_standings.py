@@ -12,7 +12,7 @@ class RealTeamStandingsReadListAction:
         db: Session,
         real_competition_id: int,
         real_competition_match_day: int,
-    ) -> dict:
+    ) -> list[dict]:
         """
         Get real team standings for a specific competition and match day.
 
