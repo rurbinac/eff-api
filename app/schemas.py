@@ -22,6 +22,18 @@ class SignUpRequest(BaseModel):
     favoriteTeam: str | None = None
 
 
+class LeaguesBuildRequest(BaseModel):
+    leagueName: str
+    leaguePassword: str
+    leagueType: int
+    gameType: int
+    scoringSystem: int
+    tradeDeadline: datetime
+    publishLeague: int
+    seasonStatus: int
+    teamsPerDivision: str  # CSV format: "8,10,8"
+
+
 class ErrorResponse(BaseModel):
     error: str
     detail: str | None = None

@@ -1,0 +1,49 @@
+### Standings Tests
+
+### 1. TeamStandings ReadList (Legacy) - Empty table
+POST {{baseUrl}}/eff/eff_api/TeamStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json
+
+### 2. TeamStandings ReadList (REST)
+POST {{baseUrl}}/api/team-standings/readlist
+Content-Type: application/json
+
+{}
+
+### 3. RealStandings ReadList (Legacy) - By Competition and MatchDay
+POST {{baseUrl}}/eff/eff_api/RealStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byCompetition&realCompetitionID={{testRealCompetitionID}}&realCompetitionMatchDay={{testRealCompetitionMatchDay}}
+
+### 4. RealStandings ReadList (REST)
+POST {{baseUrl}}/api/real-standings/readlist
+Content-Type: application/json
+
+{
+  "realCompetitionID": {{testRealCompetitionID}},
+  "realCompetitionMatchDay": {{testRealCompetitionMatchDay}}
+}
+
+### 5. RealStandings ReadList - Filter by SYMID
+POST {{baseUrl}}/eff/eff_api/RealStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byCompetition&realCompetitionSYMID=EN_PR&realCompetitionMatchDay=10
+
+### 6. RealTeamStandings ReadList (Legacy)
+POST {{baseUrl}}/eff/eff_api/RealTeamStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byTeam&realCompetitionID={{testRealCompetitionID}}&realTeamID=1
+
+### 7. RealTeamStandings ReadList (REST)
+POST {{baseUrl}}/api/real-team-standings/readlist
+Content-Type: application/json
+
+{
+  "realCompetitionID": {{testRealCompetitionID}},
+  "realTeamID": 1
+}

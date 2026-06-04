@@ -1,0 +1,115 @@
+### Authentication Tests
+
+@authToken =
+
+### 1. SignIn (Legacy) - POST form
+POST {{baseUrl}}/eff/eff_api/Users.php?f=SignIn
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&userEmail={{testEmail}}&userPassword={{testPassword}}
+
+> {%
+  client.global.set("authToken", response.body.values.token);
+%}
+
+### 2. SignIn (REST) - POST JSON
+POST {{baseUrl}}/api/auth/signin
+Content-Type: application/json
+
+{
+  "userEmail": "{{testEmail}}",
+  "userPassword": "{{testPassword}}"
+}
+
+> {%
+  client.global.set("authToken", response.body.values.token);
+%}
+
+### 3. SignInfo (Legacy) - Token-based, form
+POST {{baseUrl}}/eff/eff_api/Users.php?f=SignInfo
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{authToken}}
+
+_format=json&userID={{testUserID}}
+
+### 4. SignInfo (Gaming API) - Token-based
+POST {{baseUrl}}/gaming/api/SignInfo.php
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{authToken}}
+
+_format=json
+
+### 5. SignOut (Legacy) - Form
+POST {{baseUrl}}/eff/eff_api/Users.php?f=SignOut
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&userID={{testUserID}}
+
+### 6. SignOut (REST) - JSON
+POST {{baseUrl}}/api/auth/signout
+Content-Type: application/json
+
+{}
+
+### 7. SignOut (Gaming API) - Token-based
+POST {{baseUrl}}/gaming/api/SignOut.php
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{authToken}}
+
+_format=json
+
+### 8. SignUp (Legacy) - Form
+POST {{baseUrl}}/eff/eff_api/Users.php?f=SignUp
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&userEmail={{newUserEmail}}&userPassword={{newUserPassword}}&userName=testuser123&firstName=Test&lastName=User
+
+### 9. SignUp (Gaming API) - Form
+POST {{baseUrl}}/gaming/api/SignUp.php
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&userEmail={{newUserEmail}}&userPassword={{newUserPassword}}&userName=testuser456&firstName=Test&lastName=User
+
+### 10. SignUp (REST) - JSON
+POST {{baseUrl}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "userEmail": "newuser@test.com",
+  "userPassword": "testpass123",
+  "userName": "newuser789",
+  "firstName": "New",
+  "lastName": "User",
+  "birthday": "1990-01-15",
+  "country": "US",
+  "state": "CA",
+  "city": "Los Angeles",
+  "phoneNumber": "555-1234",
+  "timeZone": "America/Los_Angeles",
+  "favoriteTeam": "Arsenal"
+}
+
+> {%
+  client.global.set("newUserToken", response.body.values.token);
+  client.global.set("newUserID", response.body.values.userID);
+%}
+
+### 11. Update User (Gaming API) - Form with token
+POST {{baseUrl}}/gaming/api/Users.php?f=Update
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{newUserToken}}
+
+_format=json&firstName=UpdatedFirstName&lastName=UpdatedLastName&country=GB&city=London&favoriteTeam=Chelsea
+
+### 12. Update User (REST) - PATCH with JSON
+PATCH {{baseUrl}}/api/auth/users/{{newUserID}}
+Content-Type: application/json
+
+{
+  "firstName": "RESTUpdatedFirstName",
+  "lastName": "RESTUpdatedLastName",
+  "country": "US",
+  "city": "New York",
+  "favoriteTeam": "Manchester United",
+  "timeZone": "America/New_York"
+}

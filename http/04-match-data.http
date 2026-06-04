@@ -1,0 +1,50 @@
+### Match Data Tests
+
+### 1. Matches ReadList (Legacy) - Get matches in a division
+POST {{baseUrl}}/eff/eff_api/Matches.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byDivisionID&divisionID={{testDivisionID}}
+
+### 2. Matches ReadList (REST)
+POST {{baseUrl}}/api/matches/readlist
+Content-Type: application/json
+
+{
+  "divisionID": {{testDivisionID}}
+}
+
+### 3. MatchTeams ReadList (Legacy) - Get teams in a match
+POST {{baseUrl}}/eff/eff_api/MatchTeams.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byMatchID&matchID=1
+
+### 4. MatchTeams ReadList (REST)
+POST {{baseUrl}}/api/match-teams/readlist
+Content-Type: application/json
+
+{
+  "matchID": 1
+}
+
+### 5. RealMatches ReadList (Legacy) - Get real football matches
+POST {{baseUrl}}/eff/eff_api/RealMatches.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byCompetition&realCompetitionID={{testRealCompetitionID}}&realCompetitionMatchDay={{testRealCompetitionMatchDay}}
+
+### 6. RealMatches ReadList (REST)
+POST {{baseUrl}}/api/real-matches/readlist
+Content-Type: application/json
+
+{
+  "realCompetitionID": {{testRealCompetitionID}},
+  "realCompetitionMatchDay": {{testRealCompetitionMatchDay}}
+}
+
+### 7. RealMatches ReadList - Filter by SYMID and MatchDay
+POST {{baseUrl}}/eff/eff_api/RealMatches.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byCompetition&realCompetitionSYMID=EN_PR&realCompetitionMatchDay=5

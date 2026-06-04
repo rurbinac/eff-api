@@ -1,0 +1,19 @@
+### Legacy EFF API - Reference Data Tests (Lookups)
+
+### 1. Lookups.php - ReadList Countries (lookupNum=2)
+POST {{baseUrl}}/eff/eff_api/Lookups.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byLookupNum&lookupNum=2
+
+### 2. Lookups.php - ReadList States (lookupNum=3)
+POST {{baseUrl}}/eff/eff_api/Lookups.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byLookupNum&lookupNum=3
+
+### 3. Lookups.php - ReadList with specific lookupNum
+POST {{baseUrl}}/eff/eff_api/Lookups.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byLookupNum&lookupNum={{testLookupNum}}

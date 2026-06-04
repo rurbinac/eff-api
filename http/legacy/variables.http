@@ -1,0 +1,26 @@
+### Legacy EFF API (PHP-compatible) Configuration
+
+@baseUrl = https://eff-api-150703383580.us-central1.run.app
+@format = json
+
+### Test Credentials
+@testEmail = admin@effootball.com
+@testPassword = PASSWORD_1
+@testUserID = 1
+
+### New User for Testing
+@newUserEmail = legacytest@test.com
+@newUserPassword = PASSWORD_legacy
+
+### League Test Data
+@testLeagueID = 63
+@testDivisionID = 130
+@testTeamID = 1187
+
+### Real Data Test Parameters
+@testRealCompetitionID = 21
+@testRealCompetitionMatchDay = 38
+@testRealCompetitionSYMID = EN_PR
+@testLookupNum = 2
+@testMatchID = 1
+@testRealTeamID = 1

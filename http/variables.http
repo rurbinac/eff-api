@@ -1,0 +1,23 @@
+### EFF API Test Configuration
+
+@baseUrl = https://eff-api-150703383580.us-central1.run.app
+@format = json
+
+### Test Credentials
+@testEmail = admin@effootball.com
+@testPassword = PASSWORD_1
+@testUserID = 1
+
+### New User for Testing
+@newUserEmail = testuser@test.com
+@newUserPassword = testpass123
+
+### League Test Data
+@testLeagueID = 63
+@testDivisionID = 130
+@testTeamID = 1187
+
+### Real Data Test Parameters
+@testRealCompetitionID = 21
+@testRealCompetitionMatchDay = 38
+@testLookupNum = 2

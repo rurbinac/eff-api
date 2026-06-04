@@ -30,6 +30,21 @@ class RequestContext:
         """Reset the context (useful for testing)."""
         _request_datetime.set(None)
 
+    @staticmethod
+    def parse_datetime(dt_str: str) -> datetime:
+        """Parse datetime string in format 'YYYY-MM-DD HH:MM:SS' or ISO format."""
+        # Try ISO format first
+        try:
+            return datetime.fromisoformat(dt_str)
+        except ValueError:
+            pass
+
+        # Try MySQL datetime format
+        try:
+            return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            raise ValueError(f"Invalid datetime format: {dt_str}")
+
 
 def extract_match_day_status(match_day_data: dict) -> dict:
     """

@@ -1,0 +1,71 @@
+### League, Division, and Teams Tests
+
+### 1. Leagues ReadList (Legacy) - Get user's leagues
+POST {{baseUrl}}/eff/eff_api/Leagues.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byUserID&userID={{testUserID}}
+
+### 2. Leagues ReadList (REST)
+POST {{baseUrl}}/api/leagues/readlist
+Content-Type: application/json
+
+{
+  "userID": {{testUserID}}
+}
+
+### 3. Divisions ReadList (Legacy) - Get divisions in a league
+POST {{baseUrl}}/eff/eff_api/Divisions.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byLeagueID&leagueID={{testLeagueID}}
+
+### 4. Divisions ReadList (REST)
+POST {{baseUrl}}/api/divisions/readlist
+Content-Type: application/json
+
+{
+  "leagueID": {{testLeagueID}}
+}
+
+### 5. Teams ReadList (Legacy) - Get teams in a division
+POST {{baseUrl}}/eff/eff_api/Teams.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byDivisionID&divisionID={{testDivisionID}}
+
+### 6. Teams ReadList (Legacy) - Get teams in a league
+POST {{baseUrl}}/eff/eff_api/Teams.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byLeagueID&leagueID={{testLeagueID}}
+
+### 7. Teams ReadList (REST) - By Division
+POST {{baseUrl}}/api/teams/readlist
+Content-Type: application/json
+
+{
+  "divisionID": {{testDivisionID}}
+}
+
+### 8. Teams ReadList (REST) - By League
+POST {{baseUrl}}/api/teams/readlist
+Content-Type: application/json
+
+{
+  "leagueID": {{testLeagueID}}
+}
+
+### 9. DivisionNotes ReadList (Legacy) - Get notes for a division
+POST {{baseUrl}}/eff/eff_api/DivisionNotes.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byDivisionID&divisionID={{testDivisionID}}
+
+### 10. DivisionNotes ReadList (REST)
+POST {{baseUrl}}/api/division-notes/readlist
+Content-Type: application/json
+
+{
+  "divisionID": {{testDivisionID}}
+}

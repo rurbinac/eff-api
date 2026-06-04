@@ -1,0 +1,27 @@
+### Reference Data Tests (Lookups)
+
+### 1. Lookups ReadList (Legacy) - Countries and States
+POST {{baseUrl}}/eff/eff_api/Lookups.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byLookupNum&lookupNum={{testLookupNum}}
+
+### 2. Lookups ReadList (REST)
+POST {{baseUrl}}/api/lookups/readlist
+Content-Type: application/json
+
+{
+  "lookupNum": 2
+}
+
+### 3. Lookups ReadList - All Countries (lookupNum=2)
+POST {{baseUrl}}/eff/eff_api/Lookups.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byLookupNum&lookupNum=2
+
+### 4. Lookups ReadList - US States (lookupNum=3)
+POST {{baseUrl}}/eff/eff_api/Lookups.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byLookupNum&lookupNum=3

@@ -1,0 +1,56 @@
+### Legacy EFF API - Authentication Tests
+
+@authToken =
+@newUserID =
+
+### 1. Users.php - SignIn
+POST {{baseUrl}}/eff/eff_api/Users.php?f=SignIn
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&userEmail={{testEmail}}&userPassword={{testPassword}}
+
+> {%
+  client.global.set("authToken", response.body.values.token);
+%}
+
+### 2. Users.php - SignInfo (requires userID)
+POST {{baseUrl}}/eff/eff_api/Users.php?f=SignInfo
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&userID={{testUserID}}
+
+### 3. Users.php - SignInfo with Authorization header
+POST {{baseUrl}}/eff/eff_api/Users.php?f=SignInfo
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{authToken}}
+
+_format=json
+
+### 4. Users.php - SignOut
+POST {{baseUrl}}/eff/eff_api/Users.php?f=SignOut
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&userID={{testUserID}}
+
+### 5. Users.php - SignUp
+POST {{baseUrl}}/eff/eff_api/Users.php?f=SignUp
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&userEmail={{newUserEmail}}&userPassword={{newUserPassword}}&userName=legacyuser1&firstName=Legacy&lastName=User
+
+> {%
+  client.global.set("newUserID", response.body.values.userID);
+%}
+
+### 6. Users.php - Update (with userID in form)
+POST {{baseUrl}}/eff/eff_api/Users.php?f=Update
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&userID={{newUserID}}&firstName=LegacyUpdated&lastName=UserUpdated&country=GB&city=Manchester&favoriteTeam=United
+
+### 7. Users.php - Update (with Authorization header)
+POST {{baseUrl}}/eff/eff_api/Users.php?f=Update
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{authToken}}
+
+_format=json&firstName=AuthUpdated&lastName=UserAuthUpdated&country=US&city=Boston&favoriteTeam=Arsenal

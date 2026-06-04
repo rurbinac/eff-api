@@ -1,0 +1,31 @@
+### Legacy EFF API - Match Data Tests
+
+### 1. Matches.php - ReadList by DivisionID
+POST {{baseUrl}}/eff/eff_api/Matches.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byDivisionID&divisionID={{testDivisionID}}
+
+### 2. MatchTeams.php - ReadList by MatchID
+POST {{baseUrl}}/eff/eff_api/MatchTeams.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byMatchID&matchID={{testMatchID}}
+
+### 3. RealMatches.php - ReadList by Competition (ID and MatchDay)
+POST {{baseUrl}}/eff/eff_api/RealMatches.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byCompetition&realCompetitionID={{testRealCompetitionID}}&realCompetitionMatchDay={{testRealCompetitionMatchDay}}
+
+### 4. RealMatches.php - ReadList by Competition (SYMID and MatchDay)
+POST {{baseUrl}}/eff/eff_api/RealMatches.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byCompetition&realCompetitionSYMID={{testRealCompetitionSYMID}}&realCompetitionMatchDay=5
+
+### 5. RealMatches.php - ReadList Premier League MatchDay 10
+POST {{baseUrl}}/eff/eff_api/RealMatches.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byCompetition&realCompetitionSYMID=EN_PR&realCompetitionMatchDay=10

@@ -4,6 +4,7 @@ from datetime import datetime
 from app.database import get_db
 from app.context import RequestContext
 from app.actions.sign import SignInfoAction, SignOutAction, SignUpAction, UpdateUserAction
+from app.actions.leagues import LeaguesBuildAction
 from app.security import decode_token
 
 router = APIRouter()
@@ -187,6 +188,75 @@ async def gaming_api_sign_up(
             phone_number=phoneNumber if phoneNumber else None,
             time_zone=timeZone if timeZone else None,
             favorite_team=favoriteTeam if favoriteTeam else None,
+        )
+
+    except Exception as e:
+        return {"error": str(e)}
+
+    finally:
+        RequestContext.reset()
+
+
+@router.post("/gaming/api/Leagues.php")
+async def gaming_api_leagues(
+    f: str = None,
+    format: str = Form("json", alias="_format"),
+    leagueName: str = Form(...),
+    leaguePassword: str = Form(...),
+    leagueType: int = Form(...),
+    gameType: int = Form(...),
+    scoringSystem: int = Form(...),
+    tradeDeadline: str = Form(...),
+    publishLeague: int = Form(...),
+    seasonStatus: int = Form(...),
+    teamsPerDivision: str = Form(...),
+    authorization: str = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Gaming API Leagues endpoint - create new league."""
+    RequestContext.set_datetime()
+    try:
+        if f != "Build":
+            return {"error": f"Unknown function: {f}"}
+
+        # Extract token from Authorization header
+        token = None
+        if authorization:
+            if authorization.startswith("Bearer "):
+                token = authorization[7:]
+            else:
+                token = authorization
+
+        if not token:
+            return {"error": "Missing authentication token"}
+
+        # Verify token and get user ID
+        payload = decode_token(token)
+        if not payload:
+            return {"error": "Invalid or expired token"}
+
+        user_id = int(payload.get("sub"))
+
+        # Get user's name from database
+        from app.models import User
+        user = db.query(User).filter(User.userID == user_id).first()
+        if not user:
+            return {"error": "User not found"}
+
+        # Create league
+        return LeaguesBuildAction.execute(
+            db=db,
+            user_id=user_id,
+            user_name=user.userName,
+            league_name=leagueName,
+            league_password=leaguePassword,
+            league_type=leagueType,
+            game_type=gameType,
+            scoring_system=scoringSystem,
+            trade_deadline=tradeDeadline,
+            publish_league=publishLeague,
+            season_status=seasonStatus,
+            teams_per_division=teamsPerDivision,
         )
 
     except Exception as e:

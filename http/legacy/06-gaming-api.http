@@ -1,0 +1,41 @@
+### Legacy Gaming API Tests (Token-based)
+
+@authToken =
+@newUserID =
+
+### 1. SignInfo.php - Gaming API (requires Authorization token)
+POST {{baseUrl}}/gaming/api/SignInfo.php
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{authToken}}
+
+_format=json
+
+### 2. SignOut.php - Gaming API (requires Authorization token)
+POST {{baseUrl}}/gaming/api/SignOut.php
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{authToken}}
+
+_format=json
+
+### 3. SignUp.php - Gaming API
+POST {{baseUrl}}/gaming/api/SignUp.php
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&userEmail=gamingtest@test.com&userPassword=PASSWORD_gaming&userName=gaminguser&firstName=Gaming&lastName=User&country=US&city=NewYork
+
+> {%
+  client.global.set("newUserID", response.body.values.userID);
+%}
+
+### 4. Users.php?f=Update - Gaming API (with userID)
+POST {{baseUrl}}/gaming/api/Users.php?f=Update
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&userID={{newUserID}}&firstName=UpdatedGaming&lastName=UserUpdated&country=GB&city=London
+
+### 5. Users.php?f=Update - Gaming API (with Authorization token)
+POST {{baseUrl}}/gaming/api/Users.php?f=Update
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{authToken}}
+
+_format=json&firstName=GamingTokenUpdated&lastName=UserToken&country=FR&city=Paris&favoriteTeam=PSG

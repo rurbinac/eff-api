@@ -1,0 +1,37 @@
+### Legacy EFF API - Standings Tests
+
+### 1. TeamStandings.php - ReadList (empty table)
+POST {{baseUrl}}/eff/eff_api/TeamStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json
+
+### 2. RealStandings.php - ReadList by Competition (ID and MatchDay)
+POST {{baseUrl}}/eff/eff_api/RealStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byCompetition&realCompetitionID={{testRealCompetitionID}}&realCompetitionMatchDay={{testRealCompetitionMatchDay}}
+
+### 3. RealStandings.php - ReadList by Competition (SYMID and MatchDay)
+POST {{baseUrl}}/eff/eff_api/RealStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byCompetition&realCompetitionSYMID={{testRealCompetitionSYMID}}&realCompetitionMatchDay=10
+
+### 4. RealStandings.php - Premier League Current Season
+POST {{baseUrl}}/eff/eff_api/RealStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byCompetition&realCompetitionSYMID=EN_PR&realCompetitionMatchDay=38
+
+### 5. RealTeamStandings.php - ReadList by Team
+POST {{baseUrl}}/eff/eff_api/RealTeamStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byTeam&realCompetitionID={{testRealCompetitionID}}&realTeamID={{testRealTeamID}}
+
+### 6. RealTeamStandings.php - ReadList specific team
+POST {{baseUrl}}/eff/eff_api/RealTeamStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&_type=byTeam&realCompetitionID={{testRealCompetitionID}}&realTeamID=1
