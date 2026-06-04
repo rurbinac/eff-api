@@ -1,6 +1,7 @@
 from datetime import timedelta
 from random import shuffle
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.models import League, Division, Team
 from app.services import QueryService
@@ -452,17 +453,36 @@ class LeaguesJoinAction:
                 detail="Invalid league password"
             )
 
-        # Check for available teams
-        available_team = db.query(Team).filter(
-            Team.leagueID == league_id,
-            Team.userID == None
-        ).order_by(Team.divisionID, Team.teamID).first()
+        # Check for available teams with draft not started
+        available_team_result = db.execute(
+            text("""
+                SELECT t.teamID, t.leagueID, t.divisionID, d.draftStatus
+                FROM Teams t
+                INNER JOIN Divisions d ON t.divisionID = d.divisionID
+                WHERE t.leagueID = :leagueID
+                  AND t.userID IS NULL
+                ORDER BY t.divisionID, t.teamID
+                LIMIT 1
+            """),
+            {"leagueID": league_id}
+        ).first()
 
-        if not available_team:
+        if not available_team_result:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No available teams in this league"
             )
+
+        # Verify draft has not started
+        if available_team_result[3] != DraftConstants.DRAFT_STATUS_NOT_DRAFTED:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Draft has already started in this division"
+            )
+
+        # Get the actual team object
+        team_id = available_team_result[0]
+        available_team = db.query(Team).filter(Team.teamID == team_id).first()
 
         # Get the division
         division = db.query(Division).filter(
