@@ -1,8 +1,13 @@
 from fastapi import APIRouter, Query, Form, Depends
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from app.database import SessionLocal
 from app.context import RequestContext
 from app.actions.lookups import LookupsReadListAction
+
+
+class LookupsReadListRequest(BaseModel):
+    lookupNum: int | None = None
 
 router = APIRouter()
 
@@ -40,12 +45,12 @@ async def legacy_lookups(
 
 @router.post("/api/lookups/readlist")
 async def rest_lookups(
-    lookupNum: int = None,
+    payload: LookupsReadListRequest,
     db: Session = Depends(get_db),
 ):
     """REST endpoint for Lookups ReadList."""
     RequestContext.set_datetime()
     try:
-        return LookupsReadListAction.execute(db, lookup_num=lookupNum)
+        return LookupsReadListAction.execute(db, lookup_num=payload.lookupNum)
     finally:
         RequestContext.reset()
