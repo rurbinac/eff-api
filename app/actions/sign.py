@@ -61,10 +61,7 @@ class SignInAction:
 
     @staticmethod
     def execute(db: Session, user_email: str, user_password: str, client_ip: str) -> dict:
-        """Authenticate user and return signed-in data."""
-        # Set request datetime in context
-        request_datetime = RequestContext.get_datetime()
-
+        """Authenticate user and return user data with context (no response wrapper)."""
         user = db.query(User).filter(User.userEmail == user_email).first()
 
         if not user or not verify_password(user_password, user.userPassword):
@@ -74,6 +71,7 @@ class SignInAction:
             )
 
         # Update last sign in
+        request_datetime = RequestContext.get_datetime()
         user.lastSignInDate = request_datetime
         user.lastSignInIP = client_ip
         db.commit()
@@ -88,12 +86,8 @@ class SignInAction:
         # Add context data
         SignInAction._add_context_data(db, session_data)
 
-        # Return in PHP-compatible format
-        return {
-            "table": "Session",
-            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "values": session_data
-        }
+        # Return pure data (no response wrapper)
+        return session_data
 
 
 class SignOutAction:
@@ -101,7 +95,7 @@ class SignOutAction:
 
     @staticmethod
     def execute(user_id: int) -> dict:
-        """Sign out successful response."""
+        """Sign out successful response (pure data)."""
         return {"success": True}
 
 
@@ -110,9 +104,7 @@ class SignInfoAction:
 
     @staticmethod
     def execute(db: Session, user_id: int) -> dict:
-        """Return current user information with context."""
-        request_datetime = RequestContext.get_datetime()
-
+        """Return current user information with context (no response wrapper)."""
         user = db.query(User).filter(User.userID == user_id).first()
 
         if not user:
@@ -127,22 +119,12 @@ class SignInfoAction:
         # Add context data
         SignInAction._add_context_data(db, session_data)
 
-        # Return in PHP-compatible format
-        return {
-            "table": "Session",
-            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "values": session_data
-        }
+        # Return pure data (no response wrapper)
+        return session_data
 
     @staticmethod
     def execute_with_token(db: Session, token: str) -> dict:
-        """
-        Verify token and return current user information with context.
-
-        Used by /gaming/api/SignInfo.php endpoint.
-        """
-        request_datetime = RequestContext.get_datetime()
-
+        """Verify token and return current user information with context (no response wrapper)."""
         # Decode and verify token
         payload = decode_token(token)
 
@@ -169,12 +151,8 @@ class SignInfoAction:
         # Add context data
         SignInAction._add_context_data(db, session_data)
 
-        # Return in PHP-compatible format
-        return {
-            "table": "Session",
-            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "values": session_data
-        }
+        # Return pure data (no response wrapper)
+        return session_data
 
 
 class UpdateUserAction:
@@ -194,7 +172,7 @@ class UpdateUserAction:
         time_zone: str | None = None,
         favorite_team: str | None = None,
     ) -> dict:
-        """Update user profile and return updated user info with context."""
+        """Update user profile and return updated user info with context (no response wrapper)."""
         request_datetime = RequestContext.get_datetime()
 
         user = db.query(User).filter(User.userID == user_id).first()
@@ -250,12 +228,8 @@ class UpdateUserAction:
         # Add context data
         SignInAction._add_context_data(db, session_data)
 
-        # Return in PHP-compatible format
-        return {
-            "table": "Session",
-            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "values": session_data
-        }
+        # Return pure data (no response wrapper)
+        return session_data
 
 
 class SignUpAction:
@@ -277,8 +251,7 @@ class SignUpAction:
         time_zone: str | None = None,
         favorite_team: str | None = None,
     ) -> dict:
-        """Create new user and return signed-in data."""
-        # Get request datetime from context
+        """Create new user and return signed-in data (no response wrapper)."""
         request_datetime = RequestContext.get_datetime()
 
         # Check if user exists
@@ -333,9 +306,5 @@ class SignUpAction:
         # Add context data
         SignInAction._add_context_data(db, session_data)
 
-        # Return in PHP-compatible format
-        return {
-            "table": "Session",
-            "timestamp": request_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "values": session_data
-        }
+        # Return pure data (no response wrapper)
+        return session_data

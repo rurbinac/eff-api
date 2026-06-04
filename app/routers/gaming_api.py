@@ -30,8 +30,15 @@ async def gaming_api_sign_info(
         if not token:
             return {"error": "Missing authentication token"}
 
-        # Verify token and return user info with context
-        return SignInfoAction.execute_with_token(db, token)
+        # Get data from action
+        session_data = SignInfoAction.execute_with_token(db, token)
+
+        # Format as legacy PHP response
+        return {
+            "table": "Session",
+            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "values": session_data
+        }
 
     finally:
         RequestContext.reset()
@@ -62,8 +69,14 @@ async def gaming_api_sign_out(
         if not payload:
             return {"error": "Invalid or expired token"}
 
-        # Return success (token invalidation happens on client side)
-        return SignOutAction.execute(0)
+        # Get data from action
+        result = SignOutAction.execute(0)
+
+        # Format as legacy PHP response
+        return {
+            "table": "success",
+            "values": result
+        }
 
     finally:
         RequestContext.reset()
@@ -119,8 +132,8 @@ async def gaming_api_users(
             except ValueError:
                 return {"error": "Invalid birthday format, use YYYY-MM-DD"}
 
-        # Update user
-        return UpdateUserAction.execute(
+        # Get data from action
+        session_data = UpdateUserAction.execute(
             db=db,
             user_id=userID,
             first_name=firstName,
@@ -133,6 +146,13 @@ async def gaming_api_users(
             time_zone=timeZone,
             favorite_team=favoriteTeam,
         )
+
+        # Format as legacy PHP response
+        return {
+            "table": "Session",
+            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "values": session_data
+        }
 
     except Exception as e:
         return {"error": str(e)}
@@ -173,8 +193,8 @@ async def gaming_api_sign_up(
         # Get client IP
         client_ip = request.client.host if request.client else "0.0.0.0"
 
-        # Create user and return session
-        return SignUpAction.execute(
+        # Get data from action
+        session_data = SignUpAction.execute(
             db=db,
             user_email=userEmail,
             user_password=userPassword,
@@ -189,6 +209,13 @@ async def gaming_api_sign_up(
             time_zone=timeZone if timeZone else None,
             favorite_team=favoriteTeam if favoriteTeam else None,
         )
+
+        # Format as legacy PHP response
+        return {
+            "table": "Session",
+            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "values": session_data
+        }
 
     except Exception as e:
         return {"error": str(e)}

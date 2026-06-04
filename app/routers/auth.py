@@ -12,12 +12,16 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @router.post("/signin")
 def rest_signin(payload: SignInRequest, http_request: Request, db: Session = Depends(get_db)) -> dict:
     """REST endpoint: Sign in user."""
-    RequestContext.set_datetime()  # Cache request datetime
-    # Get client IP
-    client_ip = http_request.client.host if http_request.client else "0.0.0.0"
-    result = SignInAction.execute(db, payload.userEmail, payload.userPassword, client_ip)
-    RequestContext.reset()  # Clean up context
-    return result
+    RequestContext.set_datetime()
+    try:
+        # Get client IP
+        client_ip = http_request.client.host if http_request.client else "0.0.0.0"
+        # Get data from action
+        session_data = SignInAction.execute(db, payload.userEmail, payload.userPassword, client_ip)
+        # Return as REST array
+        return session_data
+    finally:
+        RequestContext.reset()
 
 
 @router.post("/signout")
@@ -31,7 +35,8 @@ def rest_signup(payload: SignUpRequest, db: Session = Depends(get_db)) -> dict:
     """REST endpoint: Create new user account."""
     RequestContext.set_datetime()
     try:
-        result = SignUpAction.execute(
+        # Get data from action
+        session_data = SignUpAction.execute(
             db=db,
             user_email=payload.userEmail,
             user_password=payload.userPassword,
@@ -46,7 +51,8 @@ def rest_signup(payload: SignUpRequest, db: Session = Depends(get_db)) -> dict:
             time_zone=payload.timeZone,
             favorite_team=payload.favoriteTeam,
         )
-        return result
+        # Return as REST object
+        return session_data
     finally:
         RequestContext.reset()
 
@@ -60,7 +66,8 @@ def rest_update_user(
     """REST endpoint: Update user profile."""
     RequestContext.set_datetime()
     try:
-        return UpdateUserAction.execute(
+        # Get data from action
+        session_data = UpdateUserAction.execute(
             db=db,
             user_id=user_id,
             first_name=payload.firstName,
@@ -73,5 +80,7 @@ def rest_update_user(
             time_zone=payload.timeZone,
             favorite_team=payload.favoriteTeam,
         )
+        # Return as REST object
+        return session_data
     finally:
         RequestContext.reset()
