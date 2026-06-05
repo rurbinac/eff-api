@@ -1,0 +1,96 @@
+EFF FANTASY FOOTBALL - IMPLEMENTED LEGACY ENDPOINTS
+====================================================
+
+Replace [CLOUD_RUN_URL] with your actual Cloud Run endpoint
+
+AUTHENTICATION
+==============
+POST [CLOUD_RUN_URL]/eff/eff_api/Users.php?f=SignIn
+  Parameters: _format, userEmail, userPassword
+
+POST [CLOUD_RUN_URL]/eff/eff_api/SignIn.php
+  Parameters: _format, userEmail, userPassword
+
+POST [CLOUD_RUN_URL]/eff/eff_api/Users.php?f=SignOut
+  Parameters: _format
+
+POST [CLOUD_RUN_URL]/eff/eff_api/SignOut.php
+  Parameters: _format
+
+POST [CLOUD_RUN_URL]/eff/eff_api/Users.php?f=SignInfo
+  Parameters: _format (requires Bearer token in Authorization header)
+
+POST [CLOUD_RUN_URL]/eff/eff_api/SignUp.php
+  Parameters: _format, userEmail, userPassword, userName, firstName, lastName, birthday (opt), country (opt), state (opt), city (opt), phoneNumber (opt), timeZone (opt), favoriteTeam (opt)
+
+
+LOOKUPS
+=======
+POST [CLOUD_RUN_URL]/eff/eff_api/Lookups.php?f=ReadList
+  Parameters: _format
+
+
+LEAGUES
+=======
+POST [CLOUD_RUN_URL]/eff/eff_api/Leagues.php?f=ReadList
+  Parameters: _format, userID, season (opt)
+
+
+DIVISIONS
+=========
+POST [CLOUD_RUN_URL]/eff/eff_api/Divisions.php?f=ReadList
+  Parameters: _format, leagueID
+
+POST [CLOUD_RUN_URL]/eff/eff_api/Divisions.php?f=TransactionsDetail
+  Parameters: _format, divisionID
+
+
+DIVISION NOTES
+==============
+POST [CLOUD_RUN_URL]/eff/eff_api/DivisionNotes.php?f=ReadList
+  Parameters: _format, divisionID
+
+
+TEAMS
+=====
+POST [CLOUD_RUN_URL]/eff/eff_api/Teams.php?f=ReadList
+  Parameters: _format, _type (byLeagueID|byDivisionID), leagueID or divisionID
+
+POST [CLOUD_RUN_URL]/eff/eff_api/Teams.php?f=GetRealMembersRanking
+  Parameters: _format, teamID
+
+
+MATCHES
+=======
+POST [CLOUD_RUN_URL]/eff/eff_api/Matches.php?f=ReadList
+  Parameters: _format, leagueID (opt), divisionID (opt), teamID (opt)
+
+
+MATCH TEAMS
+===========
+POST [CLOUD_RUN_URL]/eff/eff_api/MatchTeams.php?f=ReadList
+  Parameters: _format, leagueID (opt), divisionID (opt), teamID (opt), matchID (opt)
+
+
+REAL MATCHES
+============
+POST [CLOUD_RUN_URL]/eff/eff_api/RealMatches.php?f=ReadList
+  Parameters: _format, realCompetitionID, realCompetitionSeasonID
+
+
+REAL STANDINGS
+==============
+POST [CLOUD_RUN_URL]/eff/eff_api/RealStandings.php?f=ReadList
+  Parameters: _format, realCompetitionID (opt), realCompetitionSeasonID (opt)
+
+
+REAL TEAM STANDINGS
+===================
+POST [CLOUD_RUN_URL]/eff/eff_api/RealTeamStandings.php?f=ReadList
+  Parameters: _format, realCompetitionID, realTeamID
+
+
+TEAM STANDINGS
+==============
+POST [CLOUD_RUN_URL]/eff/eff_api/TeamStandings.php?f=ReadList
+  Parameters: _format, teamID (opt)
