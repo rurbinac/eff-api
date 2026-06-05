@@ -95,7 +95,7 @@ class DivisionsTransactionsDetailAction:
     @staticmethod
     def execute(db: Session, division_id: int) -> list[dict]:
         """Get transaction details for division in last 14 days (pure data, no wrapper)."""
-        # Query transaction logs
+        # Query transaction logs with database-agnostic date calculation
         stmt = text("""
             SELECT `t1`.`baseRealCompetitionID` AS `realCompetitionID`,
                    `tml1`.`teamMemberLogID`,
@@ -122,7 +122,7 @@ class DivisionsTransactionsDetailAction:
             LEFT OUTER JOIN `TeamMemberLog` `tml2` ON `tml2`.`teamMemberTransferID` = `tmt`.`teamMemberTransferID`
             LEFT OUTER JOIN `Teams` `t2` ON `tml2`.`teamID` = `t2`.`teamID`
             WHERE `tml1`.`divisionID` = :divisionID
-              AND `tml1`.`createdIn` >= DATE_ADD(CURRENT_TIMESTAMP, INTERVAL -14 DAY)
+              AND `tml1`.`createdIn` >= datetime('now', '-14 days')
             ORDER BY `tml1`.`createdIn` DESC
         """)
 

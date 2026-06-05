@@ -32,7 +32,6 @@ class TestDivisionsEndpoints:
         data = response.json()
         assert isinstance(data, list)
 
-    @pytest.mark.skip(reason="TeamMemberLog table not in test database")
     def test_legacy_divisions_transactions_detail(self, test_client):
         """Test Legacy Divisions TransactionsDetail endpoint."""
         response = test_client.post(
@@ -50,7 +49,6 @@ class TestDivisionsEndpoints:
         assert "timestamp" in data
         assert isinstance(data["items"], list)
 
-    @pytest.mark.skip(reason="TeamMemberLog table not in test database")
     def test_rest_divisions_transactions_detail(self, test_client):
         """Test REST Divisions TransactionsDetail endpoint."""
         response = test_client.post(

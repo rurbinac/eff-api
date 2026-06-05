@@ -619,3 +619,28 @@ class RealMatch(SQLModel, table=True):
     lastFDate: Optional[datetime] = None
     createdIn: datetime
     updatedIn: Optional[datetime] = None
+
+
+class TeamMemberTransfers(SQLModel, table=True):
+    __tablename__ = "TeamMemberTransfers"
+
+    teamMemberTransferID: Optional[int] = Field(default=None, primary_key=True)
+    createdIn: datetime
+    updatedIn: Optional[datetime] = None
+
+
+class TeamMemberLog(SQLModel, table=True):
+    __tablename__ = "TeamMemberLog"
+
+    teamMemberLogID: Optional[int] = Field(default=None, primary_key=True)
+    teamMemberTransferID: Optional[int] = None
+    leagueID: int
+    divisionID: int
+    teamID: int
+    userID: int
+    requester: Optional[int] = None
+    transactionType: int
+    membersBefore: Optional[str] = Field(default=None, max_length=500)
+    membersAfter: Optional[str] = Field(default=None, max_length=500)
+    createdIn: datetime
+    updatedIn: Optional[datetime] = None
