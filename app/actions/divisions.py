@@ -31,11 +31,11 @@ class DivisionsTransactionsDetailAction:
         members_after_str = row.get(after_key) or ""
 
         # Parse using MKeys
-        before_keys = MKeys(members_before_str, size=1)
-        after_keys = MKeys(members_after_str, size=1)
+        before_keys = MKeys.build(members_before_str, size=1)
+        after_keys = MKeys.build(members_after_str, size=1)
 
-        before_list = before_keys.get_group(0) if before_keys.is_valid else []
-        after_list = after_keys.get_group(0) if after_keys.is_valid else []
+        before_list = before_keys.get_group(0) if before_keys else []
+        after_list = after_keys.get_group(0) if after_keys else []
 
         # Calculate added and dropped
         added = list(set(after_list) - set(before_list))

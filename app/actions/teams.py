@@ -31,9 +31,11 @@ class TeamsGetCurrentMembersAction:
             return []
 
         # Parse team members using MKeys
-        team_mkeys = MKeys(team_members_str, size=1)
-        keys = team_mkeys.get_group(0)
+        team_mkeys = MKeys.build(team_members_str, size=1)
+        if not team_mkeys:
+            return []
 
+        keys = team_mkeys.get_group(0)
         if not keys:
             return []
 
@@ -93,9 +95,10 @@ class TeamsSetFranchiseWishListAction:
         else:
             wish_keys = [k.strip() for k in franchise_wish_list_keys_str.split(",") if k.strip()]
 
-        # Initialize MKeys with list and pack
-        mkeys = MKeys(".", size=1)  # Initialize empty
-        mkeys._keys = (wish_keys,)  # Set the keys directly as list in group 0
+        # Build MKeys with list and pack
+        mkeys = MKeys.build([wish_keys], size=1)
+        if not mkeys:
+            raise Exception("Invalid wish list keys")
         packed_franchise_wish_list = mkeys.pack()
 
         # Update Teams table
@@ -143,9 +146,10 @@ class TeamsWishListSetAction:
         else:
             wish_keys = [k.strip() for k in wish_list_keys_str.split(",") if k.strip()]
 
-        # Initialize MKeys with list and pack
-        mkeys = MKeys(".", size=1)  # Initialize empty
-        mkeys._keys = (wish_keys,)  # Set the keys directly as list in group 0
+        # Build MKeys with list and pack
+        mkeys = MKeys.build([wish_keys], size=1)
+        if not mkeys:
+            raise Exception("Invalid wish list keys")
         packed_wish_list = mkeys.pack()
 
         # Update Teams table
@@ -190,9 +194,10 @@ class TeamsSetRealMembersRankingAction:
         # Parse member keys from comma-separated string
         member_keys = [k.strip() for k in member_keys_str.split(",") if k.strip()]
 
-        # Initialize MKeys with list and pack
-        mkeys = MKeys(".", size=1)  # Initialize empty
-        mkeys._keys = (member_keys,)  # Set the keys directly as list in group 0
+        # Build MKeys with list and pack
+        mkeys = MKeys.build([member_keys], size=1)
+        if not mkeys:
+            raise Exception("Invalid member keys")
         packed_ranking = mkeys.pack()
 
         # Update Teams table
@@ -254,15 +259,18 @@ class TeamsGetRealMembersRankingAction:
         team_members_div = ":".join([p for p in team_members_div_parts if p])
 
         # Parse ranking using MKeys
-        ranking_keys = MKeys(members_ranking_str, size=1)
+        ranking_keys = MKeys.build(members_ranking_str, size=1)
+        if not ranking_keys:
+            return []
+
         keys = ranking_keys.get_group(0)
 
         # Create dict with ranking keys mapped to None initially
         my_dict = dict.fromkeys(keys, None)
 
         # Create MKeys for team and division membership
-        team_mkeys = MKeys(team_members_str, size=1)
-        division_mkeys = MKeys(team_members_div, size=1) if team_members_div else MKeys(".", size=1)
+        team_mkeys = MKeys.build(team_members_str, size=1)
+        division_mkeys = MKeys.build(team_members_div, size=1) if team_members_div else MKeys.build(None, size=1)
 
         # Query real team members ordered by ranking and name
         members_stmt = text("""
@@ -283,8 +291,10 @@ class TeamsGetRealMembersRankingAction:
             member_key = member_dict.get("realTeamMemberKey")
 
             # Add membership flags
-            member_dict["inTeam"] = 1 if member_key in team_mkeys.get_group(0) else 0
-            member_dict["inDivision"] = 1 if member_key in division_mkeys.get_group(0) else 0
+            team_group = team_mkeys.get_group(0) if team_mkeys else []
+            division_group = division_mkeys.get_group(0) if division_mkeys else []
+            member_dict["inTeam"] = 1 if member_key in team_group else 0
+            member_dict["inDivision"] = 1 if member_key in division_group else 0
             member_dict["inRanking"] = 1 if member_key in my_dict else 0
 
             # Populate dict if member is in ranking
