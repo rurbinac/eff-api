@@ -35,7 +35,13 @@ class MKeys:
     @property
     def is_valid(self) -> bool:
         return isinstance(self._keys, tuple)
-        
+
+    def is_valid_group(self, group: int = 0) -> bool:
+        return self.is_valid and group >= 0 and group < len(self._keys)
+    
+    def get_group(self, group: int = 0) -> list:
+        return self._keys[group] if self.is_valid_group(group) else []
+
     def unpack(self, txt: str, size: int | None = None) -> bool:
         keys = txt.split(":")
         all_keys = set()
@@ -80,13 +86,16 @@ class MKeys:
                 keys.append(".".join(k) + "." if len(k) > 0 else "")
             return ":".join(keys)
         return ""
+
+    def get_list(self, group: int = 0) -> list | None:
+        pass
     
     @property
     def size(self) -> int:
         return len(self._keys) if self.is_valid else 0
         
-    def count(self, g: int = 0) -> int | None:
-        return len(self._keys[g]) if self.is_valid and g >= 0 and g < len(self._keys) else None
+    def count(self, group: int = 0) -> int | None:
+        return len(self._keys[group]) if self.is_valid_group(group) else None
         
     def find_group(self, key: str) -> int:
         if self.is_valid:
@@ -95,9 +104,8 @@ class MKeys:
                     return i
         return -1
 
-    def get_key(self, i: int, g: int = 0) -> str | None:
-        if self.is_valid:
-            cnt = self.count(g)
-            if cnt is not None and i >= 0 and i < cnt:
-                return self._keys[g][i]
+    def get_key(self, i: int, group: int = 0) -> str | None:
+        if self.is_valid_group(group):
+            if i >= 0 and i < len(self._keys[group]):
+                return self._keys[group][i]
         return None

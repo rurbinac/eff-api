@@ -1,9 +1,17 @@
 from fastapi import APIRouter, Depends, Request, Query, Form
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.actions.teams import TeamsReadListAction
+from app.actions.teams import TeamsReadListAction, TeamsGetRealMembersRankingAction
 from app.context import RequestContext
+
+
+class TeamsRequest(BaseModel):
+    leagueID: int | None = None
+    divisionID: int | None = None
+    teamID: int | None = None
+
 
 router = APIRouter(tags=["teams"])
 
@@ -15,6 +23,7 @@ async def legacy_teams(
     type: str | None = Query(None, alias="_type"),
     leagueID: int | None = Form(None),
     divisionID: int | None = Form(None),
+    teamID: int | None = Form(None),
     request: Request = None,
     db: Session = Depends(get_db),
 ):
@@ -32,6 +41,15 @@ async def legacy_teams(
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
                 "items": [{"values": item} for item in items]
             }
+        elif f == "GetRealMembersRanking":
+            if teamID is None:
+                return {"error": "teamID is required for GetRealMembersRanking"}, 400
+            items = TeamsGetRealMembersRankingAction.execute(db, teamID)
+            return {
+                "table": "RealTeamMembers",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "items": [{"values": item} for item in items]
+            }
         else:
             return {"error": f"Unknown action: {f}"}, 400
     finally:
@@ -40,14 +58,29 @@ async def legacy_teams(
 
 @router.post("/api/teams/readlist")
 def rest_teams(
-    leagueID: int | None = None,
-    divisionID: int | None = None,
+    payload: TeamsRequest,
     db: Session = Depends(get_db)
 ):
     """REST endpoint: Get teams for league or division."""
     RequestContext.set_datetime()
     try:
-        items = TeamsReadListAction.execute(db, league_id=leagueID, division_id=divisionID)
+        items = TeamsReadListAction.execute(db, league_id=payload.leagueID, division_id=payload.divisionID)
+        return items
+    finally:
+        RequestContext.reset()
+
+
+@router.post("/api/teams/real-members-ranking")
+def rest_teams_real_members_ranking(
+    payload: TeamsRequest,
+    db: Session = Depends(get_db)
+):
+    """REST endpoint: Get real members ranking for team."""
+    RequestContext.set_datetime()
+    try:
+        if payload.teamID is None:
+            return {"error": "teamID is required"}, 400
+        items = TeamsGetRealMembersRankingAction.execute(db, payload.teamID)
         return items
     finally:
         RequestContext.reset()
