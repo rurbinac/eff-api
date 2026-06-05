@@ -64,6 +64,56 @@ class TeamsGetCurrentMembersAction:
         return result
 
 
+class TeamsWishListSetAction:
+    """Set team's wish list."""
+
+    @staticmethod
+    def execute(db: Session, team_id: int, user_id: int, wish_list_keys_str: str) -> dict:
+        """Set team's wish list (pure data, no wrapper)."""
+        # Query team to verify it exists and get owner
+        team_stmt = text("""
+            SELECT `userID`
+            FROM `Teams`
+            WHERE `teamID` = :teamID
+            LIMIT 1
+        """)
+        team_result = db.execute(team_stmt, {"teamID": team_id})
+        team_row = team_result.mappings().first()
+
+        if not team_row:
+            raise Exception(f"Team {team_id} not found")
+
+        team_user_id = team_row["userID"]
+        if team_user_id != user_id:
+            raise Exception("Unauthorized: You do not own this team")
+
+        # Parse wish list keys - handle both dot and comma separated formats
+        if "." in wish_list_keys_str and "," not in wish_list_keys_str:
+            wish_keys = [k.strip() for k in wish_list_keys_str.split(".") if k.strip()]
+        else:
+            wish_keys = [k.strip() for k in wish_list_keys_str.split(",") if k.strip()]
+
+        # Initialize MKeys with list and pack
+        mkeys = MKeys(".", size=1)  # Initialize empty
+        mkeys._keys = (wish_keys,)  # Set the keys directly as list in group 0
+        packed_wish_list = mkeys.pack()
+
+        # Update Teams table
+        update_stmt = text("""
+            UPDATE `Teams`
+            SET `membersWishList` = :membersWishList
+            WHERE `teamID` = :teamID
+        """)
+        db.execute(update_stmt, {"membersWishList": packed_wish_list, "teamID": team_id})
+        db.commit()
+
+        return {
+            "success": True,
+            "teamID": team_id,
+            "membersWishList": packed_wish_list
+        }
+
+
 class TeamsSetRealMembersRankingAction:
     """Set real members ranking for a team."""
 
