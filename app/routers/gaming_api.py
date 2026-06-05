@@ -5,7 +5,7 @@ from app.database import get_db
 from app.context import RequestContext
 from app.actions.sign import SignInfoAction, SignOutAction, SignUpAction, UpdateUserAction
 from app.actions.leagues import LeaguesBuildAction, LeaguesJoinAction
-from app.actions.teams import TeamsSetRealMembersRankingAction, TeamsGetCurrentMembersAction, TeamsWishListSetAction
+from app.actions.teams import TeamsSetRealMembersRankingAction, TeamsGetCurrentMembersAction, TeamsWishListSetAction, TeamsSetFranchiseWishListAction
 from app.security import decode_token
 
 router = APIRouter()
@@ -326,6 +326,7 @@ async def gaming_api_teams(
     teamID: int = Form(None),
     memberKeys: str = Form(None),
     wishListKeys: str = Form(None),
+    franchiseWishListKeys: str = Form(None),
     authorization: str = Header(None),
     db: Session = Depends(get_db),
 ):
@@ -411,6 +412,43 @@ async def gaming_api_teams(
                 team_id=teamID,
                 user_id=user_id,
                 wish_list_keys_str=wishListKeys,
+            )
+
+            # Format as legacy PHP response
+            return {
+                "table": "success",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "values": result
+            }
+
+        elif f == "SetFranchiseWishList":
+            if not teamID or not franchiseWishListKeys:
+                return {"error": "teamID and franchiseWishListKeys are required"}
+
+            # Extract token from Authorization header
+            token = None
+            if authorization:
+                if authorization.startswith("Bearer "):
+                    token = authorization[7:]
+                else:
+                    token = authorization
+
+            if not token:
+                return {"error": "Missing authentication token"}
+
+            # Verify token and get user ID
+            payload = decode_token(token)
+            if not payload:
+                return {"error": "Invalid or expired token"}
+
+            user_id = int(payload.get("sub"))
+
+            # Get data from action
+            result = TeamsSetFranchiseWishListAction.execute(
+                db=db,
+                team_id=teamID,
+                user_id=user_id,
+                franchise_wish_list_keys_str=franchiseWishListKeys,
             )
 
             # Format as legacy PHP response

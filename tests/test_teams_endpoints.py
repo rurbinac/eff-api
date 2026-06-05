@@ -138,3 +138,26 @@ class TestTeamsEndpoints:
         assert response.status_code in (200, 400)
         data = response.json()
         assert isinstance(data, dict)
+
+    def test_gaming_api_teams_set_franchise_wish_list(self, test_client, test_user):
+        """Test Gaming API Teams SetFranchiseWishList endpoint."""
+        from app.security import create_access_token
+
+        # Create a test token
+        token = create_access_token({"sub": str(test_user.userID), "email": test_user.userEmail})
+
+        response = test_client.post(
+            "/gaming/api/Teams.php?f=SetFranchiseWishList",
+            data={
+                "_format": "json",
+                "teamID": "1",
+                "franchiseWishListKeys": "P100,T50,P200"
+            },
+            headers={"Authorization": f"Bearer {token}"}
+        )
+
+        # Should fail with 400 because team 1 doesn't exist or user doesn't own it
+        # But the endpoint should be callable and handle auth properly
+        assert response.status_code in (200, 400)
+        data = response.json()
+        assert isinstance(data, dict)
