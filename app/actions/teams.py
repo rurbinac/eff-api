@@ -5,6 +5,65 @@ from app.context import RequestContext
 from app.utils import MKeys
 
 
+class TeamsGetCurrentMembersAction:
+    """Get current team members with real stats in roster order."""
+
+    @staticmethod
+    def execute(db: Session, team_id: int) -> list[dict]:
+        """Get team members ordered by teamMembers field (pure data, no wrapper)."""
+        # Query team to get members string and competition ID
+        team_stmt = text("""
+            SELECT `teamMembers`, `baseRealCompetitionID`
+            FROM `Teams`
+            WHERE `teamID` = :teamID
+            LIMIT 1
+        """)
+        team_result = db.execute(team_stmt, {"teamID": team_id})
+        team_row = team_result.mappings().first()
+
+        if not team_row:
+            return []
+
+        team_members_str = team_row.get("teamMembers") or ""
+        base_competition_id = team_row.get("baseRealCompetitionID")
+
+        if not team_members_str or not base_competition_id:
+            return []
+
+        # Parse team members using MKeys
+        team_mkeys = MKeys(team_members_str, size=1)
+        keys = team_mkeys.get_group(0)
+
+        if not keys:
+            return []
+
+        # Create dict with keys in order, initialized to None
+        my_dict = dict.fromkeys(keys, None)
+
+        # Query real team members
+        members_stmt = text("""
+            SELECT *
+            FROM `RealTeamMembers`
+            WHERE `baseRealCompetitionID` = :baseRealCompetitionID
+              AND `realTeamMemberKey` IN (:keys)
+        """)
+        members_result = db.execute(
+            members_stmt,
+            {"baseRealCompetitionID": base_competition_id, "keys": keys}
+        )
+
+        # Populate dict with members
+        for row in members_result.mappings():
+            member_dict = dict(row)
+            member_key = member_dict.get("realTeamMemberKey")
+            if member_key in my_dict:
+                my_dict[member_key] = member_dict
+
+        # Return non-None values in order
+        result = [v for v in my_dict.values() if v is not None]
+        return result
+
+
 class TeamsSetRealMembersRankingAction:
     """Set real members ranking for a team."""
 

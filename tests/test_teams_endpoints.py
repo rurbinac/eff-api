@@ -76,6 +76,23 @@ class TestTeamsEndpoints:
         data = response.json()
         assert isinstance(data, list)
 
+    def test_gaming_api_teams_get_current_members(self, test_client):
+        """Test Gaming API Teams GetCurrentMembers endpoint."""
+        response = test_client.post(
+            "/gaming/api/Teams.php?f=GetCurrentMembers",
+            data={
+                "_format": "json",
+                "teamID": "1"
+            }
+        )
+
+        # Should return 200 even if no members
+        assert response.status_code == 200
+        data = response.json()
+        assert data["table"] == "RealTeamMembers"
+        assert "timestamp" in data
+        assert isinstance(data["items"], list)
+
     def test_gaming_api_teams_set_real_members_ranking(self, test_client, test_user):
         """Test Gaming API Teams SetRealMembersRanking endpoint."""
         from app.security import create_access_token

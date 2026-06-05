@@ -5,7 +5,7 @@ from app.database import get_db
 from app.context import RequestContext
 from app.actions.sign import SignInfoAction, SignOutAction, SignUpAction, UpdateUserAction
 from app.actions.leagues import LeaguesBuildAction, LeaguesJoinAction
-from app.actions.teams import TeamsSetRealMembersRankingAction
+from app.actions.teams import TeamsSetRealMembersRankingAction, TeamsGetCurrentMembersAction
 from app.security import decode_token
 
 router = APIRouter()
@@ -328,47 +328,62 @@ async def gaming_api_teams(
     authorization: str = Header(None),
     db: Session = Depends(get_db),
 ):
-    """Gaming API Teams endpoint - set member ranking."""
+    """Gaming API Teams endpoint - set/get member info."""
     RequestContext.set_datetime()
     try:
-        if f != "SetRealMembersRanking":
+        if f == "GetCurrentMembers":
+            if not teamID:
+                return {"error": "teamID is required"}
+
+            # Get data from action
+            items = TeamsGetCurrentMembersAction.execute(db, teamID)
+
+            # Format as legacy PHP response
+            return {
+                "table": "RealTeamMembers",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "items": [{"values": item} for item in items]
+            }
+
+        elif f == "SetRealMembersRanking":
+            if not teamID or not memberKeys:
+                return {"error": "teamID and memberKeys are required"}
+
+            # Extract token from Authorization header
+            token = None
+            if authorization:
+                if authorization.startswith("Bearer "):
+                    token = authorization[7:]
+                else:
+                    token = authorization
+
+            if not token:
+                return {"error": "Missing authentication token"}
+
+            # Verify token and get user ID
+            payload = decode_token(token)
+            if not payload:
+                return {"error": "Invalid or expired token"}
+
+            user_id = int(payload.get("sub"))
+
+            # Get data from action
+            result = TeamsSetRealMembersRankingAction.execute(
+                db=db,
+                team_id=teamID,
+                user_id=user_id,
+                member_keys_str=memberKeys,
+            )
+
+            # Format as legacy PHP response
+            return {
+                "table": "success",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "values": result
+            }
+
+        else:
             return {"error": f"Unknown function: {f}"}
-
-        if not teamID or not memberKeys:
-            return {"error": "teamID and memberKeys are required"}
-
-        # Extract token from Authorization header
-        token = None
-        if authorization:
-            if authorization.startswith("Bearer "):
-                token = authorization[7:]
-            else:
-                token = authorization
-
-        if not token:
-            return {"error": "Missing authentication token"}
-
-        # Verify token and get user ID
-        payload = decode_token(token)
-        if not payload:
-            return {"error": "Invalid or expired token"}
-
-        user_id = int(payload.get("sub"))
-
-        # Get data from action
-        result = TeamsSetRealMembersRankingAction.execute(
-            db=db,
-            team_id=teamID,
-            user_id=user_id,
-            member_keys_str=memberKeys,
-        )
-
-        # Format as legacy PHP response
-        return {
-            "table": "success",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-            "values": result
-        }
 
     except Exception as e:
         return {"error": str(e)}
