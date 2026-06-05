@@ -5,6 +5,53 @@ from app.context import RequestContext
 from app.utils import MKeys
 
 
+class TeamsSetRealMembersRankingAction:
+    """Set real members ranking for a team."""
+
+    @staticmethod
+    def execute(db: Session, team_id: int, user_id: int, member_keys_str: str) -> dict:
+        """Set team's member ranking (pure data, no wrapper)."""
+        # Query team to verify it exists and get owner
+        team_stmt = text("""
+            SELECT `userID`
+            FROM `Teams`
+            WHERE `teamID` = :teamID
+            LIMIT 1
+        """)
+        team_result = db.execute(team_stmt, {"teamID": team_id})
+        team_row = team_result.mappings().first()
+
+        if not team_row:
+            raise Exception(f"Team {team_id} not found")
+
+        team_user_id = team_row["userID"]
+        if team_user_id != user_id:
+            raise Exception("Unauthorized: You do not own this team")
+
+        # Parse member keys from comma-separated string
+        member_keys = [k.strip() for k in member_keys_str.split(",") if k.strip()]
+
+        # Initialize MKeys with list and pack
+        mkeys = MKeys(".", size=1)  # Initialize empty
+        mkeys._keys = (member_keys,)  # Set the keys directly as list in group 0
+        packed_ranking = mkeys.pack()
+
+        # Update Teams table
+        update_stmt = text("""
+            UPDATE `Teams`
+            SET `membersRanking` = :membersRanking
+            WHERE `teamID` = :teamID
+        """)
+        db.execute(update_stmt, {"membersRanking": packed_ranking, "teamID": team_id})
+        db.commit()
+
+        return {
+            "success": True,
+            "teamID": team_id,
+            "membersRanking": packed_ranking
+        }
+
+
 class TeamsGetRealMembersRankingAction:
     """Get real members ranking for a team."""
 

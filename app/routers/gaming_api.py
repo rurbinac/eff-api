@@ -5,6 +5,7 @@ from app.database import get_db
 from app.context import RequestContext
 from app.actions.sign import SignInfoAction, SignOutAction, SignUpAction, UpdateUserAction
 from app.actions.leagues import LeaguesBuildAction, LeaguesJoinAction
+from app.actions.teams import TeamsSetRealMembersRankingAction
 from app.security import decode_token
 
 router = APIRouter()
@@ -310,6 +311,64 @@ async def gaming_api_leagues(
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
                 "values": team_data
             }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+    finally:
+        RequestContext.reset()
+
+
+@router.post("/gaming/api/Teams.php")
+async def gaming_api_teams(
+    f: str = None,
+    format: str = Form("json", alias="_format"),
+    teamID: int = Form(None),
+    memberKeys: str = Form(None),
+    authorization: str = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Gaming API Teams endpoint - set member ranking."""
+    RequestContext.set_datetime()
+    try:
+        if f != "SetRealMembersRanking":
+            return {"error": f"Unknown function: {f}"}
+
+        if not teamID or not memberKeys:
+            return {"error": "teamID and memberKeys are required"}
+
+        # Extract token from Authorization header
+        token = None
+        if authorization:
+            if authorization.startswith("Bearer "):
+                token = authorization[7:]
+            else:
+                token = authorization
+
+        if not token:
+            return {"error": "Missing authentication token"}
+
+        # Verify token and get user ID
+        payload = decode_token(token)
+        if not payload:
+            return {"error": "Invalid or expired token"}
+
+        user_id = int(payload.get("sub"))
+
+        # Get data from action
+        result = TeamsSetRealMembersRankingAction.execute(
+            db=db,
+            team_id=teamID,
+            user_id=user_id,
+            member_keys_str=memberKeys,
+        )
+
+        # Format as legacy PHP response
+        return {
+            "table": "success",
+            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "values": result
+        }
 
     except Exception as e:
         return {"error": str(e)}
