@@ -315,47 +315,6 @@ class MatchDaysStatus(SQLModel, table=True):
     finishBaseMatchDay: Optional[datetime] = None
 
 
-class TeamStanding(SQLModel, table=True):
-    __tablename__ = "TeamStandings"
-
-    teamStandingID: Optional[int] = Field(default=None, primary_key=True)
-    leagueID: int
-    divisionID: int
-    teamID: int
-    userID: int
-    season: int
-    seasonNum: int
-    matchDayMapKey: Optional[str] = Field(default=None, max_length=20)
-    realCompetitionID: Optional[int] = None
-    realCompetitionMatchDay: Optional[int] = None
-    competitionMatchDay: Optional[int] = None
-    lastCompetitionMatchDay: Optional[int] = None
-    teamName: str = Field(max_length=128)
-    place: Optional[int] = None
-    won: Optional[int] = None
-    draw: Optional[int] = None
-    lost: Optional[int] = None
-    scoreFor: Optional[float] = None
-    scoreAgainst: Optional[float] = None
-    points: Optional[int] = None
-    wonHome: Optional[int] = None
-    drawHome: Optional[int] = None
-    lostHome: Optional[int] = None
-    scoreForHome: Optional[float] = None
-    scoreAgainstHome: Optional[float] = None
-    pointsHome: Optional[int] = None
-    wonAway: Optional[int] = None
-    drawAway: Optional[int] = None
-    lostAway: Optional[int] = None
-    scoreForAway: Optional[float] = None
-    scoreAgainstAway: Optional[float] = None
-    pointsAway: Optional[int] = None
-    createdBy: Optional[int] = None
-    createdIn: datetime
-    updatedBy: Optional[int] = None
-    updatedIn: Optional[datetime] = None
-
-
 class RealStanding(SQLModel, table=True):
     __tablename__ = "RealStandings"
 

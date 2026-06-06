@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.models import TeamStanding
+from sqlalchemy import text
 
 
 class TeamStandingsReadListAction:
@@ -8,7 +8,8 @@ class TeamStandingsReadListAction:
     @staticmethod
     def execute(db: Session, team_id: int | None = None, league_id: int | None = None) -> list[dict]:
         """
-        Get team standings filtered by team ID or league ID (pure data, no wrapper).
+        Get team standings from MatchTeams and Matches (pure data, no wrapper).
+        TeamStandings table was merged into MatchTeams, so this reconstructs it via JOIN.
 
         Args:
             db: Database session
@@ -18,55 +19,68 @@ class TeamStandingsReadListAction:
         Returns:
             List of dicts with pure data (no response wrapper)
         """
-        query = db.query(TeamStanding)
+        # Build the standings query from MatchTeams + Matches
+        base_query = """
+            SELECT `t`.`matchTeamID` AS `leagueID`,
+                   `m`.`leagueID`,
+                   `m`.`divisionID`,
+                   `t`.`teamID`,
+                   `t`.`userID`,
+                   `m`.`season`,
+                   `m`.`seasonNum`,
+                   `t`.`matchDayMapKey`,
+                   `m`.`realCompetitionID`,
+                   `m`.`realCompetitionMatchDay`,
+                   `m`.`competitionMatchDay`,
+                   `m`.`lastCompetitionMatchDay`,
+                   `t`.`teamName`,
+                   `t`.`place`,
+                   `t`.`won`,
+                   `t`.`draw`,
+                   `t`.`lost`,
+                   `t`.`scoreFor`,
+                   `t`.`scoreAgainst`,
+                   `t`.`points`,
+                   `t`.`wonHome`,
+                   `t`.`drawHome`,
+                   `t`.`lostHome`,
+                   `t`.`scoreForHome`,
+                   `t`.`scoreAgainstHome`,
+                   `t`.`pointsHome`,
+                   `t`.`wonAway`,
+                   `t`.`drawAway`,
+                   `t`.`lostAway`,
+                   `t`.`scoreForAway`,
+                   `t`.`scoreAgainstAway`,
+                   `t`.`pointsAway`,
+                   `t`.`createdBy`,
+                   `t`.`createdIn`,
+                   `t`.`updatedBy`,
+                   `t`.`updatedIn`
+            FROM `MatchTeams` `t`
+            LEFT OUTER JOIN `Matches` `m` ON `m`.`matchID` = `t`.`matchID`
+            WHERE 1=1
+        """
 
+        params = {}
+
+        # Add filters
         if team_id is not None:
-            query = query.filter(TeamStanding.teamID == team_id)
+            base_query += " AND `t`.`teamID` = :teamID"
+            params["teamID"] = team_id
         elif league_id is not None:
-            query = query.filter(TeamStanding.leagueID == league_id)
+            base_query += " AND `m`.`leagueID` = :leagueID"
+            params["leagueID"] = league_id
 
-        standings = query.order_by(TeamStanding.place).all()
+        base_query += " ORDER BY `t`.`place` ASC"
+
+        # Execute the query
+        result = db.execute(text(base_query), params)
+        rows = result.mappings().all()
 
         items = []
-        for standing in standings:
-            values = {
-                "teamStandingID": standing.teamStandingID,
-                "leagueID": standing.leagueID,
-                "divisionID": standing.divisionID,
-                "teamID": standing.teamID,
-                "userID": standing.userID,
-                "season": standing.season,
-                "seasonNum": standing.seasonNum,
-                "matchDayMapKey": standing.matchDayMapKey,
-                "realCompetitionID": standing.realCompetitionID,
-                "realCompetitionMatchDay": standing.realCompetitionMatchDay,
-                "competitionMatchDay": standing.competitionMatchDay,
-                "lastCompetitionMatchDay": standing.lastCompetitionMatchDay,
-                "teamName": standing.teamName,
-                "place": standing.place,
-                "won": standing.won,
-                "draw": standing.draw,
-                "lost": standing.lost,
-                "scoreFor": standing.scoreFor,
-                "scoreAgainst": standing.scoreAgainst,
-                "points": standing.points,
-                "wonHome": standing.wonHome,
-                "drawHome": standing.drawHome,
-                "lostHome": standing.lostHome,
-                "scoreForHome": standing.scoreForHome,
-                "scoreAgainstHome": standing.scoreAgainstHome,
-                "pointsHome": standing.pointsHome,
-                "wonAway": standing.wonAway,
-                "drawAway": standing.drawAway,
-                "lostAway": standing.lostAway,
-                "scoreForAway": standing.scoreForAway,
-                "scoreAgainstAway": standing.scoreAgainstAway,
-                "pointsAway": standing.pointsAway,
-                "createdBy": standing.createdBy,
-                "createdIn": standing.createdIn.isoformat() if standing.createdIn else None,
-                "updatedBy": standing.updatedBy,
-                "updatedIn": standing.updatedIn.isoformat() if standing.updatedIn else None,
-            }
+        for row in rows:
+            values = dict(row)
             items.append(values)
 
         return items
