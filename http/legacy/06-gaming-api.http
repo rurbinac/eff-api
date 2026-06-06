@@ -39,3 +39,36 @@ Content-Type: application/x-www-form-urlencoded
 Authorization: Bearer {{authToken}}
 
 _format=json&firstName=GamingTokenUpdated&lastName=UserToken&country=FR&city=Paris&favoriteTeam=PSG
+
+### 6. Teams.php?f=GetCurrentMembers - Get team's current members
+POST {{baseUrl}}/gaming/api/Teams.php?f=GetCurrentMembers
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&teamID={{testTeamID}}
+
+### 7. Teams.php?f=WaiverMembersDetail - Get waiver members for team
+POST {{baseUrl}}/gaming/api/Teams.php?f=WaiverMembersDetail
+Content-Type: application/x-www-form-urlencoded
+
+_format=json&teamID={{testTeamID}}
+
+### 8. Teams.php?f=SetRealMembersRanking - Set member ranking (requires token)
+POST {{baseUrl}}/gaming/api/Teams.php?f=SetRealMembersRanking
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{authToken}}
+
+_format=json&teamID={{testTeamID}}&memberKeys=P1,T2,P3
+
+### 9. Teams.php?f=WishListSet - Set wish list (requires token)
+POST {{baseUrl}}/gaming/api/Teams.php?f=WishListSet
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{authToken}}
+
+_format=json&teamID={{testTeamID}}&wishListKeys=P10.T20
+
+### 10. Teams.php?f=SetFranchiseWishList - Set franchise wish list (requires token)
+POST {{baseUrl}}/gaming/api/Teams.php?f=SetFranchiseWishList
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{authToken}}
+
+_format=json&teamID={{testTeamID}}&franchiseWishListKeys=P100,T50

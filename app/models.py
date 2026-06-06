@@ -621,6 +621,29 @@ class RealMatch(SQLModel, table=True):
     updatedIn: Optional[datetime] = None
 
 
+class RealMatchTeam(SQLModel, table=True):
+    __tablename__ = "RealMatchTeams"
+
+    realMatchTeamID: Optional[int] = Field(default=None, primary_key=True)
+    realMatchID: int
+    realTeamMemberID: Optional[int] = None
+    realTeamMemberKey: Optional[str] = Field(default=None, max_length=10)
+    realTeamID: int
+    realTeamUID: str = Field(max_length=20)
+    realTeamName: str = Field(max_length=128)
+    realTeamShortName: Optional[str] = Field(default=None, max_length=10)
+    realTeamScore: Optional[int] = None
+    realTeamRealScore: Optional[int] = None
+    realTeamSide: str = Field(max_length=20)
+    realTeamCleanSheet: Optional[int] = Field(default=None, sa_type=TINYINT)
+    realTeamResult: Optional[int] = Field(default=None, sa_type=TINYINT)
+    realTeamPoints: Optional[int] = Field(default=None, sa_type=TINYINT)
+    realTeamNumber: int = Field(sa_type=TINYINT)
+    pointsL1: Optional[float] = None
+    createdIn: datetime
+    updatedIn: Optional[datetime] = None
+
+
 class TeamMemberTransfers(SQLModel, table=True):
     __tablename__ = "TeamMemberTransfers"
 

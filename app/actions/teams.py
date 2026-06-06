@@ -393,3 +393,83 @@ class TeamsReadListAction:
 
         # Return pure data (no response wrapper)
         return items
+
+
+class TeamsWaiverMembersDetailAction:
+    """Get waiver members detail for a team."""
+
+    @staticmethod
+    def execute(db: Session, team_id: int) -> list[dict]:
+        """Get team's waiver members with their stats and waiver actions (pure data, no wrapper)."""
+        # Query team to get membersWaivers and matchDayMapKey
+        team_stmt = text("""
+            SELECT `membersWaivers`, `matchDayMapKey`, `baseRealCompetitionID`
+            FROM `Teams`
+            WHERE `teamID` = :teamID
+            LIMIT 1
+        """)
+        team_result = db.execute(team_stmt, {"teamID": team_id})
+        team_row = team_result.mappings().first()
+
+        if not team_row:
+            return []
+
+        members_waivers_str = team_row.get("membersWaivers") or ""
+        match_day_map_key = team_row.get("matchDayMapKey")
+
+        if not members_waivers_str or not match_day_map_key:
+            return []
+
+        # Query MatchDaysStatus to get realCompetitionID and realCompetitionMatchDay
+        mds_stmt = text("""
+            SELECT `realCompetitionID`, `realCompetitionMatchDay`
+            FROM `MatchDaysStatus`
+            WHERE `matchDayMapKey` = :matchDayMapKey
+              AND `startWaivers` <= :currentDateTime
+              AND `finishPostMatch` > :currentDateTime
+            LIMIT 1
+        """)
+        mds_result = db.execute(mds_stmt, {
+            "matchDayMapKey": match_day_map_key,
+            "currentDateTime": RequestContext.get_datetime()
+        })
+        mds_row = mds_result.mappings().first()
+
+        if not mds_row:
+            return []
+
+        real_competition_id = mds_row.get("realCompetitionID")
+        real_competition_match_day = mds_row.get("realCompetitionMatchDay")
+
+        # Parse members waivers using MKeys with allow_dups=True
+        m_keys = MKeys.build(members_waivers_str, allow_dups=True)
+        if not m_keys:
+            return []
+
+        members = []
+        for g in range(m_keys.size):
+            group_keys = m_keys.get_group(g)
+            for k, key in enumerate(group_keys):
+                # Query RealStandings for this member
+                rs_stmt = text("""
+                    SELECT *
+                    FROM `RealStandings`
+                    WHERE `realTeamMemberKey` = :key
+                      AND `realCompetitionID` = :realCompetitionID
+                      AND `realCompetitionMatchDay` = :realCompetitionMatchDay
+                    LIMIT 1
+                """)
+                rs_result = db.execute(rs_stmt, {
+                    "key": key,
+                    "realCompetitionID": real_competition_id,
+                    "realCompetitionMatchDay": real_competition_match_day
+                })
+                rs_row = rs_result.mappings().first()
+
+                if rs_row:
+                    member_dict = dict(rs_row)
+                    member_dict["waiversGroup"] = g + 1
+                    member_dict["waiversAction"] = "add" if k == 0 else "drop"
+                    members.append(member_dict)
+
+        return members

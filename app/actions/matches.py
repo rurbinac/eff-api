@@ -1,7 +1,5 @@
-from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models import Match
-from app.context import RequestContext
+from app.models import Match, MatchTeam
 
 
 class MatchesReadListAction:
@@ -15,6 +13,7 @@ class MatchesReadListAction:
     ) -> list[dict]:
         """
         Get fantasy league matches filtered by league or division ID.
+        Joins with MatchTeams to reconstruct team-specific fields.
 
         Args:
             db: Database session
@@ -22,7 +21,7 @@ class MatchesReadListAction:
             division_id: Filter by divisionID
 
         Returns:
-            PHP-compatible response dict
+            List of match dicts with first/second team fields
         """
         query = db.query(Match)
 
@@ -37,6 +36,14 @@ class MatchesReadListAction:
 
         items = []
         for match in matches:
+            # Query MatchTeams for this match to get team data
+            team_records = db.query(MatchTeam).filter(
+                MatchTeam.matchID == match.matchID
+            ).all()
+
+            # Create a dict keyed by matchTeamNum
+            teams_by_num = {mt.matchTeamNum: mt for mt in team_records}
+
             def to_iso(dt):
                 if dt is None:
                     return None
@@ -44,6 +51,7 @@ class MatchesReadListAction:
                     return dt
                 return dt.isoformat()
 
+            # Build values dict with match metadata and pivoted team data
             values = {
                 "matchID": match.matchID,
                 "matchStatus": match.matchStatus,
@@ -63,25 +71,62 @@ class MatchesReadListAction:
                 "competitionMatchRound": match.competitionMatchRound,
                 "competitionMatchLastRound": match.competitionMatchLastRound,
                 "matchGroupWinnerTeamID": match.matchGroupWinnerTeamID,
-                "firstUserID": match.firstUserID,
-                "firstTeamID": match.firstTeamID,
-                "firstTeamName": match.firstTeamName,
-                "firstTeamScore": match.firstTeamScore,
-                "firstTeamPoints": match.firstTeamPoints,
-                "firstTeamSeeding": match.firstTeamSeeding,
-                "firstMatchDayMapKey": match.firstMatchDayMapKey,
-                "secondUserID": match.secondUserID,
-                "secondTeamID": match.secondTeamID,
-                "secondTeamName": match.secondTeamName,
-                "secondTeamScore": match.secondTeamScore,
-                "secondTeamPoints": match.secondTeamPoints,
-                "secondTeamSeeding": match.secondTeamSeeding,
-                "secondMatchDayMapKey": match.secondMatchDayMapKey,
+            }
+
+            # Add first team data (matchTeamNum = 1)
+            if 1 in teams_by_num:
+                mt1 = teams_by_num[1]
+                values.update({
+                    "firstUserID": mt1.userID,
+                    "firstTeamID": mt1.teamID,
+                    "firstTeamName": mt1.teamName,
+                    "firstTeamScore": mt1.teamScore,
+                    "firstTeamPoints": mt1.teamPoints,
+                    "firstTeamSeeding": mt1.teamSeeding,
+                    "firstMatchDayMapKey": mt1.matchDayMapKey,
+                })
+            else:
+                values.update({
+                    "firstUserID": None,
+                    "firstTeamID": None,
+                    "firstTeamName": None,
+                    "firstTeamScore": None,
+                    "firstTeamPoints": None,
+                    "firstTeamSeeding": None,
+                    "firstMatchDayMapKey": None,
+                })
+
+            # Add second team data (matchTeamNum = 2)
+            if 2 in teams_by_num:
+                mt2 = teams_by_num[2]
+                values.update({
+                    "secondUserID": mt2.userID,
+                    "secondTeamID": mt2.teamID,
+                    "secondTeamName": mt2.teamName,
+                    "secondTeamScore": mt2.teamScore,
+                    "secondTeamPoints": mt2.teamPoints,
+                    "secondTeamSeeding": mt2.teamSeeding,
+                    "secondMatchDayMapKey": mt2.matchDayMapKey,
+                })
+            else:
+                values.update({
+                    "secondUserID": None,
+                    "secondTeamID": None,
+                    "secondTeamName": None,
+                    "secondTeamScore": None,
+                    "secondTeamPoints": None,
+                    "secondTeamSeeding": None,
+                    "secondMatchDayMapKey": None,
+                })
+
+            # Add metadata
+            values.update({
                 "createdBy": match.createdBy,
                 "createdIn": to_iso(match.createdIn),
                 "updatedBy": match.updatedBy,
                 "updatedIn": to_iso(match.updatedIn),
-            }
+            })
+
             items.append({"values": values})
 
         return items

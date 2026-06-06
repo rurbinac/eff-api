@@ -161,3 +161,31 @@ class TestTeamsEndpoints:
         assert response.status_code in (200, 400)
         data = response.json()
         assert isinstance(data, dict)
+
+    def test_gaming_api_teams_waiver_members_detail(self, test_client):
+        """Test Gaming API Teams WaiverMembersDetail endpoint."""
+        response = test_client.post(
+            "/gaming/api/Teams.php?f=WaiverMembersDetail",
+            data={
+                "_format": "json",
+                "teamID": "1"
+            }
+        )
+
+        # Should return 200 even if no waiver members
+        assert response.status_code == 200
+        data = response.json()
+        assert data["table"] == "WaiverMembers"
+        assert "timestamp" in data
+        assert isinstance(data["items"], list)
+
+    def test_rest_teams_waiver_members_detail(self, test_client):
+        """Test REST Teams WaiverMembersDetail endpoint."""
+        response = test_client.post(
+            "/api/teams/waiver-members-detail",
+            json={"teamID": 1}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)

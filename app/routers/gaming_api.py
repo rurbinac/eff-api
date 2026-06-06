@@ -5,7 +5,7 @@ from app.database import get_db
 from app.context import RequestContext
 from app.actions.sign import SignInfoAction, SignOutAction, SignUpAction, UpdateUserAction
 from app.actions.leagues import LeaguesBuildAction, LeaguesJoinAction
-from app.actions.teams import TeamsSetRealMembersRankingAction, TeamsGetCurrentMembersAction, TeamsWishListSetAction, TeamsSetFranchiseWishListAction
+from app.actions.teams import TeamsSetRealMembersRankingAction, TeamsGetCurrentMembersAction, TeamsWishListSetAction, TeamsSetFranchiseWishListAction, TeamsWaiverMembersDetailAction
 from app.security import decode_token
 
 router = APIRouter()
@@ -456,6 +456,20 @@ async def gaming_api_teams(
                 "table": "success",
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
                 "values": result
+            }
+
+        elif f == "WaiverMembersDetail":
+            if not teamID:
+                return {"error": "teamID is required"}
+
+            # Get data from action
+            items = TeamsWaiverMembersDetailAction.execute(db, teamID)
+
+            # Format as legacy PHP response
+            return {
+                "table": "WaiverMembers",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "items": [{"values": item} for item in items]
             }
 
         else:

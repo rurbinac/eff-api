@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.actions.teams import TeamsReadListAction, TeamsGetRealMembersRankingAction
+from app.actions.teams import TeamsReadListAction, TeamsGetRealMembersRankingAction, TeamsWaiverMembersDetailAction
 from app.context import RequestContext
 
 
@@ -50,6 +50,15 @@ async def legacy_teams(
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
                 "items": [{"values": item} for item in items]
             }
+        elif f == "WaiverMembersDetail":
+            if teamID is None:
+                return {"error": "teamID is required for WaiverMembersDetail"}, 400
+            items = TeamsWaiverMembersDetailAction.execute(db, teamID)
+            return {
+                "table": "WaiverMembers",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "items": [{"values": item} for item in items]
+            }
         else:
             return {"error": f"Unknown action: {f}"}, 400
     finally:
@@ -81,6 +90,22 @@ def rest_teams_real_members_ranking(
         if payload.teamID is None:
             return {"error": "teamID is required"}, 400
         items = TeamsGetRealMembersRankingAction.execute(db, payload.teamID)
+        return items
+    finally:
+        RequestContext.reset()
+
+
+@router.post("/api/teams/waiver-members-detail")
+def rest_teams_waiver_members_detail(
+    payload: TeamsRequest,
+    db: Session = Depends(get_db)
+):
+    """REST endpoint: Get waiver members detail for team."""
+    RequestContext.set_datetime()
+    try:
+        if payload.teamID is None:
+            return {"error": "teamID is required"}, 400
+        items = TeamsWaiverMembersDetailAction.execute(db, payload.teamID)
         return items
     finally:
         RequestContext.reset()
