@@ -1,78 +1,31 @@
-"""F42 OPTA XML feed parser."""
+"""F42 OPTA XML feed parser using streaming (iterparse) for memory efficiency."""
 
 import xml.etree.ElementTree as ET
-from datetime import datetime
 from typing import Optional
 
 
 class F42Parser:
-    """Parse F42 OPTA XML feeds."""
+    """Parse F42 OPTA XML feeds using two-pass streaming approach.
+
+    Pass 1: Parse Squads (competitions, teams, players) - minimal memory
+    Pass 2: Parse MatchData (matches) - uses team mappings from Pass 1
+    """
 
     @staticmethod
     def parse_file(file_path: str) -> dict:
-        """Parse an F42 XML file and extract structured data.
+        """Parse an F42 XML file in two passes for memory efficiency.
 
         Args:
             file_path: Path to the F42 XML file
 
         Returns:
-            Dictionary with parsed data: competitions, teams, players, matches
+            Dictionary with parsed data: competition, teams, players, matches
         """
-        tree = ET.parse(file_path)
-        root = tree.getroot()
+        # Pass 1: Extract competition info and Squads (teams, players)
+        competition, teams, players, team_id_mapping = F42Parser._parse_pass_1_squads(file_path)
 
-        return F42Parser._parse_root(root)
-
-    @staticmethod
-    def parse_string(xml_string: str) -> dict:
-        """Parse F42 XML from a string.
-
-        Args:
-            xml_string: XML content as string
-
-        Returns:
-            Dictionary with parsed data
-        """
-        root = ET.fromstring(xml_string)
-        return F42Parser._parse_root(root)
-
-    @staticmethod
-    def _parse_root(root) -> dict:
-        """Parse the root SoccerFeed element."""
-        doc = root.find('.//SoccerDocument')
-        if doc is None:
-            raise ValueError("No SoccerDocument found in F42 feed")
-
-        competition = {
-            'competition_code': doc.get('competition_code'),
-            'competition_id': doc.get('competition_id'),
-            'competition_name': doc.get('competition_name'),
-            'season_id': doc.get('season_id'),
-            'season_name': doc.get('season_name'),
-            'game_system_id': doc.get('game_system_id'),
-            'timestamp': doc.get('timestamp'),
-        }
-
-        # Derive competition country from code (default to England for now)
-        comp_code = competition.get('competition_code', 'EN_PR')
-        if comp_code.startswith('EN_'):
-            competition['country'] = 'England'
-        else:
-            competition['country'] = 'England'  # Default for now
-
-        # Parse Squads for teams and players
-        squads = root.find('.//Squads')
-        teams = []
-        players = []
-        if squads is not None:
-            teams, players = F42Parser._parse_squads(squads)
-
-        # Parse MatchData
-        matches = []
-        for match_data in root.findall('.//MatchData'):
-            match = F42Parser._parse_match_data(match_data)
-            if match:
-                matches.append(match)
+        # Pass 2: Extract MatchData (using team mappings from Pass 1)
+        matches = F42Parser._parse_pass_2_matches(file_path, team_id_mapping)
 
         return {
             'competition': competition,
@@ -82,26 +35,95 @@ class F42Parser:
         }
 
     @staticmethod
-    def _parse_squads(squads_elem) -> tuple[list, list]:
-        """Parse Teams and Players from Squads element."""
+    def _parse_pass_1_squads(file_path: str) -> tuple[dict, list, list, dict]:
+        """Pass 1: Stream through XML and extract Squads (teams and players).
+
+        Returns:
+            (competition, teams, players, team_id_mapping)
+            team_id_mapping: dict mapping team uID to team data for Pass 2
+        """
+        competition = None
         teams = []
         players = []
+        team_id_mapping = {}  # Store team uID -> team data for Pass 2
+        in_squads = False
 
-        for team_elem in squads_elem.findall('.//Team'):
-            team = F42Parser._parse_team(team_elem)
-            if team:
-                teams.append(team)
+        # Use iterparse for memory-efficient streaming
+        context = ET.iterparse(file_path, events=['start', 'end'])
 
-            # Parse players within this team
-            for player_elem in team_elem.findall('.//Player'):
-                player = F42Parser._parse_player(player_elem, team['uID'])
-                if player:
-                    players.append(player)
+        for event, elem in context:
+            # Get competition info from SoccerDocument (start event)
+            if event == 'start' and elem.tag == 'SoccerDocument' and competition is None:
+                competition = {
+                    'competition_code': elem.get('competition_code'),
+                    'competition_id': elem.get('competition_id'),
+                    'competition_name': elem.get('competition_name'),
+                    'season_id': elem.get('season_id'),
+                    'season_name': elem.get('season_name'),
+                    'game_system_id': elem.get('game_system_id'),
+                    'timestamp': elem.get('timestamp'),
+                }
+                # Derive country
+                comp_code = competition.get('competition_code', 'EN_PR')
+                competition['country'] = 'England' if comp_code.startswith('EN_') else 'England'
 
-        return teams, players
+            # Track when we enter/exit Squads section
+            elif event == 'start' and elem.tag == 'Squads':
+                in_squads = True
+
+            # Process Team elements while in Squads (end event after all children parsed)
+            elif event == 'end' and elem.tag == 'Team' and in_squads:
+                team = F42Parser._parse_team_element(elem)
+                if team:
+                    teams.append(team)
+                    team_id_mapping[team['uID']] = team
+
+                    # Parse players within this team (from already-parsed element)
+                    for player_elem in elem.findall('Player'):
+                        player = F42Parser._parse_player_element(player_elem, team['uID'])
+                        if player:
+                            players.append(player)
+
+                # Clear element to save memory
+                elem.clear()
+
+            # Stop after Squads section (MatchData is in Pass 2)
+            elif event == 'end' and elem.tag == 'Squads':
+                in_squads = False
+                break
+
+        return competition, teams, players, team_id_mapping
 
     @staticmethod
-    def _parse_team(team_elem) -> Optional[dict]:
+    def _parse_pass_2_matches(file_path: str, team_id_mapping: dict) -> list:
+        """Pass 2: Stream through XML and extract MatchData only.
+
+        Args:
+            file_path: Path to the F42 XML file
+            team_id_mapping: Team uID mapping from Pass 1
+
+        Returns:
+            List of match dictionaries
+        """
+        matches = []
+
+        # Use iterparse for memory-efficient streaming
+        context = ET.iterparse(file_path, events=['end'])
+
+        for event, elem in context:
+            # Process MatchData elements (end event after all children parsed)
+            if event == 'end' and elem.tag == 'MatchData':
+                match = F42Parser._parse_match_element(elem, team_id_mapping)
+                if match:
+                    matches.append(match)
+
+                # Clear element to save memory
+                elem.clear()
+
+        return matches
+
+    @staticmethod
+    def _parse_team_element(team_elem) -> Optional[dict]:
         """Parse a Team element from Squads."""
         uid = team_elem.get('uID')
         if not uid:
@@ -117,7 +139,7 @@ class F42Parser:
         }
 
     @staticmethod
-    def _parse_player(player_elem, team_uid: str) -> Optional[dict]:
+    def _parse_player_element(player_elem, team_uid: str) -> Optional[dict]:
         """Parse a Player element from Team."""
         uid = player_elem.get('uID')
         if not uid:
@@ -133,7 +155,7 @@ class F42Parser:
         }
 
     @staticmethod
-    def _parse_match_data(match_elem) -> Optional[dict]:
+    def _parse_match_element(match_elem, team_id_mapping: dict) -> Optional[dict]:
         """Parse a MatchData element."""
         uid = match_elem.get('uID')
         if not uid:
@@ -169,8 +191,8 @@ class F42Parser:
 
         # Parse team data (goals, bookings, scores)
         team_data_list = []
-        for team_data in match_elem.findall('TeamData'):
-            team_info = F42Parser._parse_team_data(team_data)
+        for team_data_elem in match_elem.findall('TeamData'):
+            team_info = F42Parser._parse_team_data_element(team_data_elem, team_id_mapping)
             if team_info:
                 team_data_list.append(team_info)
 
@@ -179,7 +201,7 @@ class F42Parser:
         return match
 
     @staticmethod
-    def _parse_team_data(team_elem) -> Optional[dict]:
+    def _parse_team_data_element(team_elem, team_id_mapping: dict) -> Optional[dict]:
         """Parse TeamData element from MatchData."""
         side = team_elem.get('Side')
         team_ref = team_elem.get('TeamRef')
