@@ -46,6 +46,21 @@ class DraftConstants:
     WAIVER_STATUS_OPEN = 4
 
 
+class RealTeamMemberPositions:
+    """Position/role constants for RealTeamMembers."""
+
+    GOALKEEPER = 'Goalkeeper'
+    DEFENDER = 'Defender'
+    MIDFIELDER = 'Midfielder'
+    STRIKER = 'Striker'
+
+
+class RealTeamTypes:
+    """Team type constants for RealTeamMembers."""
+
+    EPL_TEAM = 'EPLTeam'
+
+
 class MatchConstants:
     """Match-related constants."""
 
