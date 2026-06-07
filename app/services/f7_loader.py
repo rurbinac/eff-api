@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.services.f7_parser import F7Parser
+from app.services.f7_events import add_event
 from app.constants import RealMatchPeriod
 
 
@@ -127,21 +128,27 @@ class F7Loader:
 
         Returns:
             Dictionary with processed data:
-            - match_events: List of match events
+            - match_events: List of match events with eventKey for deduplication
             - standings_data: Player standings/performance data
         """
         # Extract match data
         match_data = parsed_data.get('match_data', {})
 
-        # Placeholder for event processing (user will provide logic)
-        match_events = []
+        # Initialize events cache for processing
+        events_cache = []
+
+        # TODO: Extract and process match events
+        # - Goals (with assists)
+        # - Bookings (Yellow/Red cards)
+        # - Substitutions (SubOn/SubOff)
+        # Use add_event() to build events_cache with proper keys
 
         # Placeholder for standings data (user will provide logic)
         standings_data = {}
 
         return {
             'match_data': match_data,
-            'match_events': match_events,
+            'match_events': events_cache,
             'standings_data': standings_data,
         }
 
