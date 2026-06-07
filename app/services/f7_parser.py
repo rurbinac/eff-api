@@ -104,6 +104,8 @@ class F7Parser:
         if match_elem is None:
             return {}
 
+        match_info = match_elem.find('MatchInfo')
+
         match_data = {
             'home_team_ref': None,
             'away_team_ref': None,
@@ -111,7 +113,47 @@ class F7Parser:
             'away_score': None,
             'home_side': 'Home',
             'away_side': 'Away',
+            # MatchInfo attributes
+            'match_type': match_info.get('MatchType') if match_info is not None else None,
+            'period': match_info.get('Period') if match_info is not None else None,
+            # MatchInfo child elements
+            'attendance': None,
+            'date': None,
+            'date_offset': None,
+            'result_type': None,
+            # Stats
+            'match_time': None,
+            'first_half_time': None,
+            'second_half_time': None,
         }
+
+        if match_info is not None:
+            # Parse MatchInfo children
+            attendance_elem = match_info.find('Attendance')
+            if attendance_elem is not None:
+                match_data['attendance'] = attendance_elem.text
+
+            date_elem = match_info.find('Date')
+            if date_elem is not None:
+                match_data['date'] = date_elem.text
+                # Extract offset from date if present (format: 20250519T200000+0100)
+                if match_data['date'] and '+' in match_data['date']:
+                    match_data['date_offset'] = match_data['date'].split('+')[1]
+
+            result_elem = match_info.find('Result')
+            if result_elem is not None:
+                match_data['result_type'] = result_elem.get('Type')
+
+        # Parse Stat elements for match times
+        for stat in match_elem.findall('Stat'):
+            stat_type = stat.get('Type')
+            stat_value = stat.text
+            if stat_type == 'match_time':
+                match_data['match_time'] = stat_value
+            elif stat_type == 'first_half_time':
+                match_data['first_half_time'] = stat_value
+            elif stat_type == 'second_half_time':
+                match_data['second_half_time'] = stat_value
 
         # Parse TeamData elements
         for team_data in match_elem.findall('TeamData'):

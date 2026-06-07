@@ -1,8 +1,10 @@
 """F7 OPTA feed loader - loads single match detailed results."""
 
+from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.services.f7_parser import F7Parser
+from app.constants import RealMatchPeriod
 
 
 class F7Loader:
@@ -224,3 +226,95 @@ class F7Loader:
                 players_cache[player_uid]['realTeamMemberKey'] = row['realTeamMemberKey']
 
         return players_cache
+
+    @staticmethod
+    def update_match_quick_mode(db: Session, match_ids: dict, match_data: dict) -> dict:
+        """Update RealMatches with F7 data in Quick mode.
+
+        Args:
+            db: Database session
+            match_ids: Dict with realMatchID from foundation layer
+            match_data: Parsed match data from F7
+
+        Returns:
+            Dict with update status and count
+        """
+        now = datetime.utcnow()
+
+        # Extract and normalize period data
+        period = RealMatchPeriod.get_period(match_data.get('period'))
+        real_match_status = RealMatchPeriod.to_match_status(period)
+        real_match_ended = RealMatchPeriod.to_match_ended(period)
+
+        # Parse date - extract UTC version
+        match_date = match_data.get('date')
+        if match_date:
+            # Convert to ISO format (YYYY-MM-DD HH:MM:SS) removing timezone info
+            try:
+                # Format: 20250519T200000+0100 -> extract date/time part
+                if 'T' in match_date:
+                    date_part = match_date.split('T')[0]
+                    time_part = match_data.get('date').split('T')[1].split('+')[0].split('-')[0]
+                    match_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+            except:
+                pass
+
+        # Extract attendance (convert to int or None)
+        attendance = None
+        attendance_str = match_data.get('attendance')
+        if attendance_str:
+            try:
+                attendance = int(attendance_str)
+            except (ValueError, TypeError):
+                pass
+
+        # Convert match times to int or None
+        def safe_int(value):
+            try:
+                return int(value) if value else None
+            except (ValueError, TypeError):
+                return None
+
+        match_time = safe_int(match_data.get('match_time'))
+        first_half_time = safe_int(match_data.get('first_half_time'))
+        second_half_time = safe_int(match_data.get('second_half_time'))
+
+        # Update RealMatches
+        update_query = text("""
+            UPDATE `RealMatches`
+            SET realMatchStatus = :status,
+                realMatchType = :match_type,
+                realMatchPeriod = :period,
+                realMatchRealPeriod = :real_period,
+                realMatchAttendance = :attendance,
+                realMatchDate = :match_date,
+                realMatchDateOffset = :date_offset,
+                realMatchResultType = :result_type,
+                realMatchTime = :match_time,
+                realMatchFirstHalfTime = :first_half_time,
+                realMatchSecondHalfTime = :second_half_time,
+                realMatchEnded = :match_ended,
+                lastF7Date = :now,
+                lastFDate = :now,
+                updatedIn = :now
+            WHERE realMatchID = :match_id
+        """)
+
+        db.execute(update_query, {
+            'match_id': match_ids['realMatchID'],
+            'status': real_match_status,
+            'match_type': match_data.get('match_type'),
+            'period': period,
+            'real_period': match_data.get('period'),
+            'attendance': attendance,
+            'match_date': match_date,
+            'date_offset': match_data.get('date_offset'),
+            'result_type': match_data.get('result_type'),
+            'match_time': match_time,
+            'first_half_time': first_half_time,
+            'second_half_time': second_half_time,
+            'match_ended': real_match_ended,
+            'now': now,
+        })
+
+        return {'status': 'updated', 'match_id': match_ids['realMatchID']}
