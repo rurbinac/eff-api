@@ -373,13 +373,13 @@ class F7Loader:
             if team_update['my_score'] is not None and team_update['other_score'] is not None:
                 if team_update['my_score'] > team_update['other_score']:
                     points = 3
-                    result = 'Win'
+                    result = 1  # Win
                 elif team_update['my_score'] == team_update['other_score']:
                     points = 1
-                    result = 'Draw'
+                    result = 0  # Draw
                 else:
                     points = 0
-                    result = 'Loss'
+                    result = -1  # Loss
 
             # Update RealMatchTeams
             update_query = text("""
