@@ -66,6 +66,42 @@ class F42Loader:
         except Exception as e:
             stats['errors'].append(f"Error loading players: {str(e)}")
 
+        # Pre-load existing matches cache
+        matches_cache = {}
+        try:
+            matches_cache = F42Loader._load_matches_cache(db, real_competition_id)
+        except Exception as e:
+            stats['errors'].append(f"Error loading matches cache: {str(e)}")
+
+        # Build teams cache from loaded teams
+        teams_cache = {}
+        for team_data in parsed_data['teams']:
+            team_uid = team_data.get('uID')
+            if team_uid in team_id_mapping:
+                real_team_id = team_id_mapping[team_uid]
+                # Query for team details
+                team_query = text("""
+                    SELECT realTeamID, realTeamName, realTeamShortName
+                    FROM `RealTeams`
+                    WHERE realCompetitionID = :comp_id AND realTeamUID = :uid
+                    LIMIT 1
+                """)
+                team_result = db.execute(team_query, {
+                    'comp_id': real_competition_id,
+                    'uid': team_uid,
+                }).first()
+                if team_result:
+                    teams_cache[team_uid] = list(team_result)
+
+        # Load matches
+        try:
+            matches_result = F42Loader._load_matches(db, parsed_data['matches'], real_competition_id,
+                                                      matches_cache, teams_cache, comp_data)
+            stats['matches_inserted'] += matches_result['inserted']
+            stats['matches_updated'] += matches_result['updated']
+        except Exception as e:
+            stats['errors'].append(f"Error loading matches: {str(e)}")
+
         # Commit changes
         try:
             db.commit()
@@ -470,5 +506,200 @@ class F42Loader:
                     'now': now,
                 })
                 inserted += 1
+
+        return {'inserted': inserted, 'updated': updated}
+
+    @staticmethod
+    def _load_matches_cache(db: Session, real_competition_id: int) -> dict:
+        """Pre-load existing RealMatches and RealMatchTeams IDs into a cache.
+
+        Returns:
+            Dictionary with key="tUID_1,tUID_2" → [realMatchID, mtID_1, mtID_2]
+        """
+        cache = {}
+
+        query_text = text("""
+            SELECT `m`.`realMatchID` AS `mID`,
+                   `t1`.`realMatchTeamID` AS `mtID_1`,
+                   `t2`.`realMatchTeamID` AS `mtID_2`,
+                   `t1`.`realTeamUID` AS `tUID_1`,
+                   `t2`.`realTeamUID` AS `tUID_2`
+            FROM `RealMatches` `m`
+            INNER JOIN `RealMatchTeams` `t1` ON `m`.`realMatchID` = `t1`.`realMatchID`
+                AND `t1`.`realTeamNumber` = 1
+            INNER JOIN `RealMatchTeams` `t2` ON `m`.`realMatchID` = `t2`.`realMatchID`
+                AND `t2`.`realTeamNumber` = 2
+            WHERE `m`.`realCompetitionID` = :realCompetitionID
+        """)
+
+        results = db.execute(query_text, {'realCompetitionID': real_competition_id}).mappings().all()
+
+        for row in results:
+            key = f"{row['tUID_1']},{row['tUID_2']}"
+            cache[key] = [row['mID'], row['mtID_1'], row['mtID_2']]
+
+        return cache
+
+    @staticmethod
+    def _load_matches(db: Session, matches_data: list, real_competition_id: int,
+                     matches_cache: dict, teams_cache: dict, comp_data: dict) -> dict:
+        """Load or update matches and match teams."""
+        inserted = 0
+        updated = 0
+        now = datetime.utcnow()
+
+        # Get competition details
+        comp_query = text("""
+            SELECT realCompetitionUID, realCompetitionSYMID, realCompetitionSeasonId,
+                   realCompetitionMatchDay, realCompetitionFirstMatchDay, realCompetitionLastMatchDay,
+                   baseRealCompetitionID, extraRealCompetitionID
+            FROM `RealCompetitions`
+            WHERE realCompetitionID = :id
+            LIMIT 1
+        """)
+        comp_result = db.execute(comp_query, {'id': real_competition_id}).first()
+        if not comp_result:
+            raise ValueError(f"RealCompetition {real_competition_id} not found")
+
+        comp_uid, comp_symid, season_id, comp_match_day, first_match_day, last_match_day, base_comp_id, extra_comp_id = comp_result
+
+        for match_data in matches_data:
+            if not match_data.get('team_data') or len(match_data['team_data']) < 2:
+                continue
+
+            # Get the two teams (Home and Away)
+            home_team_data = next((t for t in match_data['team_data'] if t['side'] == 'Home'), None)
+            away_team_data = next((t for t in match_data['team_data'] if t['side'] == 'Away'), None)
+
+            if not (home_team_data and away_team_data):
+                continue
+
+            home_team_uid = home_team_data.get('team_ref')
+            away_team_uid = away_team_data.get('team_ref')
+
+            if not (home_team_uid and away_team_uid):
+                continue
+
+            # Build the key for cache lookup
+            cache_key = f"{home_team_uid},{away_team_uid}"
+
+            # Get team IDs from teams cache
+            home_team_info = teams_cache.get(home_team_uid)
+            away_team_info = teams_cache.get(away_team_uid)
+
+            if not (home_team_info and away_team_info):
+                continue
+
+            home_team_id = home_team_info[0]
+            away_team_id = away_team_info[0]
+
+            # Parse match date
+            match_date = match_data.get('date_utc')
+
+            # Check if match exists in cache
+            if cache_key in matches_cache:
+                # Update existing match
+                real_match_id, mt_id_home, mt_id_away = matches_cache[cache_key]
+
+                update_query = text("""
+                    UPDATE `RealMatches`
+                    SET realMatchType = :match_type,
+                        realMatchPeriod = :period,
+                        realMatchRealPeriod = :real_period,
+                        realMatchDate = :match_date,
+                        lastF42Date = :now,
+                        updatedIn = :now
+                    WHERE realMatchID = :id
+                """)
+                db.execute(update_query, {
+                    'id': real_match_id,
+                    'match_type': match_data.get('match_type'),
+                    'period': match_data.get('period'),
+                    'real_period': match_data.get('period'),
+                    'match_date': match_date,
+                    'now': now,
+                })
+                updated += 1
+            else:
+                # Insert new match
+                insert_match_query = text("""
+                    INSERT INTO `RealMatches`
+                    (realCompetitionID, realCompetitionUID, realCompetitionSYMID, realCompetitionSeasonId,
+                     realCompetitionMatchDay, realCompetitionFirstMatchDay, realCompetitionLastMatchDay,
+                     baseRealCompetitionID, extraRealCompetitionID,
+                     realMatchType, realMatchPeriod, realMatchRealPeriod,
+                     realMatchDate,
+                     realMatchIgnore, enabled,
+                     lastF42Date,
+                     createdIn, updatedIn)
+                    VALUES (:comp_id, :comp_uid, :comp_symid, :season_id,
+                            :comp_match_day, :first_match_day, :last_match_day,
+                            :base_comp_id, :extra_comp_id,
+                            :match_type, :period, :real_period,
+                            :match_date,
+                            :ignore, :enabled,
+                            :now,
+                            :now, :now)
+                """)
+                db.execute(insert_match_query, {
+                    'comp_id': real_competition_id,
+                    'comp_uid': comp_uid,
+                    'comp_symid': comp_symid,
+                    'season_id': season_id,
+                    'comp_match_day': comp_match_day,
+                    'first_match_day': first_match_day,
+                    'last_match_day': last_match_day,
+                    'base_comp_id': base_comp_id,
+                    'extra_comp_id': extra_comp_id,
+                    'match_type': match_data.get('match_type'),
+                    'period': match_data.get('period'),
+                    'real_period': match_data.get('period'),
+                    'match_date': match_date,
+                    'ignore': 0,
+                    'enabled': 1,
+                    'now': now,
+                })
+                db.flush()
+
+                # Get the inserted match ID
+                result = db.execute(text("""
+                    SELECT realMatchID FROM `RealMatches`
+                    WHERE realCompetitionID = :comp_id AND realMatchDate = :match_date
+                    ORDER BY realMatchID DESC LIMIT 1
+                """), {
+                    'comp_id': real_competition_id,
+                    'match_date': match_date,
+                }).first()
+
+                if result:
+                    real_match_id = result[0]
+                    inserted += 1
+
+                    # Insert RealMatchTeams for Home and Away teams
+                    for side, team_uid, team_id, team_info in [
+                        ('Home', home_team_uid, home_team_id, home_team_info),
+                        ('Away', away_team_uid, away_team_id, away_team_info),
+                    ]:
+                        real_team_number = 1 if side == 'Home' else 2
+
+                        insert_mt_query = text("""
+                            INSERT INTO `RealMatchTeams`
+                            (realMatchID, realTeamID, realTeamUID, realTeamName, realTeamShortName,
+                             realTeamSide, realTeamNumber,
+                             createdIn, updatedIn)
+                            VALUES (:match_id, :team_id, :team_uid, :team_name, :team_short_name,
+                                    :side, :team_number,
+                                    :now, :now)
+                        """)
+                        db.execute(insert_mt_query, {
+                            'match_id': real_match_id,
+                            'team_id': team_id,
+                            'team_uid': team_uid,
+                            'team_name': team_info[1],
+                            'team_short_name': team_info[2],
+                            'side': side,
+                            'team_number': real_team_number,
+                            'now': now,
+                        })
 
         return {'inserted': inserted, 'updated': updated}
