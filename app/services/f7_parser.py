@@ -1,0 +1,170 @@
+"""F7 OPTA XML feed parser - single match detailed results."""
+
+import xml.etree.ElementTree as ET
+from typing import Optional
+
+
+class F7Parser:
+    """Parse F7 OPTA XML feeds for detailed match results."""
+
+    @staticmethod
+    def parse_file(file_path: str) -> dict:
+        """Parse an F7 XML file and extract structured data.
+
+        Args:
+            file_path: Path to the F7 XML file
+
+        Returns:
+            Dictionary with parsed data: competition, match_id, teams, players
+        """
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+
+        return F7Parser._parse_root(root)
+
+    @staticmethod
+    def parse_string(xml_string: str) -> dict:
+        """Parse F7 XML from a string.
+
+        Args:
+            xml_string: XML content as string
+
+        Returns:
+            Dictionary with parsed data
+        """
+        root = ET.fromstring(xml_string)
+        return F7Parser._parse_root(root)
+
+    @staticmethod
+    def _parse_root(root) -> dict:
+        """Parse the root SoccerFeed element."""
+        doc = root.find('.//SoccerDocument')
+        if doc is None:
+            raise ValueError("No SoccerDocument found in F7 feed")
+
+        # Extract match ID from SoccerDocument uID
+        match_id = doc.get('uID')
+
+        # Parse Competition
+        competition = F7Parser._parse_competition(doc)
+
+        # Parse Match Data
+        match_data = F7Parser._parse_match_data(doc)
+
+        # Parse Teams and Players
+        teams_data = {}
+        players_data = {}
+
+        for team_elem in doc.findall('.//Team'):
+            team_uid = team_elem.get('uID')
+            if team_uid:
+                teams_data[team_uid] = F7Parser._parse_team(team_elem)
+                # Extract players from this team
+                for player_elem in team_elem.findall('Player'):
+                    player = F7Parser._parse_player(player_elem, team_uid)
+                    if player:
+                        players_data[player['realPlayerUID']] = player
+
+        return {
+            'match_id': match_id,
+            'competition': competition,
+            'match_data': match_data,
+            'teams': teams_data,
+            'players': players_data,
+        }
+
+    @staticmethod
+    def _parse_competition(doc) -> dict:
+        """Parse Competition element."""
+        comp_elem = doc.find('Competition')
+        if comp_elem is None:
+            return {}
+
+        competition = {
+            'uID': comp_elem.get('uID'),
+        }
+
+        # Extract stats
+        for stat in comp_elem.findall('Stat'):
+            stat_type = stat.get('Type')
+            stat_value = stat.text
+            if stat_type == 'symid':
+                competition['symid'] = stat_value
+            elif stat_type == 'season_id':
+                competition['season_id'] = stat_value
+            elif stat_type == 'matchday':
+                competition['matchday'] = stat_value
+
+        return competition
+
+    @staticmethod
+    def _parse_match_data(doc) -> dict:
+        """Parse MatchData element."""
+        match_elem = doc.find('MatchData')
+        if match_elem is None:
+            return {}
+
+        match_data = {
+            'home_team_ref': None,
+            'away_team_ref': None,
+            'home_score': None,
+            'away_score': None,
+            'home_side': 'Home',
+            'away_side': 'Away',
+        }
+
+        # Parse TeamData elements
+        for team_data in match_elem.findall('TeamData'):
+            side = team_data.get('Side')
+            team_ref = team_data.get('TeamRef')
+            score = team_data.get('Score')
+
+            if side == 'Home':
+                match_data['home_team_ref'] = team_ref
+                match_data['home_score'] = score
+            elif side == 'Away':
+                match_data['away_team_ref'] = team_ref
+                match_data['away_score'] = score
+
+        return match_data
+
+    @staticmethod
+    def _parse_team(team_elem) -> dict:
+        """Parse Team element."""
+        return {
+            'uID': team_elem.get('uID'),
+            'name': F7Parser._get_text(team_elem, 'Name'),
+            'official_name': F7Parser._get_text(team_elem, 'Official_name'),
+        }
+
+    @staticmethod
+    def _parse_player(player_elem, team_uid: str) -> Optional[dict]:
+        """Parse Player element from Team."""
+        uid = player_elem.get('uID')
+        if not uid:
+            return None
+
+        person_name = player_elem.find('PersonName')
+        first_name = None
+        last_name = None
+        known_name = None
+
+        if person_name is not None:
+            first_name = F7Parser._get_text(person_name, 'First')
+            last_name = F7Parser._get_text(person_name, 'Last')
+            known_name = F7Parser._get_text(person_name, 'Known')
+
+        return {
+            'realPlayerUID': uid,
+            'realTeamUID': team_uid,
+            'position': player_elem.get('Position'),
+            'firstName': first_name,
+            'lastName': last_name,
+            'knownName': known_name,
+        }
+
+    @staticmethod
+    def _get_text(elem, tag: str) -> Optional[str]:
+        """Get text from a child element."""
+        child = elem.find(tag)
+        return child.text if child is not None else None
