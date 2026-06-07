@@ -12,16 +12,51 @@ class F7Loader:
 
     @staticmethod
     def load_file(db: Session, file_path: str, mode: str = 'quick') -> dict:
-        """Parse and load an F7 file - foundation layer.
+        """Parse and load an F7 file with mode-specific persistence.
 
         Args:
             db: Database session
             file_path: Path to the F7 XML file
-            mode: 'quick' or 'full' (for future use, foundation is same for both)
+            mode: 'quick' or 'full'
 
         Returns:
-            Dictionary with match/teams/players data and caches for mode-specific processing
+            Dictionary with processing result status
         """
+        # Phase 1: Foundation layer (get caches)
+        foundation = F7Loader._get_foundation(db, file_path)
+        if foundation['status'] != 'ready':
+            return foundation
+
+        # Phase 2: Process F7 data into in-memory structures
+        try:
+            processed_data = F7Loader._process_f7_data(
+                foundation['parsed_data'],
+                foundation['real_competition_id'],
+                foundation['teams_cache'],
+                foundation['players_cache']
+            )
+        except Exception as e:
+            return {
+                'status': 'error',
+                'error': f"Failed to process F7 data: {str(e)}",
+                'match_id': foundation['parsed_data'].get('match_id'),
+            }
+
+        # Phase 3: Persist based on mode
+        if mode == 'quick':
+            return F7Loader._save_quick_mode(db, foundation, processed_data)
+        elif mode == 'full':
+            return F7Loader._save_full_mode(db, foundation, processed_data)
+        else:
+            return {
+                'status': 'error',
+                'error': f"Unknown mode: {mode}",
+                'match_id': foundation['parsed_data'].get('match_id'),
+            }
+
+    @staticmethod
+    def _get_foundation(db: Session, file_path: str) -> dict:
+        """Get foundation layer data (caches and match IDs)."""
         # Parse the file
         parsed_data = F7Parser.parse_file(file_path)
 
@@ -71,17 +106,105 @@ class F7Loader:
                 'match_id': parsed_data.get('match_id'),
             }
 
-        # Return foundation data for mode-specific processing
         return {
             'status': 'ready',
-            'mode': mode,
-            'match_id': parsed_data.get('match_id'),
+            'parsed_data': parsed_data,
             'real_competition_id': real_competition_id,
-            'competition': parsed_data['competition'],
-            'match_data': parsed_data['match_data'],
             'match_ids': match_ids,
             'teams_cache': teams_cache,
             'players_cache': players_cache,
+        }
+
+    @staticmethod
+    def _process_f7_data(parsed_data: dict, real_competition_id: int,
+                        teams_cache: dict, players_cache: dict) -> dict:
+        """Process F7 data into in-memory structures.
+
+        Returns:
+            Dictionary with processed data:
+            - match_events: List of match events
+            - standings_data: Player standings/performance data
+        """
+        # Extract match data
+        match_data = parsed_data.get('match_data', {})
+
+        # Placeholder for event processing (user will provide logic)
+        match_events = []
+
+        # Placeholder for standings data (user will provide logic)
+        standings_data = {}
+
+        return {
+            'match_data': match_data,
+            'match_events': match_events,
+            'standings_data': standings_data,
+        }
+
+    @staticmethod
+    def _save_quick_mode(db: Session, foundation: dict, processed_data: dict) -> dict:
+        """Save data in Quick mode (updates only).
+
+        Quick mode updates:
+        - RealMatches
+        - RealMatchTeams
+        - RealMatchEvents (insert/update)
+        - RealStandings (to be implemented)
+        """
+        match_ids = foundation['match_ids']
+        match_data = processed_data['match_data']
+        match_events = processed_data['match_events']
+
+        results = {
+            'status': 'success',
+            'match_id': foundation['parsed_data'].get('match_id'),
+            'matches_updated': 0,
+            'match_teams_updated': 0,
+            'match_events_processed': 0,
+            'standings_updated': 0,
+        }
+
+        try:
+            # Update RealMatches
+            F7Loader.update_match_quick_mode(db, match_ids, match_data)
+            results['matches_updated'] = 1
+        except Exception as e:
+            results['errors'] = results.get('errors', [])
+            results['errors'].append(f"RealMatches update failed: {str(e)}")
+
+        try:
+            # Update RealMatchTeams
+            teams_result = F7Loader.update_match_teams_quick_mode(
+                db, match_ids, match_data, foundation['teams_cache']
+            )
+            results['match_teams_updated'] = teams_result.get('teams_updated', 0)
+        except Exception as e:
+            results['errors'] = results.get('errors', [])
+            results['errors'].append(f"RealMatchTeams update failed: {str(e)}")
+
+        # TODO: Process RealMatchEvents (insert/update)
+        # TODO: Update RealStandings
+
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            results['status'] = 'error'
+            results['errors'] = results.get('errors', [])
+            results['errors'].append(f"Commit failed: {str(e)}")
+
+        return results
+
+    @staticmethod
+    def _save_full_mode(db: Session, foundation: dict, processed_data: dict) -> dict:
+        """Save data in Full mode (complete updates).
+
+        Full mode updates: All tables with complete data
+        """
+        # TODO: Implement full mode persistence
+        return {
+            'status': 'not_implemented',
+            'message': 'Full mode implementation pending',
+            'match_id': foundation['parsed_data'].get('match_id'),
         }
 
     @staticmethod
