@@ -61,6 +61,76 @@ class RealTeamTypes:
     EPL_TEAM = 'EPLTeam'
 
 
+class DraftPositions:
+    """Draft position mappings for real players."""
+
+    GOALKEEPER = 'goalkeeper'
+    DEFENDER = 'defender'
+    MIDFIELDER = 'midfielder'
+    STRIKER = 'striker'
+    EPL_TEAM = 'epl_team'
+
+    @staticmethod
+    def get_order(position: int | str, real_position: str | None = None) -> int:
+        """Calculate draft position order from position data.
+
+        Args:
+            position: Position as integer (1-5) or string name
+            real_position: Real position string for mapping when position is not recognized
+
+        Returns:
+            Position order number (1-5) or 0 if not found/invalid
+        """
+        if isinstance(position, int):
+            return position if 1 <= position <= 5 else 0
+
+        # Handle string position
+        pos = position.strip().lower() if position else None
+        if not pos:
+            return 0
+
+        # Map 'forward' to striker
+        if pos == 'forward':
+            pos = DraftPositions.STRIKER
+
+        # Map position names to order numbers
+        position_map = {
+            DraftPositions.GOALKEEPER: 1,
+            DraftPositions.DEFENDER: 2,
+            DraftPositions.MIDFIELDER: 3,
+            DraftPositions.STRIKER: 4,
+            DraftPositions.EPL_TEAM: 5,
+        }
+
+        # Try to find the position in the map
+        if pos in position_map:
+            return position_map[pos]
+
+        # If not found and real_position is provided, try to map it
+        if real_position:
+            real_positions = {
+                'central back': 2,
+                'central defender': 2,
+                'centre back': 2,
+                'centre defender': 2,
+                'full back': 2,
+                'sweeper': 2,
+                'wing back': 2,
+                'attacking midfielder': 3,
+                'central midfielder': 3,
+                'centre midfielder': 3,
+                'defensive midfielder': 3,
+                'wide midfielder': 3,
+                'central forward': 4,
+                'centre forward': 4,
+                'second striker': 4,
+                'winger': 4,
+            }
+            return real_positions.get(real_position.lower(), 0)
+
+        return 0
+
+
 class MatchConstants:
     """Match-related constants."""
 

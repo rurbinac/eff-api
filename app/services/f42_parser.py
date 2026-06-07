@@ -145,7 +145,7 @@ class F42Parser:
         if not uid:
             return None
 
-        return {
+        player = {
             'uID': uid,
             'team_uID': team_uid,
             'name': player_elem.get('Name'),
@@ -153,6 +153,26 @@ class F42Parser:
             'shirt_number': player_elem.get('ShirtNumber'),
             'status': player_elem.get('Status'),
         }
+
+        # Extract player stats from Stat elements
+        stat_map = {
+            'first_name': 'first_name',
+            'last_name': 'last_name',
+            'known_name': 'known_name',
+            'real_position': 'real_position',
+            'birth_date': 'birth_date',
+            'weight': 'weight',
+            'height': 'height',
+            'jersey_num': 'jersey_number',
+        }
+
+        for stat_elem in player_elem.findall('Stat'):
+            stat_type = stat_elem.get('Type')
+            stat_value = stat_elem.text
+            if stat_type in stat_map:
+                player[stat_map[stat_type]] = stat_value
+
+        return player
 
     @staticmethod
     def _parse_match_element(match_elem, team_id_mapping: dict) -> Optional[dict]:
