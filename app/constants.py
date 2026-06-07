@@ -144,6 +144,27 @@ class DraftPositions:
         return positions[order - 1] if order >= 1 and order <= 5 else None
 
 
+class RealMatchStatus:
+    """RealMatch status constants."""
+
+    UNKNOWN = 0
+    NOT_STARTED = 1
+    PLAYING = 2
+    FINISHED = 3
+
+
+class RealMatchPeriod:
+    """RealMatch period constants."""
+
+    UNKNOWN = ''
+    PREMATCH = 'PreMatch'
+    FIRSTHALF = 'FirstHalf'
+    SECONDHALF = 'SecondHalf'
+    FULLTIME = 'FullTime'
+    ABANDONED = 'Abandoned'
+    POSTPONED = 'Postponed'
+
+
 class MatchConstants:
     """Match-related constants."""
 
