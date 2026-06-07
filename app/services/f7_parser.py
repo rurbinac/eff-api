@@ -69,6 +69,10 @@ class F7Parser:
         player_lineup_data = F7Parser._parse_player_lineup(doc)
         match_data['player_lineup'] = player_lineup_data
 
+        # Parse goals from MatchData
+        goals = F7Parser._parse_goals(doc)
+        match_data['goals'] = goals
+
         return {
             'match_id': match_id,
             'competition': competition,
@@ -245,3 +249,27 @@ class F7Parser:
                 }
 
         return lineup_data
+
+    @staticmethod
+    def _parse_goals(doc) -> list:
+        """Parse Goal elements from MatchData/TeamData."""
+        goals = []
+
+        match_elem = doc.find('MatchData')
+        if match_elem is None:
+            return goals
+
+        # Process each TeamData (Home and Away)
+        for team_data in match_elem.findall('TeamData'):
+            team_uid = team_data.get('TeamRef')
+            if not team_uid:
+                continue
+
+            # Process each Goal
+            for goal_elem in team_data.findall('Goal'):
+                goals.append({
+                    'team_uid': team_uid,
+                    'element': goal_elem,
+                })
+
+        return goals

@@ -1,5 +1,7 @@
 """F7 event processing utilities."""
 
+import xml.etree.ElementTree as ET
+
 
 def add_event(events_cache: list, event: dict) -> list:
     """Add an event to the events cache with unique key generation.
@@ -53,5 +55,51 @@ def add_event(events_cache: list, event: dict) -> list:
         event['eventKey'] = key
 
         events_cache.append(event)
+
+    return events_cache
+
+
+def load_goal(events_cache: list, goal_elem: ET.Element, real_team_uid: str) -> list:
+    """Load a goal event from F7 XML element.
+
+    Args:
+        events_cache: List of events to append to
+        goal_elem: Goal XML element
+        real_team_uid: Real team UID of the scoring team
+
+    Returns:
+        Updated events_cache list
+    """
+    # Extract goal information from XML
+    player_ref = goal_elem.get('PlayerRef')
+    goal_type = goal_elem.get('Type')
+
+    # Get assist player if present
+    assist_elem = goal_elem.find('Assist')
+    assist_player_ref = assist_elem.get('PlayerRef') if assist_elem is not None else None
+
+    # Build goal event
+    goal_values = {
+        'realTeamUID': real_team_uid,
+        'realPlayerUID': player_ref,
+        'secondRealPlayerUID': assist_player_ref,
+        'eventPeriod': goal_elem.get('Period'),
+        'eventTime': goal_elem.get('Time'),
+        'eventNumber': goal_elem.get('EventNumber'),
+        'eventTimeStamp': goal_elem.get('TimeStamp'),
+        'eventType': goal_type,
+        'eventClass': 'Goal',
+    }
+
+    # Add the goal event
+    events_cache = add_event(events_cache, goal_values)
+
+    # If it's not an own goal, also add an assist event
+    if goal_type != 'Own' and assist_player_ref:
+        assist_values = goal_values.copy()
+        assist_values['realPlayerUID'] = assist_player_ref
+        assist_values['secondRealPlayerUID'] = None  # Clear the secondary player reference
+        assist_values['eventClass'] = 'Assist'
+        events_cache = add_event(events_cache, assist_values)
 
     return events_cache
