@@ -561,7 +561,7 @@ class F42Loader:
         if not comp_result:
             raise ValueError(f"RealCompetition {real_competition_id} not found")
 
-        comp_uid, comp_symid, season_id, comp_match_day, first_match_day, last_match_day, base_comp_id, extra_comp_id = comp_result
+        comp_uid, comp_symid, season_id, _, first_match_day, last_match_day, base_comp_id, extra_comp_id = comp_result
 
         for match_data in matches_data:
             if not match_data.get('team_data') or len(match_data['team_data']) < 2:
@@ -593,8 +593,9 @@ class F42Loader:
             home_team_id = home_team_info[0]
             away_team_id = away_team_info[0]
 
-            # Parse match date
+            # Parse match data
             match_date = match_data.get('date_utc')
+            match_day = match_data.get('match_day')
 
             # Check if match exists in cache
             if cache_key in matches_cache:
@@ -607,6 +608,7 @@ class F42Loader:
                         realMatchPeriod = :period,
                         realMatchRealPeriod = :real_period,
                         realMatchDate = :match_date,
+                        realCompetitionMatchDay = :match_day,
                         lastF42Date = :now,
                         updatedIn = :now
                     WHERE realMatchID = :id
@@ -617,6 +619,7 @@ class F42Loader:
                     'period': match_data.get('period'),
                     'real_period': match_data.get('period'),
                     'match_date': match_date,
+                    'match_day': match_day,
                     'now': now,
                 })
                 updated += 1
@@ -633,7 +636,7 @@ class F42Loader:
                      lastF42Date,
                      createdIn, updatedIn)
                     VALUES (:comp_id, :comp_uid, :comp_symid, :season_id,
-                            :comp_match_day, :first_match_day, :last_match_day,
+                            :match_day, :first_match_day, :last_match_day,
                             :base_comp_id, :extra_comp_id,
                             :match_type, :period, :real_period,
                             :match_date,
@@ -646,7 +649,7 @@ class F42Loader:
                     'comp_uid': comp_uid,
                     'comp_symid': comp_symid,
                     'season_id': season_id,
-                    'comp_match_day': comp_match_day,
+                    'match_day': match_day,
                     'first_match_day': first_match_day,
                     'last_match_day': last_match_day,
                     'base_comp_id': base_comp_id,
