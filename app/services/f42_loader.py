@@ -379,8 +379,9 @@ class F42Loader:
             height = safe_float(player_data.get('height'))
             jersey_number = safe_int(player_data.get('jersey_number'))
 
-            # Calculate draft position order
+            # Calculate draft position order and name
             draft_position_order = DraftPositions.get_order(position, real_position)
+            draft_position = DraftPositions.get_position(draft_position_order) if draft_position_order else None
 
             if result:
                 # Update existing
@@ -396,6 +397,7 @@ class F42Loader:
                         weight = :weight,
                         height = :height,
                         jerseyNumber = :jersey_number,
+                        draftPosition = :draft_position,
                         draftPositionOrder = :draft_pos_order,
                         lastF42Date = :now,
                         lastFDate = :now,
@@ -413,6 +415,7 @@ class F42Loader:
                     'weight': weight,
                     'height': height,
                     'jersey_number': jersey_number,
+                    'draft_position': draft_position,
                     'draft_pos_order': draft_position_order,
                     'now': now,
                 })
@@ -427,7 +430,7 @@ class F42Loader:
                      realPlayerUID, firstName, lastName, knownName,
                      position, realPosition,
                      birthDate, weight, height, jerseyNumber,
-                     draftPositionOrder,
+                     draftPosition, draftPositionOrder,
                      isProcessedMember,
                      lastF42Date, lastFDate,
                      createdIn, updatedIn)
@@ -437,7 +440,7 @@ class F42Loader:
                             :player_uid, :first_name, :last_name, :known_name,
                             :position, :real_position,
                             :birth_date, :weight, :height, :jersey_number,
-                            :draft_pos_order,
+                            :draft_position, :draft_pos_order,
                             :is_processed,
                             :now, :now,
                             :now, :now)
@@ -461,6 +464,7 @@ class F42Loader:
                     'weight': weight,
                     'height': height,
                     'jersey_number': jersey_number,
+                    'draft_position': draft_position,
                     'draft_pos_order': draft_position_order,
                     'is_processed': 0,
                     'now': now,

@@ -62,13 +62,7 @@ class RealTeamTypes:
 
 
 class DraftPositions:
-    """Draft position mappings for real players."""
-
-    GOALKEEPER = 'goalkeeper'
-    DEFENDER = 'defender'
-    MIDFIELDER = 'midfielder'
-    STRIKER = 'striker'
-    EPL_TEAM = 'epl_team'
+    """Draft position order and name mappings for real players."""
 
     @staticmethod
     def get_order(position: int | str, real_position: str | None = None) -> int:
@@ -95,11 +89,11 @@ class DraftPositions:
 
         # Map position names to order numbers
         position_map = {
-            DraftPositions.GOALKEEPER: 1,
-            DraftPositions.DEFENDER: 2,
-            DraftPositions.MIDFIELDER: 3,
-            DraftPositions.STRIKER: 4,
-            DraftPositions.EPL_TEAM: 5,
+            RealTeamMemberPositions.GOALKEEPER.lower(): 1,
+            RealTeamMemberPositions.DEFENDER.lower(): 2,
+            RealTeamMemberPositions.MIDFIELDER.lower(): 3,
+            RealTeamMemberPositions.STRIKER.lower(): 4,
+            RealTeamTypes.EPL_TEAM.lower(): 5,
         }
 
         # Try to find the position in the map
@@ -129,6 +123,25 @@ class DraftPositions:
             return real_positions.get(real_position.lower(), 0)
 
         return 0
+
+    @staticmethod
+    def get_position(order: int) -> str | None:
+        """Get draft position string from order number.
+
+        Args:
+            order: Position order number (1-5)
+
+        Returns:
+            Position string (Goalkeeper, Defender, etc.) or None if invalid
+        """
+        positions = [
+            RealTeamMemberPositions.GOALKEEPER,
+            RealTeamMemberPositions.DEFENDER,
+            RealTeamMemberPositions.MIDFIELDER,
+            RealTeamMemberPositions.STRIKER,
+            RealTeamTypes.EPL_TEAM,
+        ]
+        return positions[order - 1] if order >= 1 and order <= 5 else None
 
 
 class MatchConstants:
