@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.services.f7_parser import F7Parser
-from app.services.f7_events import add_event, load_goal
+from app.services.f7_events import add_event, load_goal, load_booking, load_substitution
 from app.constants import RealMatchPeriod
 
 
@@ -142,9 +142,15 @@ class F7Loader:
         for goal_data in goals:
             events_cache = load_goal(events_cache, goal_data['element'], goal_data['team_uid'])
 
-        # TODO: Extract and process match events
-        # - Bookings (Yellow/Red cards)
-        # - Substitutions (SubOn/SubOff)
+        # Process bookings from parsed data
+        bookings = match_data.get('bookings', [])
+        for booking_data in bookings:
+            events_cache = load_booking(events_cache, booking_data['element'], booking_data['team_uid'])
+
+        # Process substitutions from parsed data
+        substitutions = match_data.get('substitutions', [])
+        for sub_data in substitutions:
+            events_cache = load_substitution(events_cache, sub_data['element'], sub_data['team_uid'])
 
         # Placeholder for standings data (user will provide logic)
         standings_data = {}

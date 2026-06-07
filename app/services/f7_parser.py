@@ -73,6 +73,14 @@ class F7Parser:
         goals = F7Parser._parse_goals(doc)
         match_data['goals'] = goals
 
+        # Parse bookings from MatchData
+        bookings = F7Parser._parse_bookings(doc)
+        match_data['bookings'] = bookings
+
+        # Parse substitutions from MatchData
+        substitutions = F7Parser._parse_substitutions(doc)
+        match_data['substitutions'] = substitutions
+
         return {
             'match_id': match_id,
             'competition': competition,
@@ -273,3 +281,51 @@ class F7Parser:
                 })
 
         return goals
+
+    @staticmethod
+    def _parse_bookings(doc) -> list:
+        """Parse Booking elements from MatchData/TeamData."""
+        bookings = []
+
+        match_elem = doc.find('MatchData')
+        if match_elem is None:
+            return bookings
+
+        # Process each TeamData (Home and Away)
+        for team_data in match_elem.findall('TeamData'):
+            team_uid = team_data.get('TeamRef')
+            if not team_uid:
+                continue
+
+            # Process each Booking
+            for booking_elem in team_data.findall('Booking'):
+                bookings.append({
+                    'team_uid': team_uid,
+                    'element': booking_elem,
+                })
+
+        return bookings
+
+    @staticmethod
+    def _parse_substitutions(doc) -> list:
+        """Parse Substitution elements from MatchData/TeamData."""
+        substitutions = []
+
+        match_elem = doc.find('MatchData')
+        if match_elem is None:
+            return substitutions
+
+        # Process each TeamData (Home and Away)
+        for team_data in match_elem.findall('TeamData'):
+            team_uid = team_data.get('TeamRef')
+            if not team_uid:
+                continue
+
+            # Process each Substitution
+            for sub_elem in team_data.findall('Substitution'):
+                substitutions.append({
+                    'team_uid': team_uid,
+                    'element': sub_elem,
+                })
+
+        return substitutions

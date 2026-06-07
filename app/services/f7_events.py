@@ -59,6 +59,69 @@ def add_event(events_cache: list, event: dict) -> list:
     return events_cache
 
 
+def load_booking(events_cache: list, booking_elem: ET.Element, real_team_uid: str) -> list:
+    """Load a booking event (yellow/red card) from F7 XML element.
+
+    Args:
+        events_cache: List of events to append to
+        booking_elem: Booking XML element
+        real_team_uid: Real team UID of the team with the booking
+
+    Returns:
+        Updated events_cache list
+    """
+    # Extract booking information from XML
+    values = {
+        'realTeamUID': real_team_uid,
+        'realPlayerUID': booking_elem.get('PlayerRef'),
+        'eventPeriod': booking_elem.get('Period'),
+        'eventTime': booking_elem.get('Time'),
+        'eventNumber': booking_elem.get('EventNumber'),
+        'eventTimeStamp': booking_elem.get('TimeStamp'),
+        'eventType': booking_elem.get('CardType'),
+        'eventClass': 'Booking',
+    }
+
+    events_cache = add_event(events_cache, values)
+    return events_cache
+
+
+def load_substitution(events_cache: list, substitution_elem: ET.Element, real_team_uid: str) -> list:
+    """Load substitution events (player off and on) from F7 XML element.
+
+    Args:
+        events_cache: List of events to append to
+        substitution_elem: Substitution XML element
+        real_team_uid: Real team UID of the team with the substitution
+
+    Returns:
+        Updated events_cache list
+    """
+    # Create base values dictionary for substitution events
+    base_values = {
+        'realTeamUID': real_team_uid,
+        'eventPeriod': substitution_elem.get('Period'),
+        'eventTime': substitution_elem.get('Time'),
+        'eventNumber': substitution_elem.get('EventNumber'),
+        'eventTimeStamp': substitution_elem.get('TimeStamp'),
+        'eventType': substitution_elem.get('Reason'),
+    }
+
+    # Create SubOff event (player leaving the field)
+    sub_off_values = base_values.copy()
+    sub_off_values['realPlayerUID'] = substitution_elem.get('SubOff')
+    sub_off_values['eventClass'] = 'SubOff'
+    events_cache = add_event(events_cache, sub_off_values)
+
+    # Create SubOn event (player entering the field)
+    sub_on_values = base_values.copy()
+    sub_on_values['realPlayerUID'] = substitution_elem.get('SubOn')
+    sub_on_values['eventClass'] = 'SubOn'
+    events_cache = add_event(events_cache, sub_on_values)
+
+    return events_cache
+
+
 def load_goal(events_cache: list, goal_elem: ET.Element, real_team_uid: str) -> list:
     """Load a goal event from F7 XML element.
 
