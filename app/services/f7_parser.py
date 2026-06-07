@@ -65,6 +65,10 @@ class F7Parser:
                     if player:
                         players_data[player['realPlayerUID']] = player
 
+        # Parse PlayerLineUp data from MatchData
+        player_lineup_data = F7Parser._parse_player_lineup(doc)
+        match_data['player_lineup'] = player_lineup_data
+
         return {
             'match_id': match_id,
             'competition': competition,
@@ -210,3 +214,34 @@ class F7Parser:
         """Get text from a child element."""
         child = elem.find(tag)
         return child.text if child is not None else None
+
+    @staticmethod
+    def _parse_player_lineup(doc) -> dict:
+        """Parse PlayerLineUp data from MatchData/TeamData elements."""
+        lineup_data = {}
+
+        match_elem = doc.find('MatchData')
+        if match_elem is None:
+            return lineup_data
+
+        # Process each TeamData (Home and Away)
+        for team_data in match_elem.findall('TeamData'):
+            lineup_elem = team_data.find('PlayerLineUp')
+            if lineup_elem is None:
+                continue
+
+            # Process each MatchPlayer
+            for match_player in lineup_elem.findall('MatchPlayer'):
+                player_ref = match_player.get('PlayerRef')
+                if not player_ref:
+                    continue
+
+                lineup_data[player_ref] = {
+                    'playerRef': player_ref,
+                    'status': match_player.get('Status'),
+                    'formation_place': match_player.get('Formation_Place'),
+                    'shirt_number': match_player.get('ShirtNumber'),
+                    'position': match_player.get('Position'),
+                }
+
+        return lineup_data

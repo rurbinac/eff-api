@@ -96,9 +96,14 @@ class F7Loader:
                 'match_id': parsed_data.get('match_id'),
             }
 
-        # Build players cache
+        # Build players cache with lineup data
         try:
-            players_cache = F7Loader._build_players_cache(db, real_competition_id, parsed_data['players'])
+            player_lineup = parsed_data['match_data'].get('player_lineup', {})
+            match_time = parsed_data['match_data'].get('match_time')
+            players_cache = F7Loader._build_players_cache(
+                db, real_competition_id, parsed_data['players'],
+                player_lineup, match_time
+            )
         except Exception as e:
             return {
                 'status': 'error',
@@ -307,8 +312,9 @@ class F7Loader:
         }
 
     @staticmethod
-    def _build_players_cache(db: Session, real_competition_id: int, players: dict) -> dict:
-        """Build players cache from RealPlayers table."""
+    def _build_players_cache(db: Session, real_competition_id: int, players: dict,
+                            player_lineup: dict = None, match_time: int = None) -> dict:
+        """Build players cache from RealPlayers table and PlayerLineUp data."""
         # Start with player data from XML
         players_cache = {}
         for player_uid, player_data in players.items():
@@ -323,30 +329,62 @@ class F7Loader:
             }
 
         # Enrich with database data
-        if not players_cache:
-            return players_cache
+        if players_cache:
+            player_uids = list(players_cache.keys())
 
-        player_uids = list(players_cache.keys())
+            # Build IN clause for query
+            placeholders = ','.join([f':uid_{i}' for i in range(len(player_uids))])
+            params = {f'uid_{i}': uid for i, uid in enumerate(player_uids)}
+            params['comp_id'] = real_competition_id
 
-        # Build IN clause for query
-        placeholders = ','.join([f':uid_{i}' for i in range(len(player_uids))])
-        params = {f'uid_{i}': uid for i, uid in enumerate(player_uids)}
-        params['comp_id'] = real_competition_id
+            query_str = f"""
+                SELECT `realPlayerID`, `realPlayerUID`, `realTeamMemberKey`
+                FROM `RealPlayers`
+                WHERE `realCompetitionID` = :comp_id
+                  AND `realPlayerUID` IN ({placeholders})
+            """
 
-        query_str = f"""
-            SELECT `realPlayerID`, `realPlayerUID`, `realTeamMemberKey`
-            FROM `RealPlayers`
-            WHERE `realCompetitionID` = :comp_id
-              AND `realPlayerUID` IN ({placeholders})
-        """
+            results = db.execute(text(query_str), params).mappings().all()
 
-        results = db.execute(text(query_str), params).mappings().all()
+            for row in results:
+                player_uid = row['realPlayerUID']
+                if player_uid in players_cache:
+                    players_cache[player_uid]['realPlayerID'] = row['realPlayerID']
+                    players_cache[player_uid]['realTeamMemberKey'] = row['realTeamMemberKey']
 
-        for row in results:
-            player_uid = row['realPlayerUID']
-            if player_uid in players_cache:
-                players_cache[player_uid]['realPlayerID'] = row['realPlayerID']
-                players_cache[player_uid]['realTeamMemberKey'] = row['realTeamMemberKey']
+        # Enrich with PlayerLineUp data
+        if player_lineup:
+            for player_ref, lineup_info in player_lineup.items():
+                if player_ref in players_cache:
+                    status = lineup_info.get('status')
+                    shirt_number = lineup_info.get('shirt_number')
+                    formation_place = lineup_info.get('formation_place')
+
+                    players_cache[player_ref]['status'] = status
+                    players_cache[player_ref]['formation_place'] = formation_place
+                    players_cache[player_ref]['shirt_number'] = shirt_number
+
+                    # Calculate playing time and flags based on status
+                    if status == 'Start':
+                        # Player started the match
+                        players_cache[player_ref]['timeIn'] = 0
+                        players_cache[player_ref]['timeOut'] = match_time
+                        players_cache[player_ref]['timePlayed'] = match_time
+                        players_cache[player_ref]['startedGame'] = 1
+                        players_cache[player_ref]['finishedGame'] = 1
+                        players_cache[player_ref]['fullGame'] = 1
+                        players_cache[player_ref]['gamePlayed'] = 1
+                        players_cache[player_ref]['cleanSheet'] = 1
+                    else:
+                        # Player is a substitute
+                        players_cache[player_ref]['timeIn'] = None
+                        players_cache[player_ref]['timeOut'] = None
+                        players_cache[player_ref]['timePlayed'] = 0
+                        players_cache[player_ref]['startedGame'] = 0
+                        players_cache[player_ref]['finishedGame'] = 0
+                        players_cache[player_ref]['fullGame'] = 0
+                        players_cache[player_ref]['gamePlayed'] = 0
+                        players_cache[player_ref]['cleanSheet'] = 0
 
         return players_cache
 
