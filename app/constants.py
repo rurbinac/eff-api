@@ -154,7 +154,7 @@ class RealMatchStatus:
 
 
 class RealMatchPeriod:
-    """RealMatch period constants."""
+    """RealMatch period constants and utilities."""
 
     UNKNOWN = ''
     PREMATCH = 'PreMatch'
@@ -163,6 +163,66 @@ class RealMatchPeriod:
     FULLTIME = 'FullTime'
     ABANDONED = 'Abandoned'
     POSTPONED = 'Postponed'
+
+    @staticmethod
+    def get_period(period) -> str:
+        """Normalize and validate period string.
+
+        Args:
+            period: Period value (any type)
+
+        Returns:
+            Normalized period string or UNKNOWN if invalid
+        """
+        period_str = str(period).strip().lower() if period else ''
+
+        if period_str == RealMatchPeriod.PREMATCH.lower():
+            return RealMatchPeriod.PREMATCH
+        elif period_str == RealMatchPeriod.FIRSTHALF.lower():
+            return RealMatchPeriod.FIRSTHALF
+        elif period_str == RealMatchPeriod.SECONDHALF.lower():
+            return RealMatchPeriod.SECONDHALF
+        elif period_str == RealMatchPeriod.FULLTIME.lower():
+            return RealMatchPeriod.FULLTIME
+        elif period_str == RealMatchPeriod.ABANDONED.lower():
+            return RealMatchPeriod.ABANDONED
+        elif period_str == RealMatchPeriod.POSTPONED.lower():
+            return RealMatchPeriod.POSTPONED
+        else:
+            return RealMatchPeriod.UNKNOWN
+
+    @staticmethod
+    def to_match_status(period) -> int:
+        """Convert period to match status.
+
+        Args:
+            period: Period value (any type)
+
+        Returns:
+            RealMatchStatus: NOT_STARTED, PLAYING, FINISHED, or UNKNOWN
+        """
+        normalized = RealMatchPeriod.get_period(period)
+
+        if normalized in (RealMatchPeriod.PREMATCH, RealMatchPeriod.POSTPONED):
+            return RealMatchStatus.NOT_STARTED
+        elif normalized in (RealMatchPeriod.FIRSTHALF, RealMatchPeriod.SECONDHALF):
+            return RealMatchStatus.PLAYING
+        elif normalized in (RealMatchPeriod.FULLTIME, RealMatchPeriod.ABANDONED):
+            return RealMatchStatus.FINISHED
+        else:
+            return RealMatchStatus.UNKNOWN
+
+    @staticmethod
+    def to_match_ended(period) -> int:
+        """Determine if match is ended.
+
+        Args:
+            period: Period value (any type)
+
+        Returns:
+            1 if finished, 0 otherwise
+        """
+        return 1 if RealMatchPeriod.to_match_status(period) == RealMatchStatus.FINISHED else 0
 
 
 class MatchConstants:
