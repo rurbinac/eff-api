@@ -318,3 +318,88 @@ class F7Loader:
         })
 
         return {'status': 'updated', 'match_id': match_ids['realMatchID']}
+
+    @staticmethod
+    def update_match_teams_quick_mode(db: Session, match_ids: dict, match_data: dict,
+                                      teams_cache: dict) -> dict:
+        """Update RealMatchTeams with F7 data in Quick mode.
+
+        Args:
+            db: Database session
+            match_ids: Dict with realMatchID, realMatchTeamID_Home, realMatchTeamID_Away
+            match_data: Parsed match data from F7
+            teams_cache: Teams cache with team info
+
+        Returns:
+            Dict with update status
+        """
+        now = datetime.utcnow()
+
+        # Get scores
+        home_score_str = match_data.get('home_score')
+        away_score_str = match_data.get('away_score')
+
+        home_score = None
+        away_score = None
+        try:
+            home_score = int(home_score_str) if home_score_str else None
+            away_score = int(away_score_str) if away_score_str else None
+        except (ValueError, TypeError):
+            pass
+
+        # Prepare updates for both teams
+        teams_to_update = [
+            {
+                'realMatchTeamID': match_ids['realMatchTeamID_Home'],
+                'team_number': 1,
+                'my_score': home_score,
+                'other_score': away_score,
+            },
+            {
+                'realMatchTeamID': match_ids['realMatchTeamID_Away'],
+                'team_number': 2,
+                'my_score': away_score,
+                'other_score': home_score,
+            },
+        ]
+
+        update_count = 0
+
+        for team_update in teams_to_update:
+            # Calculate points and result
+            points = 0
+            result = None
+
+            if team_update['my_score'] is not None and team_update['other_score'] is not None:
+                if team_update['my_score'] > team_update['other_score']:
+                    points = 3
+                    result = 'Win'
+                elif team_update['my_score'] == team_update['other_score']:
+                    points = 1
+                    result = 'Draw'
+                else:
+                    points = 0
+                    result = 'Loss'
+
+            # Update RealMatchTeams
+            update_query = text("""
+                UPDATE `RealMatchTeams`
+                SET realTeamScore = :score,
+                    realTeamRealScore = :score,
+                    realTeamResult = :result,
+                    realTeamPoints = :points,
+                    updatedIn = :now
+                WHERE realMatchTeamID = :mt_id
+            """)
+
+            db.execute(update_query, {
+                'mt_id': team_update['realMatchTeamID'],
+                'score': team_update['my_score'],
+                'result': result,
+                'points': points,
+                'now': now,
+            })
+
+            update_count += 1
+
+        return {'status': 'updated', 'teams_updated': update_count}
