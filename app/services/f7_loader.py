@@ -152,6 +152,9 @@ class F7Loader:
         for sub_data in substitutions:
             events_cache = load_substitution(events_cache, sub_data['element'], sub_data['team_uid'])
 
+        # Sort events by eventKey (period, time, timestamp, class)
+        events_cache.sort(key=lambda e: e.get('eventKey', ''))
+
         # Placeholder for standings data (user will provide logic)
         standings_data = {}
 
