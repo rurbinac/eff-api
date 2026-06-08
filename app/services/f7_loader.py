@@ -282,7 +282,7 @@ class F7Loader:
             raise ValueError("Missing home or away team reference in match data")
 
         query = text("""
-            SELECT `realTeamID`, `realTeamUID`, `realTeamMemberKey`
+            SELECT `realTeamID`, `realTeamUID`, `realTeamMemberKey`, `realTeamName`, `realTeamShortName`
             FROM `RealTeams`
             WHERE `realCompetitionID` = :comp_id
               AND (`realTeamUID` = :home_uid OR `realTeamUID` = :away_uid)
@@ -299,7 +299,15 @@ class F7Loader:
             teams_cache[row['realTeamUID']] = {
                 'realTeamID': row['realTeamID'],
                 'realTeamMemberKey': row['realTeamMemberKey'],
+                'realTeamName': row['realTeamName'],
+                'realTeamShortName': row['realTeamShortName'],
             }
+
+        # Add score and side from match data
+        teams_cache[home_team_uid]['score'] = match_data.get('home_score')
+        teams_cache[home_team_uid]['side'] = 'Home'
+        teams_cache[away_team_uid]['score'] = match_data.get('away_score')
+        teams_cache[away_team_uid]['side'] = 'Away'
 
         return teams_cache
 
@@ -384,6 +392,13 @@ class F7Loader:
                 if player_uid in players_cache:
                     players_cache[player_uid]['realPlayerID'] = row['realPlayerID']
                     players_cache[player_uid]['realTeamMemberKey'] = row['realTeamMemberKey']
+                else:
+                    # Player from database not yet in cache, add them
+                    players_cache[player_uid] = {
+                        'realPlayerUID': player_uid,
+                        'realPlayerID': row['realPlayerID'],
+                        'realTeamMemberKey': row['realTeamMemberKey'],
+                    }
 
         # Enrich with PlayerLineUp data
         if player_lineup:
