@@ -219,8 +219,24 @@ class F7Loader:
             results['errors'] = results.get('errors', [])
             results['errors'].append(f"RealMatchTeams update failed: {str(e)}")
 
+        # Update RealStandings with match results
+        try:
+            real_match_day = foundation['competition'].get('matchday')
+            if real_match_day:
+                try:
+                    real_match_day = int(real_match_day)
+                    standings_result = F7Loader.update_standings_quick_mode(
+                        db, match_ids, match_data, foundation['teams_cache'],
+                        foundation['real_competition_id'], real_match_day
+                    )
+                    results['standings_updated'] = standings_result.get('standings_updated', 0)
+                except (ValueError, TypeError):
+                    pass
+        except Exception as e:
+            results['errors'] = results.get('errors', [])
+            results['errors'].append(f"RealStandings update failed: {str(e)}")
+
         # TODO: Process RealMatchEvents (insert/update)
-        # TODO: Update RealStandings
 
         try:
             db.commit()
@@ -630,3 +646,118 @@ class F7Loader:
             update_count += 1
 
         return {'status': 'updated', 'teams_updated': update_count}
+
+    @staticmethod
+    def update_standings_quick_mode(db: Session, match_ids: dict, match_data: dict,
+                                     teams_cache: dict, real_competition_id: int,
+                                     real_match_day: int) -> dict:
+        """Update RealStandings for both teams with match results.
+
+        Args:
+            db: Database session
+            match_ids: Dict with realMatchID from foundation
+            match_data: Parsed match data with scores
+            teams_cache: Teams cache with team info and scores
+            real_competition_id: Competition ID
+            real_match_day: Match day number
+
+        Returns:
+            Dict with update status
+        """
+        now = datetime.utcnow()
+
+        # Get scores
+        home_score = None
+        away_score = None
+        try:
+            home_score = int(match_data.get('home_score')) if match_data.get('home_score') else None
+            away_score = int(match_data.get('away_score')) if match_data.get('away_score') else None
+        except (ValueError, TypeError):
+            pass
+
+        # Get match date and status
+        match_date = match_data.get('date')
+        match_time = match_data.get('match_time')
+        match_status = RealMatchPeriod.to_match_status(match_data.get('period'))
+
+        # Prepare updates for both teams
+        teams_to_update = [
+            {
+                'side': 'Home',
+                'my_score': home_score,
+                'other_score': away_score,
+                'team_uid': None,  # Will be set below
+            },
+            {
+                'side': 'Away',
+                'my_score': away_score,
+                'other_score': home_score,
+                'team_uid': None,  # Will be set below
+            },
+        ]
+
+        # Map team UIDs to sides
+        for team_uid, team_info in teams_cache.items():
+            side = team_info.get('side')
+            for team_update in teams_to_update:
+                if team_update['side'] == side:
+                    team_update['team_uid'] = team_uid
+
+        update_count = 0
+
+        for team_update in teams_to_update:
+            team_uid = team_update['team_uid']
+            if not team_uid or team_uid not in teams_cache:
+                continue
+
+            team_info = teams_cache[team_uid]
+            my_score = team_update['my_score']
+            other_score = team_update['other_score']
+
+            # Calculate match results
+            match_won = 1 if (my_score is not None and other_score is not None and my_score > other_score) else 0
+            match_draw = 1 if (my_score is not None and other_score is not None and my_score == other_score) else 0
+            match_lost = 1 if (my_score is not None and other_score is not None and my_score < other_score) else 0
+
+            # Calculate match points
+            match_points = 3 * match_won + match_draw
+
+            # Update RealStandings
+            update_query = text("""
+                UPDATE `RealStandings`
+                SET realMatchDate = :match_date,
+                    realMatchTime = :match_time,
+                    realMatchStatus = :match_status,
+                    realTeamScore = :my_score,
+                    oppositeRealTeamScore = :other_score,
+                    matchWon = :match_won,
+                    matchDraw = :match_draw,
+                    matchLost = :match_lost,
+                    matchPointsL1 = :match_points,
+                    livePointsL1 = :match_points,
+                    processed = 1,
+                    updatedIn = :now
+                WHERE realCompetitionID = :comp_id
+                  AND realCompetitionMatchDay = :match_day
+                  AND realTeamMemberKey = :team_member_key
+            """)
+
+            db.execute(update_query, {
+                'match_date': match_date,
+                'match_time': match_time,
+                'match_status': match_status,
+                'my_score': my_score,
+                'other_score': other_score,
+                'match_won': match_won,
+                'match_draw': match_draw,
+                'match_lost': match_lost,
+                'match_points': match_points,
+                'comp_id': real_competition_id,
+                'match_day': real_match_day,
+                'team_member_key': team_info.get('realTeamMemberKey'),
+                'now': now,
+            })
+
+            update_count += 1
+
+        return {'status': 'updated', 'standings_updated': update_count}
