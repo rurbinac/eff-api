@@ -383,6 +383,24 @@ class F7Loader:
                     players_cache[player_ref]['formation_place'] = formation_place
                     players_cache[player_ref]['shirt_number'] = shirt_number
 
+                    # Initialize performance tracking fields
+                    players_cache[player_ref]['assists'] = 0
+                    players_cache[player_ref]['goals'] = 0
+                    players_cache[player_ref]['goalsConceded'] = 0
+                    players_cache[player_ref]['ownGoals'] = 0
+                    players_cache[player_ref]['position'] = 0
+                    players_cache[player_ref]['redCards'] = 0
+                    players_cache[player_ref]['secondYellowCards'] = 0
+                    players_cache[player_ref]['straightRedCards'] = 0
+                    players_cache[player_ref]['yellowCards'] = 0
+                    players_cache[player_ref]['pointsAssists'] = 0
+                    players_cache[player_ref]['pointsCards'] = 0
+                    players_cache[player_ref]['pointsCleanSheet'] = 0
+                    players_cache[player_ref]['pointsGoals'] = 0
+                    players_cache[player_ref]['pointsGoalsAllowed'] = 0
+                    players_cache[player_ref]['pointsOwnGoals'] = 0
+                    players_cache[player_ref]['pointsPlayed'] = 0
+
                     # Calculate playing time and flags based on status
                     if status == 'Start':
                         # Player started the match
