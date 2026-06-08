@@ -219,7 +219,7 @@ class F7Loader:
             results['errors'] = results.get('errors', [])
             results['errors'].append(f"RealMatchTeams update failed: {str(e)}")
 
-        # Update RealStandings with match results
+        # Update RealStandings with match results (teams)
         try:
             real_match_day = foundation['competition'].get('matchday')
             if real_match_day:
@@ -234,7 +234,25 @@ class F7Loader:
                     pass
         except Exception as e:
             results['errors'] = results.get('errors', [])
-            results['errors'].append(f"RealStandings update failed: {str(e)}")
+            results['errors'].append(f"RealStandings team update failed: {str(e)}")
+
+        # Update RealStandings with player performance
+        try:
+            real_match_day = foundation['competition'].get('matchday')
+            if real_match_day:
+                try:
+                    real_match_day = int(real_match_day)
+                    player_result = F7Loader.update_player_standings_quick_mode(
+                        db, match_ids, match_data, foundation['teams_cache'],
+                        processed_data['standings_data'], foundation['real_competition_id'],
+                        real_match_day
+                    )
+                    results['players_standings_updated'] = player_result.get('players_updated', 0)
+                except (ValueError, TypeError):
+                    pass
+        except Exception as e:
+            results['errors'] = results.get('errors', [])
+            results['errors'].append(f"RealStandings player update failed: {str(e)}")
 
         # TODO: Process RealMatchEvents (insert/update)
 
@@ -761,3 +779,187 @@ class F7Loader:
             update_count += 1
 
         return {'status': 'updated', 'standings_updated': update_count}
+
+    @staticmethod
+    def update_player_standings_quick_mode(db: Session, match_ids: dict, match_data: dict,
+                                            teams_cache: dict, players_cache: dict,
+                                            real_competition_id: int, real_match_day: int) -> dict:
+        """Update RealStandings for all players with match performance.
+
+        Args:
+            db: Database session
+            match_ids: Dict with realMatchID and realMatchTeamID values
+            match_data: Parsed match data
+            teams_cache: Teams cache with team info
+            players_cache: Players cache with performance data
+            real_competition_id: Competition ID
+            real_match_day: Match day number
+
+        Returns:
+            Dict with update status
+        """
+        now = datetime.utcnow()
+
+        # Get match data
+        match_date = match_data.get('date')
+        match_time = match_data.get('match_time')
+        match_status = RealMatchPeriod.to_match_status(match_data.get('period'))
+
+        # Build team info lookup (side -> team info)
+        team_by_side = {}
+        for team_uid, team_info in teams_cache.items():
+            side = team_info.get('side')
+            if side:
+                team_by_side[side] = (team_uid, team_info)
+
+        update_count = 0
+
+        # Update RealStandings for each player
+        for player_uid, player in players_cache.items():
+            # Skip players without realTeamMemberKey
+            if not player.get('realTeamMemberKey'):
+                continue
+
+            player_team_uid = player.get('realTeamUID')
+            if not player_team_uid or player_team_uid not in teams_cache:
+                continue
+
+            team_info = teams_cache[player_team_uid]
+            player_side = team_info.get('side')
+
+            # Get opponent team info
+            opponent_side = 'Away' if player_side == 'Home' else 'Home'
+            if opponent_side not in team_by_side:
+                continue
+
+            opponent_uid, opponent_info = team_by_side[opponent_side]
+
+            # Find the correct realMatchTeamID for this player's team
+            real_match_team_id = None
+            if player_side == 'Home' and 'realMatchTeamID_Home' in match_ids:
+                real_match_team_id = match_ids['realMatchTeamID_Home']
+            elif player_side == 'Away' and 'realMatchTeamID_Away' in match_ids:
+                real_match_team_id = match_ids['realMatchTeamID_Away']
+
+            if not real_match_team_id:
+                continue
+
+            # Build player names
+            known_name = player.get('knownName')
+            first_name = player.get('firstName', '')
+            last_name = player.get('lastName', '')
+            name = known_name if known_name else f"{first_name} {last_name}".strip()
+            sort_name = known_name if known_name else f"{last_name} {first_name}".strip()
+
+            # Calculate total points
+            total_points = (
+                player.get('pointsPlayed', 0) +
+                player.get('pointsGoalsAllowed', 0) +
+                player.get('pointsCleanSheet', 0) +
+                player.get('pointsCards', 0) +
+                player.get('pointsGoals', 0) +
+                player.get('pointsAssists', 0) +
+                player.get('pointsOwnGoals', 0)
+            )
+
+            # Update RealStandings for player
+            update_query = text("""
+                UPDATE `RealStandings`
+                SET realMatchID = :match_id,
+                    realMatchTeamID = :match_team_id,
+                    realMatchDate = :match_date,
+                    realMatchTime = :match_time,
+                    realMatchStatus = :match_status,
+                    realTeamID = :team_id,
+                    realTeamUID = :team_uid,
+                    realTeamName = :team_name,
+                    realTeamShortName = :team_short_name,
+                    realTeamScore = :team_score,
+                    realTeamSide = :team_side,
+                    oppositeRealTeamID = :opp_team_id,
+                    oppositeRealTeamUID = :opp_team_uid,
+                    oppositeRealTeamName = :opp_team_name,
+                    oppositeRealTeamShortName = :opp_team_short_name,
+                    oppositeRealTeamScore = :opp_team_score,
+                    realPlayerID = :player_id,
+                    realPlayerUID = :player_uid,
+                    firstName = :first_name,
+                    lastName = :last_name,
+                    knownName = :known_name,
+                    name = :name,
+                    sortName = :sort_name,
+                    matchTimePlayed = :time_played,
+                    matchGamePlayed = :game_played,
+                    matchGoals = :goals,
+                    matchAssists = :assists,
+                    matchYellowCards = :yellow_cards,
+                    matchRedCards = :red_cards,
+                    matchGoalsConceded = :goals_conceded,
+                    matchCleanSheet = :clean_sheet,
+                    matchDayPlayed = :day_played,
+                    matchPointsL1Played = :points_played,
+                    matchPointsL1GoalsAllowed = :points_goals_allowed,
+                    matchPointsL1CleanSheet = :points_clean_sheet,
+                    matchPointsL1Cards = :points_cards,
+                    matchPointsL1Goals = :points_goals,
+                    matchPointsL1Assists = :points_assists,
+                    matchPointsL1OwnGoals = :points_own_goals,
+                    matchPointsL1 = :total_points,
+                    livePointsL1 = :total_points,
+                    processed = 1,
+                    updatedIn = :now
+                WHERE realCompetitionID = :comp_id
+                  AND realCompetitionMatchDay = :match_day
+                  AND realTeamMemberKey = :team_member_key
+            """)
+
+            db.execute(update_query, {
+                'match_id': match_ids['realMatchID'],
+                'match_team_id': real_match_team_id,
+                'match_date': match_date,
+                'match_time': match_time,
+                'match_status': match_status,
+                'team_id': team_info['realTeamID'],
+                'team_uid': player_team_uid,
+                'team_name': team_info['realTeamName'],
+                'team_short_name': team_info['realTeamShortName'],
+                'team_score': team_info['score'],
+                'team_side': player_side,
+                'opp_team_id': opponent_info['realTeamID'],
+                'opp_team_uid': opponent_uid,
+                'opp_team_name': opponent_info['realTeamName'],
+                'opp_team_short_name': opponent_info['realTeamShortName'],
+                'opp_team_score': opponent_info['score'],
+                'player_id': player.get('realPlayerID'),
+                'player_uid': player_uid,
+                'first_name': first_name,
+                'last_name': last_name,
+                'known_name': known_name,
+                'name': name,
+                'sort_name': sort_name,
+                'time_played': player.get('timePlayed', 0),
+                'game_played': player.get('gamePlayed', 0),
+                'goals': player.get('goals', 0),
+                'assists': player.get('assists', 0),
+                'yellow_cards': player.get('yellowCards', 0),
+                'red_cards': player.get('redCards', 0),
+                'goals_conceded': player.get('goalsConceded', 0),
+                'clean_sheet': player.get('cleanSheet', 0),
+                'day_played': player.get('gamePlayed', 0),
+                'points_played': player.get('pointsPlayed', 0),
+                'points_goals_allowed': player.get('pointsGoalsAllowed', 0),
+                'points_clean_sheet': player.get('pointsCleanSheet', 0),
+                'points_cards': player.get('pointsCards', 0),
+                'points_goals': player.get('pointsGoals', 0),
+                'points_assists': player.get('pointsAssists', 0),
+                'points_own_goals': player.get('pointsOwnGoals', 0),
+                'total_points': total_points,
+                'comp_id': real_competition_id,
+                'match_day': real_match_day,
+                'team_member_key': player['realTeamMemberKey'],
+                'now': now,
+            })
+
+            update_count += 1
+
+        return {'status': 'updated', 'players_updated': update_count}
