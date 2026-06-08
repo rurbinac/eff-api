@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.services.f7_parser import F7Parser
 from app.services.f7_events import add_event, load_goal, load_booking, load_substitution
+from app.services.f7_standings import process_events, calculate_player_points
 from app.constants import RealMatchPeriod
 
 
@@ -155,8 +156,21 @@ class F7Loader:
         # Sort events by eventKey (period, time, timestamp, class)
         events_cache.sort(key=lambda e: e.get('eventKey', ''))
 
-        # Placeholder for standings data (user will provide logic)
-        standings_data = {}
+        # Process events to calculate player statistics
+        match_time_str = match_data.get('match_time')
+        try:
+            match_time = int(match_time_str) if match_time_str else None
+        except (ValueError, TypeError):
+            match_time = None
+
+        if match_time:
+            players_cache = process_events(players_cache, events_cache, match_time)
+
+        # Calculate fantasy points for all players
+        players_cache = calculate_player_points(players_cache)
+
+        # Prepare standings data (player statistics for persistence)
+        standings_data = players_cache
 
         return {
             'match_data': match_data,
