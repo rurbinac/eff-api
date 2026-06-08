@@ -1,5 +1,6 @@
 cache,field_name
 players_cache,realPlayerUID
+players_cache,realPlayerID
 players_cache,realTeamMemberKey
 players_cache,realTeamUID
 players_cache,firstName
@@ -47,6 +48,10 @@ events_cache,eventKey
 teams_cache,realTeamUID
 teams_cache,realTeamID
 teams_cache,realTeamMemberKey
+teams_cache,realTeamName
+teams_cache,realTeamShortName
+teams_cache,score
+teams_cache,side
 match_data,home_team_ref
 match_data,away_team_ref
 match_data,home_score
