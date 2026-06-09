@@ -1037,15 +1037,220 @@ class SyncService:
         Args:
             db: Database session
             rc: RealCompetition dict
-            matches: Dict of matches keyed by realTeamUID
+            matches: Dict of matches keyed by realTeamMemberKey
             match_day: Match day number
             teams: Dict of team members from RealTeamMembers
 
         Returns:
             Results dict with rows_affected
         """
-        # TODO: Implement team member sync logic
-        return {'rows_affected': 0}
+        rows_affected = 0
+
+        try:
+            comp_id = rc.get('realCompetitionID')
+
+            # Step 1: Read existing RealStandings for teams in this match day
+            q_standings = text("""
+                SELECT `realStandingID`, `realTeamMemberKey`
+                FROM `RealStandings`
+                WHERE `realCompetitionID` = :comp_id
+                  AND `realCompetitionMatchDay` = :match_day
+                  AND LEFT(`realTeamMemberKey`, 1) = 'T'
+            """)
+            standing_rows = db.execute(q_standings, {
+                'comp_id': comp_id,
+                'match_day': match_day,
+            }).fetchall()
+
+            found = []
+
+            # Step 2: Update existing records
+            for row in standing_rows:
+                row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
+                key = row_dict.get('realTeamMemberKey')
+                standing_id = row_dict.get('realStandingID')
+
+                if key not in matches or key not in teams:
+                    continue
+
+                found.append(key)
+                op_key = matches[key].get('op_realTeamMemberKey')
+                match_points = matches[key].get('realTeamPoints', 0)
+
+                # Determine match result
+                match_won = 1 if match_points == 3 else 0
+                match_draw = 1 if match_points == 1 else 0
+                match_lost = 1 if match_points == 0 else 0
+
+                q_update = text("""
+                    UPDATE `RealStandings`
+                    SET `realTeamMemberID` = :realTeamMemberID,
+                        `realTeamMemberKey` = :realTeamMemberKey,
+                        `prevRealTeamMemberKey` = :prevRealTeamMemberKey,
+                        `nextRealTeamMemberKey` = :nextRealTeamMemberKey,
+                        `realCompetitionID` = :realCompetitionID,
+                        `realCompetitionUID` = :realCompetitionUID,
+                        `realCompetitionSYMID` = :realCompetitionSYMID,
+                        `realCompetitionSeasonId` = :realCompetitionSeasonId,
+                        `realCompetitionMatchDay` = :realCompetitionMatchDay,
+                        `realCompetitionLastMatchDay` = :realCompetitionLastMatchDay,
+                        `baseRealCompetitionID` = :baseRealCompetitionID,
+                        `extraRealCompetitionID` = :extraRealCompetitionID,
+                        `isTeam` = 1,
+                        `isPlayer` = 0,
+                        `baseMatchDay` = :baseMatchDay,
+                        `realMatchID` = :realMatchID,
+                        `realMatchTeamID` = :realMatchTeamID,
+                        `realMatchDate` = :realMatchDate,
+                        `realMatchTime` = :realMatchTime,
+                        `realMatchStatus` = :realMatchStatus,
+                        `realTeamID` = :realTeamID,
+                        `realTeamUID` = :realTeamUID,
+                        `realTeamName` = :realTeamName,
+                        `realTeamShortName` = :realTeamShortName,
+                        `realTeamScore` = :realTeamScore,
+                        `realTeamSide` = :realTeamSide,
+                        `oppositeRealTeamID` = :oppositeRealTeamID,
+                        `oppositeRealTeamUID` = :oppositeRealTeamUID,
+                        `oppositeRealTeamName` = :oppositeRealTeamName,
+                        `oppositeRealTeamShortName` = :oppositeRealTeamShortName,
+                        `oppositeRealTeamScore` = :oppositeRealTeamScore,
+                        `name` = :name,
+                        `sortName` = :sortName,
+                        `position` = :position,
+                        `draftPosition` = :draftPosition,
+                        `draftPositionOrder` = :draftPositionOrder,
+                        `matchWon` = :matchWon,
+                        `matchDraw` = :matchDraw,
+                        `matchLost` = :matchLost,
+                        `matchPointsL1` = :matchPointsL1,
+                        `livePointsL1` = :livePointsL1,
+                        `processed` = 1
+                    WHERE `realStandingID` = :standing_id
+                """)
+
+                result = db.execute(q_update, {
+                    'realTeamMemberID': teams[key].get('realTeamMemberID'),
+                    'realTeamMemberKey': teams[key].get('realTeamMemberKey'),
+                    'prevRealTeamMemberKey': teams[key].get('prevRealTeamMemberKey'),
+                    'nextRealTeamMemberKey': teams[key].get('nextRealTeamMemberKey'),
+                    'realCompetitionID': rc.get('realCompetitionID'),
+                    'realCompetitionUID': rc.get('realCompetitionUID'),
+                    'realCompetitionSYMID': rc.get('realCompetitionSYMID'),
+                    'realCompetitionSeasonId': rc.get('realCompetitionSeasonId'),
+                    'realCompetitionMatchDay': match_day,
+                    'realCompetitionLastMatchDay': rc.get('realCompetitionLastMatchDay'),
+                    'baseRealCompetitionID': rc.get('baseRealCompetitionID'),
+                    'extraRealCompetitionID': rc.get('extraRealCompetitionID'),
+                    'baseMatchDay': match_day,
+                    'realMatchID': matches[key].get('realMatchID'),
+                    'realMatchTeamID': matches[key].get('realMatchTeamID'),
+                    'realMatchDate': matches[key].get('realMatchDate'),
+                    'realMatchTime': matches[key].get('realMatchTime'),
+                    'realMatchStatus': matches[key].get('realMatchStatus'),
+                    'realTeamID': teams[key].get('realTeamID'),
+                    'realTeamUID': teams[key].get('realTeamUID'),
+                    'realTeamName': teams[key].get('realTeamName'),
+                    'realTeamShortName': teams[key].get('realTeamShortName'),
+                    'realTeamScore': matches[key].get('realTeamScore'),
+                    'realTeamSide': matches[key].get('realTeamSide'),
+                    'oppositeRealTeamID': teams[op_key].get('realTeamID') if op_key else None,
+                    'oppositeRealTeamUID': teams[op_key].get('realTeamUID') if op_key else None,
+                    'oppositeRealTeamName': teams[op_key].get('realTeamName') if op_key else None,
+                    'oppositeRealTeamShortName': teams[op_key].get('realTeamShortName') if op_key else None,
+                    'oppositeRealTeamScore': matches[op_key].get('realTeamScore') if op_key else None,
+                    'name': teams[key].get('name'),
+                    'sortName': teams[key].get('sortName'),
+                    'position': RealTeamTypes.EPL_TEAM,
+                    'draftPosition': RealTeamTypes.EPL_TEAM,
+                    'draftPositionOrder': 5,
+                    'matchWon': match_won,
+                    'matchDraw': match_draw,
+                    'matchLost': match_lost,
+                    'matchPointsL1': match_points,
+                    'livePointsL1': match_points,
+                    'standing_id': standing_id,
+                })
+                rows_affected += result.rowcount
+
+            # Step 3: Insert new records for teams not yet in RealStandings
+            for key in teams:
+                if key not in found and key in matches:
+                    op_key = matches[key].get('op_realTeamMemberKey')
+                    match_points = matches[key].get('realTeamPoints', 0)
+
+                    match_won = 1 if match_points == 3 else 0
+                    match_draw = 1 if match_points == 1 else 0
+                    match_lost = 1 if match_points == 0 else 0
+
+                    q_insert = text("""
+                        INSERT INTO `RealStandings`
+                        (`realTeamMemberID`, `realTeamMemberKey`, `prevRealTeamMemberKey`, `nextRealTeamMemberKey`,
+                         `realCompetitionID`, `realCompetitionUID`, `realCompetitionSYMID`, `realCompetitionSeasonId`,
+                         `realCompetitionMatchDay`, `realCompetitionLastMatchDay`, `baseRealCompetitionID`, `extraRealCompetitionID`,
+                         `isTeam`, `isPlayer`, `baseMatchDay`, `realMatchID`, `realMatchTeamID`, `realMatchDate`, `realMatchTime`,
+                         `realMatchStatus`, `realTeamID`, `realTeamUID`, `realTeamName`, `realTeamShortName`, `realTeamScore`, `realTeamSide`,
+                         `oppositeRealTeamID`, `oppositeRealTeamUID`, `oppositeRealTeamName`, `oppositeRealTeamShortName`, `oppositeRealTeamScore`,
+                         `realPlayerID`, `realPlayerUID`, `firstName`, `lastName`, `knownName`, `name`, `sortName`, `position`, `draftPosition`,
+                         `draftPositionOrder`, `matchWon`, `matchDraw`, `matchLost`, `matchPointsL1`, `livePointsL1`, `processed`)
+                        VALUES
+                        (:realTeamMemberID, :realTeamMemberKey, :prevRealTeamMemberKey, :nextRealTeamMemberKey,
+                         :realCompetitionID, :realCompetitionUID, :realCompetitionSYMID, :realCompetitionSeasonId,
+                         :realCompetitionMatchDay, :realCompetitionLastMatchDay, :baseRealCompetitionID, :extraRealCompetitionID,
+                         1, 0, :baseMatchDay, :realMatchID, :realMatchTeamID, :realMatchDate, :realMatchTime,
+                         :realMatchStatus, :realTeamID, :realTeamUID, :realTeamName, :realTeamShortName, :realTeamScore, :realTeamSide,
+                         :oppositeRealTeamID, :oppositeRealTeamUID, :oppositeRealTeamName, :oppositeRealTeamShortName, :oppositeRealTeamScore,
+                         NULL, NULL, NULL, NULL, NULL, :name, :sortName, :position, :draftPosition,
+                         :draftPositionOrder, :matchWon, :matchDraw, :matchLost, :matchPointsL1, :livePointsL1, 1)
+                    """)
+
+                    result = db.execute(q_insert, {
+                        'realTeamMemberID': teams[key].get('realTeamMemberID'),
+                        'realTeamMemberKey': teams[key].get('realTeamMemberKey'),
+                        'prevRealTeamMemberKey': teams[key].get('prevRealTeamMemberKey'),
+                        'nextRealTeamMemberKey': teams[key].get('nextRealTeamMemberKey'),
+                        'realCompetitionID': rc.get('realCompetitionID'),
+                        'realCompetitionUID': rc.get('realCompetitionUID'),
+                        'realCompetitionSYMID': rc.get('realCompetitionSYMID'),
+                        'realCompetitionSeasonId': rc.get('realCompetitionSeasonId'),
+                        'realCompetitionMatchDay': match_day,
+                        'realCompetitionLastMatchDay': rc.get('realCompetitionLastMatchDay'),
+                        'baseRealCompetitionID': rc.get('baseRealCompetitionID'),
+                        'extraRealCompetitionID': rc.get('extraRealCompetitionID'),
+                        'baseMatchDay': match_day,
+                        'realMatchID': matches[key].get('realMatchID'),
+                        'realMatchTeamID': matches[key].get('realMatchTeamID'),
+                        'realMatchDate': matches[key].get('realMatchDate'),
+                        'realMatchTime': matches[key].get('realMatchTime'),
+                        'realMatchStatus': matches[key].get('realMatchStatus'),
+                        'realTeamID': teams[key].get('realTeamID'),
+                        'realTeamUID': teams[key].get('realTeamUID'),
+                        'realTeamName': teams[key].get('realTeamName'),
+                        'realTeamShortName': teams[key].get('realTeamShortName'),
+                        'realTeamScore': matches[key].get('realTeamScore'),
+                        'realTeamSide': matches[key].get('realTeamSide'),
+                        'oppositeRealTeamID': teams[op_key].get('realTeamID') if op_key else None,
+                        'oppositeRealTeamUID': teams[op_key].get('realTeamUID') if op_key else None,
+                        'oppositeRealTeamName': teams[op_key].get('realTeamName') if op_key else None,
+                        'oppositeRealTeamShortName': teams[op_key].get('realTeamShortName') if op_key else None,
+                        'oppositeRealTeamScore': matches[op_key].get('realTeamScore') if op_key else None,
+                        'name': teams[key].get('name'),
+                        'sortName': teams[key].get('sortName'),
+                        'position': RealTeamTypes.EPL_TEAM,
+                        'draftPosition': RealTeamTypes.EPL_TEAM,
+                        'draftPositionOrder': 5,
+                        'matchWon': match_won,
+                        'matchDraw': match_draw,
+                        'matchLost': match_lost,
+                        'matchPointsL1': match_points,
+                        'livePointsL1': match_points,
+                    })
+                    rows_affected += result.rowcount
+
+        except Exception as e:
+            return {'rows_affected': 0, 'error': str(e)}
+
+        return {'rows_affected': rows_affected}
 
     @staticmethod
     def _sync_rmt_players(db: Session, rc: dict, matches: dict, match_day: int, teams: dict, players: dict) -> dict:
