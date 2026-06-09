@@ -6,6 +6,7 @@ Syncs redundant/denormalized data across tables to maintain consistency.
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime
+from app.constants import RealTeamMemberPositions, RealTeamTypes
 
 
 class SyncService:
@@ -14,14 +15,6 @@ class SyncService:
     # Competition SYMIDs
     BASE_SYMID = 'EN_PR'
     EXTRA_SYMID = 'EN_FA'
-
-    # Draft position constants
-    DRAFT_POSITION_GOALKEEPER = 'Goalkeeper'
-    DRAFT_POSITION_DEFENDER = 'Defender'
-    DRAFT_POSITION_MIDFIELDER = 'Midfielder'
-    DRAFT_POSITION_STRIKER = 'Striker'
-
-    DRAFT_POSITION_TEAM = 'EPLTeam'
 
     @staticmethod
     def sync_real_competitions(db: Session) -> dict:
@@ -125,14 +118,13 @@ class SyncService:
                        `t`.`baseRealTeamShortName` = `t1`.`realTeamShortName`,
                        `t`.`realTeamMemberKey` = CONCAT('T', `t1`.`realTeamID`),
                        `t`.`draftPosition` = :draftPosition,
-                       `t`.`draftPositionOrder` = :draftPositionOrder,
+                       `t`.`draftPositionOrder` = 5,
                        `t`.`lastFDate` = IF(`t`.`lastF7Date` > `t`.`lastF42Date`, `t`.`lastF7Date`, `t`.`lastF42Date`)
                    WHERE `t`.`realCompetitionID` = :realCompetitionID
             """)
             result = db.execute(q1, {
                 'realCompetitionID': real_competition_id,
-                'draftPosition': SyncService.DRAFT_POSITION_TEAM,
-                'draftPositionOrder': 5,
+                'draftPosition': RealTeamTypes.EPL_TEAM,
             })
             results['queries_executed'] += 1
             results['rows_affected'] += result.rowcount
@@ -201,8 +193,7 @@ class SyncService:
             """)
             result = db.execute(q3, {
                 'realCompetitionID': real_competition_id,
-                'draftPosition': SyncService.DRAFT_POSITION_TEAM,
-                'draftPositionOrder': 5,
+                'draftPosition': RealTeamTypes.EPL_TEAM,
             })
             results['queries_executed'] += 1
             results['rows_affected'] += result.rowcount
@@ -275,8 +266,7 @@ class SyncService:
             """)
             result = db.execute(q5, {
                 'realCompetitionID': real_competition_id,
-                'draftPosition': SyncService.DRAFT_POSITION_TEAM,
-                'draftPositionOrder': 5,
+                'draftPosition': RealTeamTypes.EPL_TEAM,
             })
             results['queries_executed'] += 1
             results['rows_affected'] += result.rowcount
