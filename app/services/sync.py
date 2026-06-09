@@ -972,6 +972,75 @@ class SyncService:
         return results
 
     @staticmethod
+    def _sync_rmt_read_rs_teams(db: Session, rc: dict, matches: dict, match_day: int, teams: dict) -> None:
+        """Read RealStandings teams data and update teams dict with calculated fields.
+
+        Args:
+            db: Database session
+            rc: RealCompetition dict
+            matches: Dict of matches keyed by realTeamMemberKey
+            match_day: Match day number
+            teams: Teams dict to update (modified in place)
+        """
+        comp_id = rc.get('realCompetitionID')
+
+        # Query to get teams from RealStandings for this match day
+        q = text("""
+            SELECT `realStandingID`, `realTeamMemberKey`
+            FROM `RealStandings`
+            WHERE `realCompetitionID` = :comp_id
+              AND `realCompetitionMatchDay` = :match_day
+              AND LEFT(`realTeamMemberKey`, 1) = 'T'
+        """)
+        rows = db.execute(q, {
+            'comp_id': comp_id,
+            'match_day': match_day,
+        }).fetchall()
+
+        for row in rows:
+            row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
+            key = row_dict.get('realTeamMemberKey')
+            standing_id = row_dict.get('realStandingID')
+
+            if key not in matches or key not in teams:
+                continue
+
+            # Extract match data
+            score = matches[key].get('realTeamScore', 0)
+            points = matches[key].get('realTeamPoints', 0)
+            side = matches[key].get('realTeamSide', '')
+            op_key = matches[key].get('op_realTeamMemberKey')
+            op_score = matches[op_key].get('realTeamScore', 0) if op_key else 0
+
+            # Calculate match result
+            match_won = 1 if points == 3 else 0
+            match_draw = 1 if points == 1 else 0
+            match_lost = 1 if points == 0 else 0
+
+            # Update teams dict with aggregated stats
+            teams[key]['matchWon'] = match_won
+            teams[key]['matchDraw'] = match_draw
+            teams[key]['matchLost'] = match_lost
+            teams[key]['played'] += 1
+            teams[key]['won'] += match_won
+            teams[key]['draw'] += match_draw
+            teams[key]['lost'] += match_lost
+            teams[key]['goalsFor'] += score
+            teams[key]['goalsAgainst'] += op_score
+
+            # Update home/away stats based on side
+            if side:
+                teams[key]['played' + side] += 1
+                teams[key]['won' + side] += match_won
+                teams[key]['draw' + side] += match_draw
+                teams[key]['lost' + side] += match_lost
+                teams[key]['goalsFor' + side] += score
+                teams[key]['goalsAgainst' + side] += op_score
+
+            # Store realStandingID for later updates
+            teams[key]['realStandingID'] = standing_id
+
+    @staticmethod
     def sync_real_team_members(db: Session, real_competition_id: int) -> dict:
         """Sync RealTeamMembers with match and player data across competitions.
 
@@ -1054,6 +1123,27 @@ class SyncService:
                         'draftPosition': row_dict.get('draftPosition'),
                         'draftPositionOrder': row_dict.get('draftPositionOrder'),
                         'enabled': row_dict.get('enabled'),
+                        'matchWon': 0,
+                        'matchDraw': 0,
+                        'matchLost': 0,
+                        'played': 0,
+                        'won': 0,
+                        'draw': 0,
+                        'lost': 0,
+                        'goalsFor': 0,
+                        'goalsAgainst': 0,
+                        'playedHome': 0,
+                        'wonHome': 0,
+                        'drawHome': 0,
+                        'lostHome': 0,
+                        'goalsForHome': 0,
+                        'goalsAgainstHome': 0,
+                        'playedAway': 0,
+                        'wonAway': 0,
+                        'drawAway': 0,
+                        'lostAway': 0,
+                        'goalsForAway': 0,
+                        'goalsAgainstAway': 0,
                     }
                 elif member_key.startswith('P'):
                     players[member_key] = {
@@ -1080,6 +1170,22 @@ class SyncService:
                         'height': row_dict.get('height'),
                         'jerseyNumber': row_dict.get('jerseyNumber'),
                         'enabled': row_dict.get('enabled'),
+                        'timePlayed': 0,
+                        'gamePlayed': 0,
+                        'goals': 0,
+                        'assists': 0,
+                        'yellowCards': 0,
+                        'redCards': 0,
+                        'goalsConceded': 0,
+                        'cleanSheet': 0,
+                        'pointsL1Played': 0,
+                        'pointsL1GoalsAllowed': 0,
+                        'pointsL1CleanSheet': 0,
+                        'pointsL1Cards': 0,
+                        'pointsL1Goals': 0,
+                        'pointsL1Assists': 0,
+                        'pointsL1OwnGoals': 0,
+                        'pointsL1': 0,
                     }
 
             # Step 3: Process each competition and match day
