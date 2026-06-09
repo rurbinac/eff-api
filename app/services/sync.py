@@ -10,11 +10,183 @@ from app.constants import RealTeamMemberPositions, RealTeamTypes
 
 
 class SyncService:
-    """Synchronize Real* table data."""
+    """Synchronize application and Real* table data."""
 
     # Competition SYMIDs
     BASE_SYMID = 'EN_PR'
     EXTRA_SYMID = 'EN_FA'
+
+    # Application-level syncs
+    @staticmethod
+    def sync_leagues(db: Session, base_real_competition_id: int, extra_real_competition_id: int) -> dict:
+        """Sync Leagues with RealCompetitions."""
+        results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+        }
+
+        try:
+            # Update Leagues with competition data
+            q = text("""
+                UPDATE `Leagues` `lg`
+                   LEFT OUTER JOIN `RealCompetitions` `rc` ON `rc`.`realCompetitionID` = `rc`.`baseRealCompetitionID`
+                   SET `lg`.`baseRealCompetitionID` = `rc`.`baseRealCompetitionID`,
+                       `lg`.`extraRealCompetitionID` = `rc`.`extraRealCompetitionID`,
+                       `lg`.`season` = `rc`.`realCompetitionSeasonId`
+                   WHERE `lg`.`baseRealCompetitionID` = :baseRealCompetitionID
+                     AND `lg`.`extraRealCompetitionID` = :extraRealCompetitionID
+            """)
+            result = db.execute(q, {
+                'baseRealCompetitionID': base_real_competition_id,
+                'extraRealCompetitionID': extra_real_competition_id,
+            })
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+        except Exception as e:
+            results['status'] = 'error'
+            results['error'] = str(e)
+
+        return results
+
+    @staticmethod
+    def sync_divisions(db: Session, base_real_competition_id: int, extra_real_competition_id: int) -> dict:
+        """Sync Divisions with Leagues."""
+        results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+        }
+
+        try:
+            # Update Divisions with league data
+            q = text("""
+                UPDATE `Divisions` `dv`
+                   LEFT OUTER JOIN `Leagues` `lg` ON `lg`.`leagueID` = `dv`.`leagueID`
+                   SET `dv`.`baseRealCompetitionID` = `lg`.`baseRealCompetitionID`,
+                       `dv`.`extraRealCompetitionID` = `lg`.`extraRealCompetitionID`,
+                       `dv`.`season` = `lg`.`season`,
+                       `dv`.`seasonNum` = `lg`.`seasonNum`,
+                       `dv`.`commissionerID` = `lg`.`commissionerID`,
+                       `dv`.`prevLeagueID` = `lg`.`prevLeagueID`,
+                       `dv`.`nextLeagueID` = `lg`.`nextLeagueID`
+                   WHERE `lg`.`baseRealCompetitionID` = :baseRealCompetitionID
+                     AND `lg`.`extraRealCompetitionID` = :extraRealCompetitionID
+            """)
+            result = db.execute(q, {
+                'baseRealCompetitionID': base_real_competition_id,
+                'extraRealCompetitionID': extra_real_competition_id,
+            })
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+        except Exception as e:
+            results['status'] = 'error'
+            results['error'] = str(e)
+
+        return results
+
+    @staticmethod
+    def sync_teams(db: Session, base_real_competition_id: int, extra_real_competition_id: int) -> dict:
+        """Sync Teams with Divisions."""
+        results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+        }
+
+        try:
+            # Update Teams with division data
+            q = text("""
+                UPDATE `Teams` `tm`
+                   LEFT OUTER JOIN `Divisions` `dv` ON `tm`.`divisionID` = `dv`.`divisionID`
+                   SET `tm`.`baseRealCompetitionID` = `dv`.`baseRealCompetitionID`,
+                       `tm`.`extraRealCompetitionID` = `dv`.`extraRealCompetitionID`,
+                       `tm`.`season` = `dv`.`season`,
+                       `tm`.`seasonNum` = `dv`.`seasonNum`,
+                       `tm`.`divisionID` = `dv`.`divisionID`,
+                       `tm`.`matchDayMapKey` = `dv`.`matchDayMapKey`,
+                       `tm`.`leagueID` = `dv`.`leagueID`,
+                       `tm`.`commissionerID` = `dv`.`commissionerID`,
+                       `tm`.`prevLeagueID` = `dv`.`prevLeagueID`,
+                       `tm`.`nextLeagueID` = `dv`.`nextLeagueID`,
+                       `tm`.`prevDivisionID` = `dv`.`prevDivisionID`,
+                       `tm`.`nextDivisionID` = `dv`.`nextDivisionID`,
+                       `tm`.`leagueMatches` = `dv`.`leagueMatches`,
+                       `tm`.`divisionMatches` = `dv`.`divisionMatches`
+                   WHERE `dv`.`baseRealCompetitionID` = :baseRealCompetitionID
+                     AND `dv`.`extraRealCompetitionID` = :extraRealCompetitionID
+            """)
+            result = db.execute(q, {
+                'baseRealCompetitionID': base_real_competition_id,
+                'extraRealCompetitionID': extra_real_competition_id,
+            })
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+        except Exception as e:
+            results['status'] = 'error'
+            results['error'] = str(e)
+
+        return results
+
+    @staticmethod
+    def sync_matches(db: Session, base_real_competition_id: int, extra_real_competition_id: int) -> dict:
+        """Sync Matches and MatchTeams with Divisions/Teams."""
+        results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+        }
+
+        try:
+            # Update Matches with division data
+            q1 = text("""
+                UPDATE `Matches` `m`
+                   LEFT OUTER JOIN `Divisions` `dv` ON `dv`.`divisionID` = `m`.`divisionID`
+                   SET `m`.`leagueID` = `dv`.`leagueID`,
+                       `m`.`season` = `dv`.`season`,
+                       `m`.`seasonNum` = `dv`.`seasonNum`
+                   WHERE `dv`.`baseRealCompetitionID` = :baseRealCompetitionID
+                     AND `dv`.`extraRealCompetitionID` = :extraRealCompetitionID
+            """)
+            result = db.execute(q1, {
+                'baseRealCompetitionID': base_real_competition_id,
+                'extraRealCompetitionID': extra_real_competition_id,
+            })
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Update MatchTeams with team data
+            q2 = text("""
+                UPDATE `MatchTeams` `mt`
+                   LEFT OUTER JOIN `Matches` `m` ON `m`.`matchID` = `mt`.`matchID`
+                   LEFT OUTER JOIN `Teams` `t` ON `t`.`teamID` = `mt`.`teamID`
+                   SET `mt`.`userID` = `t`.`userID`,
+                       `mt`.`teamName` = `t`.`teamName`,
+                       `mt`.`teamSeeding` = CASE `m`.`competitionType`
+                                               WHEN 1 THEN `t`.`seedingC1`
+                                               WHEN 2 THEN `t`.`seedingC2`
+                                               WHEN 3 THEN `t`.`seedingC3`
+                                               ELSE NULL
+                                            END,
+                       `mt`.`matchDayMapKey` = `t`.`matchDayMapKey`
+                   WHERE `t`.`baseRealCompetitionID` = :baseRealCompetitionID
+                     AND `t`.`extraRealCompetitionID` = :extraRealCompetitionID
+            """)
+            result = db.execute(q2, {
+                'baseRealCompetitionID': base_real_competition_id,
+                'extraRealCompetitionID': extra_real_competition_id,
+            })
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+        except Exception as e:
+            results['status'] = 'error'
+            results['error'] = str(e)
+
+        return results
 
     @staticmethod
     def sync_real_competitions(db: Session) -> dict:
