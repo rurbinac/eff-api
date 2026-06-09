@@ -858,3 +858,159 @@ class SyncService:
             results['error'] = str(e)
 
         return results
+
+    @staticmethod
+    def sync_real_team_members(db: Session, real_competition_id: int) -> dict:
+        """Sync RealTeamMembers with match and player data across competitions.
+
+        Args:
+            db: Database session
+            real_competition_id: RealCompetitionID to sync (base or extra)
+
+        Returns:
+            Results dict with status and operation counts
+        """
+        results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+            'match_days_processed': 0,
+        }
+
+        try:
+            # Step 1: Load RealCompetitions and organize by SYMID
+            q_comps = text("""
+                SELECT *
+                FROM `RealCompetitions`
+                WHERE `baseRealCompetitionID` = :realCompetitionID
+                   OR `extraRealCompetitionID` = :realCompetitionID
+            """)
+            comp_rows = db.execute(q_comps, {'realCompetitionID': real_competition_id}).fetchall()
+
+            # Organize competitions by SYMID
+            real_comp = {}
+            for row in comp_rows:
+                row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
+                symid = row_dict.get('realCompetitionSYMID')
+                if symid == SyncService.BASE_SYMID:
+                    real_comp[SyncService.BASE_SYMID] = row_dict
+                elif symid == SyncService.EXTRA_SYMID:
+                    real_comp[SyncService.EXTRA_SYMID] = row_dict
+
+            if not real_comp:
+                results['status'] = 'error'
+                results['error'] = 'No RealCompetitions found for given ID'
+                return results
+
+            # Step 2: Load RealTeamMembers and separate into teams/players
+            base_comp_id = real_comp.get(SyncService.BASE_SYMID, {}).get('realCompetitionID')
+            extra_comp_id = real_comp.get(SyncService.EXTRA_SYMID, {}).get('realCompetitionID')
+
+            q_members = text("""
+                SELECT *
+                FROM `RealTeamMembers`
+                WHERE `baseRealCompetitionID` = :base_id
+                  AND `extraRealCompetitionID` = :extra_id
+            """)
+            member_rows = db.execute(q_members, {
+                'base_id': base_comp_id,
+                'extra_id': extra_comp_id,
+            }).fetchall()
+
+            teams = {}
+            players = {}
+            for row in member_rows:
+                row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
+                member_key = row_dict.get('realTeamMemberKey', '')
+
+                if member_key.startswith('T'):
+                    teams[member_key] = row_dict
+                elif member_key.startswith('P'):
+                    players[member_key] = row_dict
+
+            # Step 3: Process each competition and match day
+            for rc_key, rc in real_comp.items():
+                comp_id = rc.get('realCompetitionID')
+                first_match_day = rc.get('realCompetitionFirstMatchDay', 1)
+                last_match_day = rc.get('realCompetitionLastMatchDay', 1)
+
+                for match_day in range(first_match_day, last_match_day + 1):
+                    # Load matches for this match day
+                    q_matches = text("""
+                        SELECT `m`.`realMatchID`,
+                               `m`.`realMatchStatus`,
+                               `m`.`realMatchDate`,
+                               `m`.`realMatchTime`,
+                               `mt`.`realMatchTeamID`,
+                               `mt`.`realTeamMemberID`,
+                               `mt`.`realTeamMemberKey`,
+                               `mt`.`realTeamID`,
+                               `mt`.`realTeamUID`,
+                               `mt`.`realTeamName`,
+                               `mt`.`realTeamShortName`,
+                               `mt`.`realTeamScore`,
+                               `mt`.`realTeamSide`
+                        FROM `RealMatches` `m`
+                           INNER JOIN `RealMatchTeams` `mt` ON `mt`.`realMatchID` = `m`.`realMatchID`
+                        WHERE `m`.`realCompetitionID` = :comp_id
+                          AND `m`.`realCompetitionMatchDay` = :match_day
+                    """)
+                    match_rows = db.execute(q_matches, {
+                        'comp_id': comp_id,
+                        'match_day': match_day,
+                    }).fetchall()
+
+                    # Organize matches by team UID
+                    matches = {}
+                    for row in match_rows:
+                        row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
+                        team_uid = row_dict.get('realTeamUID')
+                        matches[team_uid] = row_dict
+
+                    # Sync team and player members for this match day
+                    team_result = SyncService._sync_rmt_teams(db, rc, matches, teams)
+                    results['rows_affected'] += team_result.get('rows_affected', 0)
+
+                    player_result = SyncService._sync_rmt_players(db, rc, matches, teams, players)
+                    results['rows_affected'] += player_result.get('rows_affected', 0)
+
+                    results['match_days_processed'] += 1
+
+        except Exception as e:
+            results['status'] = 'error'
+            results['error'] = str(e)
+
+        return results
+
+    @staticmethod
+    def _sync_rmt_teams(db: Session, rc: dict, matches: dict, teams: dict) -> dict:
+        """Sync team members for a match day.
+
+        Args:
+            db: Database session
+            rc: RealCompetition dict
+            matches: Dict of matches keyed by realTeamUID
+            teams: Dict of team members from RealTeamMembers
+
+        Returns:
+            Results dict with rows_affected
+        """
+        # TODO: Implement team member sync logic
+        return {'rows_affected': 0}
+
+    @staticmethod
+    def _sync_rmt_players(db: Session, rc: dict, matches: dict, teams: dict, players: dict) -> dict:
+        """Sync player members for a match day.
+
+        Args:
+            db: Database session
+            rc: RealCompetition dict
+            matches: Dict of matches keyed by realTeamUID
+            teams: Dict of team members from RealTeamMembers
+            players: Dict of player members from RealTeamMembers
+
+        Returns:
+            Results dict with rows_affected
+        """
+        # TODO: Implement player member sync logic
+        return {'rows_affected': 0}
