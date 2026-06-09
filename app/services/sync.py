@@ -924,9 +924,51 @@ class SyncService:
                 member_key = row_dict.get('realTeamMemberKey', '')
 
                 if member_key.startswith('T'):
-                    teams[member_key] = row_dict
+                    teams[member_key] = {
+                        'realTeamMemberID': row_dict.get('realTeamMemberID'),
+                        'prevRealTeamMemberKey': row_dict.get('prevRealTeamMemberKey'),
+                        'nextRealTeamMemberKey': row_dict.get('nextRealTeamMemberKey'),
+                        'baseRealCompetitionID': real_comp[SyncService.BASE_SYMID]['realCompetitionID'],
+                        'extraRealCompetitionID': real_comp[SyncService.EXTRA_SYMID]['realCompetitionID'],
+                        'isTeam': 1,
+                        'isPlayer': 0,
+                        'realTeamID': row_dict.get('realTeamID'),
+                        'realTeamUID': row_dict.get('realTeamUID'),
+                        'realTeamName': row_dict.get('realTeamName'),
+                        'realTeamShortName': row_dict.get('realTeamShortName'),
+                        'name': row_dict.get('name'),
+                        'sortName': row_dict.get('sortName'),
+                        'position': row_dict.get('position'),
+                        'draftPosition': row_dict.get('draftPosition'),
+                        'draftPositionOrder': row_dict.get('draftPositionOrder'),
+                        'enabled': row_dict.get('enabled'),
+                    }
                 elif member_key.startswith('P'):
-                    players[member_key] = row_dict
+                    players[member_key] = {
+                        'realTeamMemberID': row_dict.get('realTeamMemberID'),
+                        'prevRealTeamMemberKey': row_dict.get('prevRealTeamMemberKey'),
+                        'nextRealTeamMemberKey': row_dict.get('nextRealTeamMemberKey'),
+                        'baseRealCompetitionID': row_dict.get('baseRealCompetitionID'),
+                        'extraRealCompetitionID': row_dict.get('extraRealCompetitionID'),
+                        'isTeam': 0,
+                        'isPlayer': 1,
+                        'realTeamID': row_dict.get('realTeamID'),
+                        'realPlayerID': row_dict.get('realPlayerID'),
+                        'realPlayerUID': row_dict.get('realPlayerUID'),
+                        'firstName': row_dict.get('firstName'),
+                        'lastName': row_dict.get('lastName'),
+                        'knownName': row_dict.get('knownName'),
+                        'name': row_dict.get('name'),
+                        'sortName': row_dict.get('sortName'),
+                        'position': row_dict.get('position'),
+                        'draftPosition': row_dict.get('draftPosition'),
+                        'draftPositionOrder': row_dict.get('draftPositionOrder'),
+                        'birthDate': row_dict.get('birthDate'),
+                        'weight': row_dict.get('weight'),
+                        'height': row_dict.get('height'),
+                        'jerseyNumber': row_dict.get('jerseyNumber'),
+                        'enabled': row_dict.get('enabled'),
+                    }
 
             # Step 3: Process each competition and match day
             for rc_key, rc in real_comp.items():
