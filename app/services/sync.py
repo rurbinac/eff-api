@@ -984,11 +984,7 @@ class SyncService:
                                `m`.`realMatchDate`,
                                `m`.`realMatchTime`,
                                `mt`.`realMatchTeamID`,
-                               `mt`.`realTeamMemberID`,
                                `mt`.`realTeamMemberKey`,
-                               `mt`.`realTeamID`,
-                               `mt`.`realTeamUID`,
-                               `mt`.`realTeamName`,
                                `mt`.`realTeamShortName`,
                                `mt`.`realTeamScore`,
                                `mt`.`realTeamSide`
@@ -1002,12 +998,22 @@ class SyncService:
                         'match_day': match_day,
                     }).fetchall()
 
-                    # Organize matches by team UID
+                    # Organize matches by team member key, tracking opposite teams
+                    opposite = {}
                     matches = {}
                     for row in match_rows:
                         row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
-                        team_uid = row_dict.get('realTeamUID')
-                        matches[team_uid] = row_dict
+                        match_id = row_dict.get('realMatchID')
+                        team_member_key = row_dict.get('realTeamMemberKey')
+
+                        # Link opposite teams
+                        if match_id in opposite:
+                            row_dict['op_realTeamMemberKey'] = opposite[match_id]
+                            matches[opposite[match_id]]['op_realTeamMemberKey'] = team_member_key
+                        else:
+                            opposite[match_id] = team_member_key
+
+                        matches[team_member_key] = row_dict
 
                     # Sync team and player members for this match day
                     team_result = SyncService._sync_rmt_teams(db, rc, matches, match_day, teams)
