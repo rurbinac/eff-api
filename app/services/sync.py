@@ -987,6 +987,7 @@ class SyncService:
                                `mt`.`realTeamMemberKey`,
                                `mt`.`realTeamShortName`,
                                `mt`.`realTeamScore`,
+                               `mt`.`realTeamPoints`,
                                `mt`.`realTeamSide`
                         FROM `RealMatches` `m`
                            INNER JOIN `RealMatchTeams` `mt` ON `mt`.`realMatchID` = `m`.`realMatchID`
