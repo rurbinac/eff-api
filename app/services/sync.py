@@ -38,12 +38,13 @@ class SyncService:
         return result[0] if result else None
 
     @staticmethod
-    def sync_leagues(db: Session, real_competition_id: int = None) -> dict:
+    def sync_leagues(db: Session, real_competition_id: int = None, league_id: int = None) -> dict:
         """Sync Leagues with RealCompetitions.
 
         Args:
             db: Database session
             real_competition_id: RealCompetitionID to sync. If None, derived from current season.
+            league_id: Optional LeagueID to sync specific league.
         """
         results = {
             'status': 'success',
@@ -53,24 +54,37 @@ class SyncService:
 
         try:
             # Derive real_competition_id if not provided
-            if not real_competition_id:
+            if not real_competition_id and not league_id:
                 real_competition_id = SyncService._get_real_competition_id(db)
                 if not real_competition_id:
                     results['status'] = 'error'
                     results['error'] = 'Could not determine realCompetitionID'
                     return results
 
+            # Build WHERE clause based on provided parameters
+            where_conditions = []
+            params = {}
+
+            if league_id:
+                where_conditions.append("`lg`.`leagueID` = :league_id")
+                params['league_id'] = league_id
+
+            if real_competition_id:
+                where_conditions.append("(`rc`.`baseRealCompetitionID` = :real_competition_id OR `rc`.`extraRealCompetitionID` = :real_competition_id)")
+                params['real_competition_id'] = real_competition_id
+
+            where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+
             # Update Leagues with competition data
-            q = text("""
+            q = text(f"""
                 UPDATE `Leagues` `lg`
                    LEFT OUTER JOIN `RealCompetitions` `rc` ON `rc`.`realCompetitionID` = `rc`.`baseRealCompetitionID`
                    SET `lg`.`baseRealCompetitionID` = `rc`.`baseRealCompetitionID`,
                        `lg`.`extraRealCompetitionID` = `rc`.`extraRealCompetitionID`,
                        `lg`.`season` = `rc`.`realCompetitionSeasonId`
-                   WHERE `rc`.`baseRealCompetitionID` = :real_competition_id
-                      OR `rc`.`extraRealCompetitionID` = :real_competition_id
+                   WHERE {where_clause}
             """)
-            result = db.execute(q, {'real_competition_id': real_competition_id})
+            result = db.execute(q, params)
             results['queries_executed'] += 1
             results['rows_affected'] += result.rowcount
 
