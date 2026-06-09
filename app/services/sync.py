@@ -96,6 +96,88 @@ class SyncService:
         return all_results
 
     @staticmethod
+    def sync_real(db: Session, real_competition_id: int = None) -> dict:
+        """Sync all Real* data (RealCompetitions → RealTeams → RealPlayers → RealMatches → RealTeamMembers → RealStandings).
+
+        Args:
+            db: Database session
+            real_competition_id: RealCompetitionID to sync. If None, derived from current season.
+
+        Returns:
+            Combined results from all sync operations.
+        """
+        all_results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+            'operations': {},
+        }
+
+        try:
+            # Derive real_competition_id if not provided
+            if not real_competition_id:
+                real_competition_id = SyncService._get_real_competition_id(db)
+                if not real_competition_id:
+                    all_results['status'] = 'error'
+                    all_results['error'] = 'Could not determine realCompetitionID'
+                    return all_results
+
+            # Sync RealCompetitions
+            result = SyncService.sync_real_competitions(db)
+            all_results['operations']['sync_real_competitions'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync RealTeams
+            result = SyncService.sync_real_teams(db, real_competition_id)
+            all_results['operations']['sync_real_teams'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync RealPlayers
+            result = SyncService.sync_real_players(db, real_competition_id)
+            all_results['operations']['sync_real_players'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync RealMatches
+            result = SyncService.sync_real_matches(db, real_competition_id)
+            all_results['operations']['sync_real_matches'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync RealTeamMembers
+            result = SyncService.sync_real_team_members(db, real_competition_id)
+            all_results['operations']['sync_real_team_members'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            all_results['match_days_processed'] = result.get('match_days_processed', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync RealStandings
+            result = SyncService.sync_real_standings(db, real_competition_id)
+            all_results['operations']['sync_real_standings'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+        except Exception as e:
+            all_results['status'] = 'error'
+            all_results['error'] = str(e)
+
+        return all_results
+
+    @staticmethod
     def sync_leagues(db: Session, real_competition_id: int = None, league_id: int = None) -> dict:
         """Sync Leagues with RealCompetitions.
 
