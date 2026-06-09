@@ -372,6 +372,36 @@ class SyncService:
         return results
 
     @staticmethod
+    def _load_real_competitions(db: Session, real_competition_id: int) -> dict:
+        """Load RealCompetitions organized by SYMID.
+
+        Args:
+            db: Database session
+            real_competition_id: RealCompetitionID (base or extra)
+
+        Returns:
+            Dict with BASE_SYMID and EXTRA_SYMID keys, or empty dict if not found
+        """
+        q = text("""
+            SELECT *
+            FROM `RealCompetitions`
+            WHERE `baseRealCompetitionID` = :realCompetitionID
+               OR `extraRealCompetitionID` = :realCompetitionID
+        """)
+        rows = db.execute(q, {'realCompetitionID': real_competition_id}).fetchall()
+
+        real_comp = {}
+        for row in rows:
+            row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
+            symid = row_dict.get('realCompetitionSYMID')
+            if symid == SyncService.BASE_SYMID:
+                real_comp[SyncService.BASE_SYMID] = row_dict
+            elif symid == SyncService.EXTRA_SYMID:
+                real_comp[SyncService.EXTRA_SYMID] = row_dict
+
+        return real_comp
+
+    @staticmethod
     def sync_real_competitions(db: Session) -> dict:
         """Sync RealCompetitions and cascade to related tables."""
         results = {
@@ -1484,3 +1514,99 @@ class SyncService:
             return {'rows_affected': 0, 'error': str(e)}
 
         return {'rows_affected': rows_affected}
+
+    @staticmethod
+    def sync_real_standings(db: Session, real_competition_id: int) -> dict:
+        """Sync RealTeamMembers with data from RealStandings.
+
+        Updates both last season data and current season data in RealTeamMembers
+        based on the last match day of each competition.
+
+        Args:
+            db: Database session
+            real_competition_id: RealCompetitionID to sync (base or extra)
+
+        Returns:
+            Results dict with status and rows_affected
+        """
+        rows_affected = 0
+
+        try:
+            # Load RealCompetitions organized by SYMID
+            real_comp = SyncService._load_real_competitions(db, real_competition_id)
+
+            if not real_comp or SyncService.BASE_SYMID not in real_comp:
+                return {
+                    'status': 'error',
+                    'error': 'Could not load RealCompetitions',
+                    'rows_affected': 0,
+                }
+
+            base_comp_id = real_comp[SyncService.BASE_SYMID]['realCompetitionID']
+
+            # Query #1: Update last_* fields from previous season
+            q1 = text("""
+                UPDATE `RealTeamMembers` `rtm`
+                   LEFT OUTER JOIN `RealStandings` `rs`
+                      ON `rs`.`realTeamMemberKey` = `rtm`.`prevRealTeamMemberKey`
+                      AND `rs`.`realCompetitionMatchDay` = `rs`.`realCompetitionLastMatchDay`
+                   SET `rtm`.`last_ranking` = `rs`.`ranking`,
+                       `rtm`.`last_timePlayed` = `rs`.`timePlayed`,
+                       `rtm`.`last_gamePlayed` = `rs`.`gamePlayed`,
+                       `rtm`.`last_goals` = `rs`.`goals`,
+                       `rtm`.`last_assists` = `rs`.`assists`,
+                       `rtm`.`last_goalsConceded` = `rs`.`goalsConceded`,
+                       `rtm`.`last_yellowCards` = `rs`.`yellowCards`,
+                       `rtm`.`last_redCards` = `rs`.`redCards`,
+                       `rtm`.`last_cleanSheet` = `rs`.`cleanSheet`,
+                       `rtm`.`last_played` = `rs`.`played`,
+                       `rtm`.`last_won` = `rs`.`won`,
+                       `rtm`.`last_draw` = `rs`.`draw`,
+                       `rtm`.`last_lost` = `rs`.`lost`,
+                       `rtm`.`last_goalsFor` = `rs`.`goalsFor`,
+                       `rtm`.`last_goalsAgainst` = `rs`.`goalsAgainst`,
+                       `rtm`.`last_pointsL1` = `rs`.`pointsL1`
+                   WHERE `rtm`.`baseRealCompetitionID` = :base_comp_id
+            """)
+            result = db.execute(q1, {'base_comp_id': base_comp_id})
+            rows_affected += result.rowcount
+
+            # Query #2: Update current season fields from current standings
+            q2 = text("""
+                UPDATE `RealTeamMembers` `rtm`
+                   LEFT OUTER JOIN `RealStandings` `rs`
+                      ON `rs`.`realTeamMemberKey` = `rtm`.`realTeamMemberKey`
+                      AND `rs`.`realCompetitionMatchDay` = `rs`.`realCompetitionLastMatchDay`
+                   SET `rtm`.`timePlayed` = `rs`.`timePlayed`,
+                       `rtm`.`gamePlayed` = `rs`.`gamePlayed`,
+                       `rtm`.`goals` = `rs`.`goals`,
+                       `rtm`.`assists` = `rs`.`assists`,
+                       `rtm`.`yellowCards` = `rs`.`yellowCards`,
+                       `rtm`.`redCards` = `rs`.`redCards`,
+                       `rtm`.`goalsConceded` = `rs`.`goalsConceded`,
+                       `rtm`.`cleanSheet` = `rs`.`cleanSheet`,
+                       `rtm`.`played` = `rs`.`played`,
+                       `rtm`.`won` = `rs`.`won`,
+                       `rtm`.`draw` = `rs`.`draw`,
+                       `rtm`.`lost` = `rs`.`lost`,
+                       `rtm`.`goalsFor` = `rs`.`goalsFor`,
+                       `rtm`.`goalsAgainst` = `rs`.`goalsAgainst`,
+                       `rtm`.`pointsL1` = `rs`.`pointsL1`,
+                       `rtm`.`livePointsL1` = `rs`.`livePointsL1`,
+                       `rtm`.`ranking` = `rs`.`ranking`
+                   WHERE `rtm`.`baseRealCompetitionID` = :base_comp_id
+            """)
+            result = db.execute(q2, {'base_comp_id': base_comp_id})
+            rows_affected += result.rowcount
+
+            return {
+                'status': 'success',
+                'rows_affected': rows_affected,
+            }
+
+        except Exception as e:
+            return {
+                'status': 'error',
+                'error': str(e),
+                'rows_affected': 0,
+            }
