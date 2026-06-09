@@ -38,6 +38,64 @@ class SyncService:
         return result[0] if result else None
 
     @staticmethod
+    def sync_fantasy(db: Session, real_competition_id: int = None, league_id: int = None) -> dict:
+        """Sync all fantasy data (Leagues → Divisions → Teams → Matches).
+
+        Args:
+            db: Database session
+            real_competition_id: RealCompetitionID to sync. If None, derived from current season.
+            league_id: Optional LeagueID to sync specific league only.
+
+        Returns:
+            Combined results from all sync operations.
+        """
+        all_results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+            'operations': {},
+        }
+
+        try:
+            # Sync Leagues
+            result = SyncService.sync_leagues(db, real_competition_id, league_id)
+            all_results['operations']['sync_leagues'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync Divisions
+            result = SyncService.sync_divisions(db, real_competition_id, league_id)
+            all_results['operations']['sync_divisions'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync Teams
+            result = SyncService.sync_teams(db, real_competition_id, league_id)
+            all_results['operations']['sync_teams'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync Matches
+            result = SyncService.sync_matches(db, real_competition_id, league_id)
+            all_results['operations']['sync_matches'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+        except Exception as e:
+            all_results['status'] = 'error'
+            all_results['error'] = str(e)
+
+        return all_results
+
+    @staticmethod
     def sync_leagues(db: Session, real_competition_id: int = None, league_id: int = None) -> dict:
         """Sync Leagues with RealCompetitions.
 
