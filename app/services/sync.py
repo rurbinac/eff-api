@@ -968,10 +968,10 @@ class SyncService:
                         matches[team_uid] = row_dict
 
                     # Sync team and player members for this match day
-                    team_result = SyncService._sync_rmt_teams(db, rc, matches, teams)
+                    team_result = SyncService._sync_rmt_teams(db, rc, matches, match_day, teams)
                     results['rows_affected'] += team_result.get('rows_affected', 0)
 
-                    player_result = SyncService._sync_rmt_players(db, rc, matches, teams, players)
+                    player_result = SyncService._sync_rmt_players(db, rc, matches, match_day, teams, players)
                     results['rows_affected'] += player_result.get('rows_affected', 0)
 
                     results['match_days_processed'] += 1
@@ -983,13 +983,14 @@ class SyncService:
         return results
 
     @staticmethod
-    def _sync_rmt_teams(db: Session, rc: dict, matches: dict, teams: dict) -> dict:
+    def _sync_rmt_teams(db: Session, rc: dict, matches: dict, match_day: int, teams: dict) -> dict:
         """Sync team members for a match day.
 
         Args:
             db: Database session
             rc: RealCompetition dict
             matches: Dict of matches keyed by realTeamUID
+            match_day: Match day number
             teams: Dict of team members from RealTeamMembers
 
         Returns:
@@ -999,13 +1000,14 @@ class SyncService:
         return {'rows_affected': 0}
 
     @staticmethod
-    def _sync_rmt_players(db: Session, rc: dict, matches: dict, teams: dict, players: dict) -> dict:
+    def _sync_rmt_players(db: Session, rc: dict, matches: dict, match_day: int, teams: dict, players: dict) -> dict:
         """Sync player members for a match day.
 
         Args:
             db: Database session
             rc: RealCompetition dict
             matches: Dict of matches keyed by realTeamUID
+            match_day: Match day number
             teams: Dict of team members from RealTeamMembers
             players: Dict of player members from RealTeamMembers
 
