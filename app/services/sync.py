@@ -1243,7 +1243,16 @@ class SyncService:
 
                         matches[team_member_key] = row_dict
 
-                    # Sync team and player members for this match day
+                    # Process standings in order:
+                    # 1. Read existing standings and aggregate stats
+                    SyncService._sync_rmt_read_rs_teams(db, rc, matches, match_day, teams)
+                    SyncService._sync_rmt_read_rs_players(db, rc, matches, match_day, teams, players)
+
+                    # 2. Calculate places and rankings
+                    SyncService._sync_rmt_calc_places(teams)
+                    SyncService._sync_rmt_calc_ranking(teams, players)
+
+                    # 3. Update/insert into RealStandings
                     team_result = SyncService._sync_rmt_teams(db, rc, matches, match_day, teams)
                     results['rows_affected'] += team_result.get('rows_affected', 0)
 
