@@ -1,0 +1,601 @@
+"""Real competition synchronization service.
+
+Syncs Real* table data (RealCompetitions, RealTeams, RealPlayers, RealMatches, etc.)
+across competitions and seasons.
+"""
+
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from app.constants import RealTeamMemberPositions, RealTeamTypes
+
+
+class SyncRealService:
+    """Synchronize Real* table data."""
+
+    # Competition SYMIDs
+    BASE_SYMID = 'EN_PR'
+    EXTRA_SYMID = 'EN_FA'
+
+    @staticmethod
+    def sync_real(db: Session, real_competition_id: int = None) -> dict:
+        """Sync all Real* data (RealCompetitions → RealTeams → RealPlayers → RealMatches → RealTeamMembers → RealStandings).
+
+        Args:
+            db: Database session
+            real_competition_id: RealCompetitionID to sync. If None, derived from current season.
+
+        Returns:
+            Combined results from all sync operations.
+        """
+        all_results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+            'operations': {},
+        }
+
+        try:
+            # Derive real_competition_id if not provided
+            if not real_competition_id:
+                from app.services import SyncFantasyService
+                real_competition_id = SyncFantasyService._get_real_competition_id(db)
+                if not real_competition_id:
+                    all_results['status'] = 'error'
+                    all_results['error'] = 'Could not determine realCompetitionID'
+                    return all_results
+
+            # Sync RealCompetitions
+            result = SyncRealService.sync_real_competitions(db)
+            all_results['operations']['sync_real_competitions'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync RealTeams
+            result = SyncRealService.sync_real_teams(db, real_competition_id)
+            all_results['operations']['sync_real_teams'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync RealPlayers
+            result = SyncRealService.sync_real_players(db, real_competition_id)
+            all_results['operations']['sync_real_players'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync RealMatches
+            result = SyncRealService.sync_real_matches(db, real_competition_id)
+            all_results['operations']['sync_real_matches'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+        except Exception as e:
+            all_results['status'] = 'error'
+            all_results['error'] = str(e)
+
+        return all_results
+
+    @staticmethod
+    def _load_real_competitions(db: Session, real_competition_id: int) -> dict:
+        """Load RealCompetitions organized by SYMID.
+
+        Args:
+            db: Database session
+            real_competition_id: RealCompetitionID (base or extra)
+
+        Returns:
+            Dict with BASE_SYMID and EXTRA_SYMID keys, or empty dict if not found
+        """
+        q = text("""
+            SELECT *
+            FROM `RealCompetitions`
+            WHERE `baseRealCompetitionID` = :realCompetitionID
+               OR `extraRealCompetitionID` = :realCompetitionID
+        """)
+        rows = db.execute(q, {'realCompetitionID': real_competition_id}).fetchall()
+
+        real_comp = {}
+        for row in rows:
+            row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
+            symid = row_dict.get('realCompetitionSYMID')
+            if symid == SyncRealService.BASE_SYMID:
+                real_comp[SyncRealService.BASE_SYMID] = row_dict
+            elif symid == SyncRealService.EXTRA_SYMID:
+                real_comp[SyncRealService.EXTRA_SYMID] = row_dict
+
+        return real_comp
+
+    @staticmethod
+    def sync_real_competitions(db: Session) -> dict:
+        """Sync RealCompetitions and cascade to related tables."""
+        results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+        }
+
+        try:
+            # Query #1: Update baseID and extraID
+            q1 = text("""
+                UPDATE `RealCompetitions` `rc`
+                   INNER JOIN `RealCompetitions` `rc_b`
+                      ON `rc_b`.`realCompetitionSeasonId` = `rc`.`realCompetitionSeasonId`
+                      AND `rc_b`.`realCompetitionSYMID` = :baseRealCompetitionSYMID
+                   INNER JOIN `RealCompetitions` `rc_e`
+                      ON `rc_e`.`realCompetitionSeasonId` = `rc`.`realCompetitionSeasonId`
+                      AND `rc_e`.`realCompetitionSYMID` = :extraRealCompetitionSYMID
+                   SET `rc`.`baseRealCompetitionID` = `rc_b`.`realCompetitionID`,
+                       `rc`.`extraRealCompetitionID` = `rc_e`.`realCompetitionID`
+            """)
+            result = db.execute(q1, {
+                'baseRealCompetitionSYMID': SyncRealService.BASE_SYMID,
+                'extraRealCompetitionSYMID': SyncRealService.EXTRA_SYMID,
+            })
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #2: Update prev and next
+            q2 = text("""
+                UPDATE `RealCompetitions` `c`
+                   LEFT OUTER JOIN `RealCompetitions` `n`
+                      ON `c`.`realCompetitionSYMID` = `n`.`realCompetitionSYMID`
+                      AND CAST(`c`.`realCompetitionSeasonId` AS SIGNED) + 1 = CAST(`n`.`realCompetitionSeasonId` AS SIGNED)
+                   LEFT OUTER JOIN `RealCompetitions` `p`
+                      ON `c`.`realCompetitionSYMID` = `p`.`realCompetitionSYMID`
+                      AND CAST(`c`.`realCompetitionSeasonId` AS SIGNED) - 1 = CAST(`p`.`realCompetitionSeasonId` AS SIGNED)
+                   SET `c`.`prevRealCompetitionID` = `p`.`realCompetitionID`,
+                       `c`.`nextRealCompetitionID` = `n`.`realCompetitionID`
+            """)
+            result = db.execute(q2)
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #3: Update RealTeams
+            q3 = text("""
+                UPDATE `RealTeams` `t`
+                   LEFT OUTER JOIN `RealCompetitions` `c` ON `c`.`realCompetitionID` = `t`.`realCompetitionID`
+                   SET `t`.`realCompetitionUID` = `c`.`realCompetitionUID`,
+                       `t`.`realCompetitionSYMID` = `c`.`realCompetitionSYMID`,
+                       `t`.`realCompetitionSeasonId` = `c`.`realCompetitionSeasonId`,
+                       `t`.`baseRealCompetitionID` = `c`.`baseRealCompetitionID`,
+                       `t`.`extraRealCompetitionID` = `c`.`extraRealCompetitionID`
+            """)
+            result = db.execute(q3)
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #4: Update RealMatches
+            q4 = text("""
+                UPDATE `RealMatches` `m`
+                   LEFT OUTER JOIN `RealCompetitions` `c` ON `c`.`realCompetitionID` = `m`.`realCompetitionID`
+                   SET `m`.`realCompetitionUID` = `c`.`realCompetitionUID`,
+                       `m`.`realCompetitionSYMID` = `c`.`realCompetitionSYMID`,
+                       `m`.`realCompetitionSeasonId` = `c`.`realCompetitionSeasonId`,
+                       `m`.`realCompetitionFirstMatchDay` = `c`.`realCompetitionFirstMatchDay`,
+                       `m`.`realCompetitionLastMatchDay` = `c`.`realCompetitionLastMatchDay`,
+                       `m`.`baseRealCompetitionID` = `c`.`baseRealCompetitionID`,
+                       `m`.`extraRealCompetitionID` = `c`.`extraRealCompetitionID`
+            """)
+            result = db.execute(q4)
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+        except Exception as e:
+            results['status'] = 'error'
+            results['error'] = str(e)
+
+        return results
+
+    @staticmethod
+    def sync_real_teams(db: Session, real_competition_id: int) -> dict:
+        """Sync RealTeams and populate RealTeamMembers."""
+        results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+        }
+
+        try:
+            # Query #1: Set base fields
+            q1 = text("""
+                UPDATE `RealTeams` `t`
+                   LEFT OUTER JOIN `RealTeams` `t1`
+                      ON `t`.`baseRealCompetitionID` = `t1`.`realCompetitionID`
+                      AND `t`.`realTeamUID` = `t1`.`realTeamUID`
+                   SET `t`.`baseRealTeamID` = `t1`.`realTeamID`,
+                       `t`.`baseRealTeamName` = `t1`.`realTeamName`,
+                       `t`.`baseRealTeamShortName` = `t1`.`realTeamShortName`,
+                       `t`.`realTeamMemberKey` = CONCAT('T', `t1`.`realTeamID`),
+                       `t`.`draftPosition` = :draftPosition,
+                       `t`.`draftPositionOrder` = 5,
+                       `t`.`lastFDate` = IF(`t`.`lastF7Date` > `t`.`lastF42Date`, `t`.`lastF7Date`, `t`.`lastF42Date`)
+                   WHERE `t`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q1, {
+                'realCompetitionID': real_competition_id,
+                'draftPosition': RealTeamTypes.EPL_TEAM,
+            })
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #2: Update prev and next
+            q2 = text("""
+                UPDATE `RealTeams` `t`
+                   LEFT OUTER JOIN `RealCompetitions` `c` ON `t`.`realCompetitionID` = `c`.`realCompetitionID`
+                   LEFT OUTER JOIN `RealTeams` `t_p`
+                      ON `t_p`.`realCompetitionID` = `c`.`prevRealCompetitionID`
+                      AND `t_p`.`realTeamUID` = `t`.`realTeamUID`
+                   LEFT OUTER JOIN `RealTeams` `t_n`
+                      ON `t_n`.`realCompetitionID` = `c`.`nextRealCompetitionID`
+                      AND `t_n`.`realTeamUID` = `t`.`realTeamUID`
+                   SET `t`.`prevRealTeamID` = `t_p`.`realTeamID`,
+                       `t`.`nextRealTeamID` = `t_n`.`realTeamID`
+                   WHERE `t`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q2, {'realCompetitionID': real_competition_id})
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #3: Insert new RealTeams to RealTeamMembers
+            q3 = text("""
+                INSERT INTO `RealTeamMembers`
+                    (`realTeamMemberKey`, `prevRealTeamMemberKey`, `nextRealTeamMemberKey`,
+                     `baseRealCompetitionID`, `extraRealCompetitionID`,
+                     `isTeam`, `isPlayer`,
+                     `realTeamID`, `realTeamUID`, `realTeamName`, `realTeamShortName`,
+                     `realPlayerID`, `realPlayerUID`, `firstName`, `lastName`, `knownName`,
+                     `name`, `sortName`,
+                     `position`, `draftPosition`, `draftPositionOrder`,
+                     `birthDate`, `weight`, `height`, `jerseyNumber`,
+                     `enabled`,
+                     `last_ranking`, `last_timePlayed`, `last_gamePlayed`, `last_goals`, `last_assists`,
+                     `last_goalsConceded`, `last_yellowCards`, `last_redCards`, `last_cleanSheet`,
+                     `last_played`, `last_won`, `last_draw`, `last_lost`, `last_goalsFor`, `last_goalsAgainst`, `last_pointsL1`,
+                     `ranking`,
+                     `timePlayed`, `gamePlayed`, `goals`, `assists`, `goalsConceded`, `yellowCards`, `redCards`, `cleanSheet`,
+                     `played`, `won`, `draw`, `lost`, `goalsFor`, `goalsAgainst`, `pointsL1`, `livePointsL1`,
+                     `lastF7Date`, `lastF42Date`, `lastFDate`,
+                     `createdIn`, `updatedIn`)
+                SELECT `t`.`realTeamMemberKey`,
+                       IF(`t`.`prevRealTeamID` IS null, null, CONCAT('T', `t`.`prevRealTeamID`)),
+                       IF(`t`.`nextRealTeamID` IS null, null, CONCAT('T', `t`.`nextRealTeamID`)),
+                       `t`.`baseRealCompetitionID`, `t`.`extraRealCompetitionID`,
+                       1, 0,
+                       `t`.`realTeamID`, `t`.`realTeamUID`, `t`.`realTeamName`, `t`.`realTeamShortName`,
+                       null, null, null, null, null,
+                       `t`.`realTeamName`, `t`.`realTeamName`,
+                       :draftPosition, :draftPosition, :draftPositionOrder,
+                       null, null, null, null,
+                       1,
+                       null, null, null, null, null, null, null, null, null,
+                       null, null, null, null, null, null, 0,
+                       `t`.`ranking`,
+                       null, null, null, null, null, null, null, null,
+                       0, 0, 0, 0, 0, 0, 0, 0,
+                       `t`.`lastF7Date`, `t`.`lastF42Date`, `t`.`lastFDate`,
+                       `t`.`createdIn`, `t`.`updatedIn`
+                FROM `RealTeams` `t`
+                LEFT OUTER JOIN `RealTeamMembers` `m` ON `m`.`realTeamMemberKey` = `t`.`realTeamMemberKey`
+                WHERE `t`.`realTeamID` = `t`.`baseRealTeamID`
+                  AND `m`.`realTeamMemberID` IS null
+                  AND `t`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q3, {
+                'realCompetitionID': real_competition_id,
+                'draftPosition': RealTeamTypes.EPL_TEAM,
+            })
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #4: Update realTeamMemberID
+            q4 = text("""
+                UPDATE `RealTeams` `t`
+                   LEFT OUTER JOIN `RealTeamMembers` `m` ON `m`.`realTeamMemberKey` = `t`.`realTeamMemberKey`
+                   SET `t`.`realTeamMemberID` = `m`.`realTeamMemberID`
+                   WHERE `t`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q4, {'realCompetitionID': real_competition_id})
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #5: Update old RealTeams to RealTeamMembers
+            q5 = text("""
+                UPDATE `RealTeamMembers` `m`
+                   INNER JOIN `RealTeams` `t` ON `m`.`realTeamMemberKey` = `t`.`realTeamMemberKey`
+                   SET `m`.`realTeamMemberID` = `t`.`realTeamMemberID`,
+                       `m`.`realTeamMemberKey` = `t`.`realTeamMemberKey`,
+                       `m`.`prevRealTeamMemberKey` = IF(`t`.`prevRealTeamID` IS null, null, CONCAT('T', `t`.`prevRealTeamID`)),
+                       `m`.`nextRealTeamMemberKey` = IF(`t`.`nextRealTeamID` IS null, null, CONCAT('T', `t`.`nextRealTeamID`)),
+                       `m`.`baseRealCompetitionID` = `t`.`baseRealCompetitionID`,
+                       `m`.`extraRealCompetitionID` = `t`.`extraRealCompetitionID`,
+                       `m`.`isTeam` = 1,
+                       `m`.`isPlayer` = 0,
+                       `m`.`realTeamID` = `t`.`realTeamID`,
+                       `m`.`realTeamUID` = `t`.`realTeamUID`,
+                       `m`.`realTeamName` = `t`.`realTeamName`,
+                       `m`.`realTeamShortName` = `t`.`realTeamShortName`,
+                       `m`.`realPlayerID` = null,
+                       `m`.`realPlayerUID` = null,
+                       `m`.`firstName` = null,
+                       `m`.`lastName` = null,
+                       `m`.`knownName` = null,
+                       `m`.`name` = `t`.`realTeamName`,
+                       `m`.`sortName` = `t`.`realTeamName`,
+                       `m`.`position` = :draftPosition,
+                       `m`.`draftPosition` = :draftPosition,
+                       `m`.`draftPositionOrder` = :draftPositionOrder,
+                       `m`.`birthDate` = null,
+                       `m`.`weight` = null,
+                       `m`.`height` = null,
+                       `m`.`jerseyNumber` = null,
+                       `m`.`last_ranking` = null,
+                       `m`.`last_timePlayed` = null,
+                       `m`.`last_gamePlayed` = null,
+                       `m`.`last_goals` = null,
+                       `m`.`last_assists` = null,
+                       `m`.`last_goalsConceded` = null,
+                       `m`.`last_yellowCards` = null,
+                       `m`.`last_redCards` = null,
+                       `m`.`last_cleanSheet` = null,
+                       `m`.`timePlayed` = null,
+                       `m`.`gamePlayed` = null,
+                       `m`.`goals` = null,
+                       `m`.`assists` = null,
+                       `m`.`goalsConceded` = null,
+                       `m`.`yellowCards` = null,
+                       `m`.`redCards` = null,
+                       `m`.`cleanSheet` = null,
+                       `m`.`lastF7Date` = `t`.`lastF7Date`,
+                       `m`.`lastF42Date` = `t`.`lastF42Date`,
+                       `m`.`lastFDate` = `t`.`lastFDate`,
+                       `m`.`createdIn` = `t`.`createdIn`,
+                       `m`.`updatedIn` = `t`.`updatedIn`
+                   WHERE `t`.`realTeamID` = `t`.`baseRealTeamID`
+                     AND `t`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q5, {
+                'realCompetitionID': real_competition_id,
+                'draftPosition': RealTeamTypes.EPL_TEAM,
+            })
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+        except Exception as e:
+            results['status'] = 'error'
+            results['error'] = str(e)
+
+        return results
+
+    @staticmethod
+    def sync_real_players(db: Session, real_competition_id: int) -> dict:
+        """Sync RealPlayers and populate RealTeamMembers."""
+        results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+        }
+
+        try:
+            # Query #1: Set base fields
+            q1 = text("""
+                UPDATE `RealPlayers` `p`
+                   LEFT OUTER JOIN `RealPlayers` `p1`
+                      ON `p`.`baseRealCompetitionID` = `p1`.`realCompetitionID`
+                      AND `p`.`realPlayerUID` = `p1`.`realPlayerUID`
+                   SET `p`.`baseRealPlayerID` = `p1`.`realPlayerID`,
+                       `p`.`realTeamMemberKey` = CONCAT('P', `p1`.`realPlayerID`)
+                   WHERE `p`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q1, {'realCompetitionID': real_competition_id})
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #2: Sync from RealTeams
+            q2 = text("""
+                UPDATE `RealPlayers` `p`
+                   LEFT OUTER JOIN `RealTeams` `t` ON `t`.`realTeamID` = `p`.`realTeamID`
+                   SET `p`.`realCompetitionID` = `t`.`realCompetitionID`,
+                       `p`.`realCompetitionUID` = `t`.`realCompetitionUID`,
+                       `p`.`realCompetitionSYMID` = `t`.`realCompetitionSYMID`,
+                       `p`.`realCompetitionSeasonId` = `t`.`realCompetitionSeasonId`,
+                       `p`.`baseRealCompetitionID` = `t`.`baseRealCompetitionID`,
+                       `p`.`extraRealCompetitionID` = `t`.`extraRealCompetitionID`,
+                       `p`.`realTeamUID` = `t`.`realTeamUID`,
+                       `p`.`baseRealTeamID` = `t`.`baseRealTeamID`,
+                       `p`.`baseRealTeamUID` = `t`.`baseRealTeamUID`,
+                       `p`.`baseRealTeamName` = `t`.`baseRealTeamName`,
+                       `p`.`baseRealTeamShortName` = `t`.`baseRealTeamShortName`
+                   WHERE `p`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q2, {'realCompetitionID': real_competition_id})
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #3: Update prev and next
+            q3 = text("""
+                UPDATE `RealPlayers` `p`
+                   LEFT OUTER JOIN `RealCompetitions` `c` ON `p`.`realCompetitionID` = `c`.`realCompetitionID`
+                   LEFT OUTER JOIN `RealPlayers` `p_p`
+                      ON `p_p`.`realCompetitionID` = `c`.`prevRealCompetitionID`
+                      AND `p_p`.`realPlayerUID` = `p`.`realPlayerUID`
+                   LEFT OUTER JOIN `RealPlayers` `p_n`
+                      ON `p_n`.`realCompetitionID` = `c`.`nextRealCompetitionID`
+                      AND `p_n`.`realPlayerUID` = `p`.`realPlayerUID`
+                   SET `p`.`prevRealPlayerID` = `p_p`.`realPlayerID`,
+                       `p`.`nextRealPlayerID` = `p_n`.`realPlayerID`
+                   WHERE `p`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q3, {'realCompetitionID': real_competition_id})
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #4: Insert new RealPlayers to RealTeamMembers
+            q4 = text("""
+                INSERT INTO `RealTeamMembers`
+                    (`realTeamMemberKey`, `prevRealTeamMemberKey`, `nextRealTeamMemberKey`,
+                     `baseRealCompetitionID`, `extraRealCompetitionID`,
+                     `isTeam`, `isPlayer`,
+                     `realTeamID`, `realTeamUID`, `realTeamName`, `realTeamShortName`,
+                     `realPlayerID`, `realPlayerUID`, `firstName`, `lastName`, `knownName`,
+                     `name`, `sortName`,
+                     `position`, `draftPosition`, `draftPositionOrder`,
+                     `birthDate`, `weight`, `height`, `jerseyNumber`,
+                     `enabled`,
+                     `last_ranking`, `last_timePlayed`, `last_gamePlayed`, `last_goals`, `last_assists`,
+                     `last_goalsConceded`, `last_yellowCards`, `last_redCards`, `last_cleanSheet`,
+                     `last_played`, `last_won`, `last_draw`, `last_lost`, `last_goalsFor`, `last_goalsAgainst`, `last_pointsL1`,
+                     `ranking`,
+                     `timePlayed`, `gamePlayed`, `goals`, `assists`, `goalsConceded`, `yellowCards`, `redCards`, `cleanSheet`,
+                     `played`, `won`, `draw`, `lost`, `goalsFor`, `goalsAgainst`, `pointsL1`, `livePointsL1`,
+                     `lastF7Date`, `lastF42Date`, `lastFDate`,
+                     `createdIn`, `updatedIn`)
+                SELECT `p`.`realTeamMemberKey`,
+                       IF(`p`.`prevRealPlayerID` IS null, null, CONCAT('P', `p`.`prevRealPlayerID`)),
+                       IF(`p`.`nextRealPlayerID` IS null, null, CONCAT('P', `p`.`nextRealPlayerID`)),
+                       `p`.`baseRealCompetitionID`, `p`.`extraRealCompetitionID`,
+                       0, 1,
+                       `p`.`realTeamID`, `p`.`realTeamUID`, `p`.`baseRealTeamName`, `p`.`baseRealTeamShortName`,
+                       `p`.`realPlayerID`, `p`.`realPlayerUID`, `p`.`firstName`, `p`.`lastName`, `p`.`knownName`,
+                       IFNULL(`p`.`knownName`, CONCAT(`p`.`firstName`, ' ', `p`.`lastName`)),
+                       IFNULL(`p`.`knownName`, CONCAT(`p`.`lastName`, ' ', `p`.`firstName`)),
+                       `p`.`position`, `p`.`draftPosition`, `p`.`draftPositionOrder`,
+                       `p`.`birthDate`, `p`.`weight`, `p`.`height`, `p`.`jerseyNumber`,
+                       1,
+                       null, 0, 0, 0, 0, 0, 0, 0, 0,
+                       null, null, null, null, null, null, 0,
+                       `p`.`ranking`,
+                       0, 0, 0, 0, 0, 0, 0, 0,
+                       null, null, null, null, null, null, 0, 0,
+                       `p`.`lastF7Date`, `p`.`lastF42Date`, `p`.`lastFDate`,
+                       `p`.`createdIn`, `p`.`updatedIn`
+                FROM `RealPlayers` `p`
+                LEFT OUTER JOIN `RealTeamMembers` `m` ON `m`.`realTeamMemberKey` = `p`.`realTeamMemberKey`
+                WHERE `p`.`realPlayerID` = `p`.`baseRealPlayerID`
+                  AND `m`.`realTeamMemberID` IS null
+                  AND `p`.`draftPosition` IN (:dp_1, :dp_2, :dp_3, :dp_4)
+                  AND `p`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q4, {
+                'realCompetitionID': real_competition_id,
+                'dp_1': RealTeamMemberPositions.GOALKEEPER,
+                'dp_2': RealTeamMemberPositions.DEFENDER,
+                'dp_3': RealTeamMemberPositions.MIDFIELDER,
+                'dp_4': RealTeamMemberPositions.STRIKER,
+            })
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #5: Update realTeamMemberID
+            q5 = text("""
+                UPDATE `RealPlayers` `p`
+                   LEFT OUTER JOIN `RealTeamMembers` `m` ON `m`.`realTeamMemberKey` = `p`.`realTeamMemberKey`
+                   SET `p`.`realTeamMemberID` = `m`.`realTeamMemberID`
+                   WHERE `p`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q5, {'realCompetitionID': real_competition_id})
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+            # Query #6: Update old RealPlayers to RealTeamMembers
+            q6 = text("""
+                UPDATE `RealTeamMembers` `m`
+                   INNER JOIN `RealPlayers` `p` ON `m`.`realTeamMemberKey` = `p`.`realTeamMemberKey`
+                   SET `m`.`realTeamMemberID` = `p`.`realTeamMemberID`,
+                       `m`.`realTeamMemberKey` = `p`.`realTeamMemberKey`,
+                       `m`.`prevRealTeamMemberKey` = IF(`p`.`prevRealPlayerID` IS null, null, CONCAT('P', `p`.`prevRealPlayerID`)),
+                       `m`.`nextRealTeamMemberKey` = IF(`p`.`nextRealPlayerID` IS null, null, CONCAT('P', `p`.`nextRealPlayerID`)),
+                       `m`.`baseRealCompetitionID` = `p`.`baseRealCompetitionID`,
+                       `m`.`extraRealCompetitionID` = `p`.`extraRealCompetitionID`,
+                       `m`.`isTeam` = 0,
+                       `m`.`isPlayer` = 1,
+                       `m`.`realTeamID` = `p`.`realTeamID`,
+                       `m`.`realTeamUID` = `p`.`realTeamUID`,
+                       `m`.`realTeamName` = `p`.`baseRealTeamName`,
+                       `m`.`realTeamShortName` = `p`.`baseRealTeamShortName`,
+                       `m`.`realPlayerID` = `p`.`realPlayerID`,
+                       `m`.`realPlayerUID` = `p`.`realPlayerUID`,
+                       `m`.`firstName` = `p`.`firstName`,
+                       `m`.`lastName` = `p`.`lastName`,
+                       `m`.`knownName` = `p`.`knownName`,
+                       `m`.`name` = IFNULL(`p`.`knownName`, CONCAT(`p`.`firstName`, ' ', `p`.`lastName`)),
+                       `m`.`sortName` = IFNULL(`p`.`knownName`, CONCAT(`p`.`lastName`, ' ', `p`.`firstName`)),
+                       `m`.`position` = IF(`m`.`draftPosition` IS null, `p`.`position`, `m`.`position`),
+                       `m`.`draftPosition` = IF(`m`.`draftPosition` IS null, `p`.`draftPosition`, `m`.`draftPosition`),
+                       `m`.`draftPositionOrder` = IF(`m`.`draftPosition` IS null, `p`.`draftPositionOrder`, `m`.`draftPositionOrder`),
+                       `m`.`birthDate` = `p`.`birthDate`,
+                       `m`.`weight` = `p`.`weight`,
+                       `m`.`height` = `p`.`height`,
+                       `m`.`jerseyNumber` = `p`.`jerseyNumber`,
+                       `m`.`last_played` = null,
+                       `m`.`last_won` = null,
+                       `m`.`last_draw` = null,
+                       `m`.`last_lost` = null,
+                       `m`.`last_goalsFor` = null,
+                       `m`.`last_goalsAgainst` = null,
+                       `m`.`played` = null,
+                       `m`.`won` = null,
+                       `m`.`draw` = null,
+                       `m`.`lost` = null,
+                       `m`.`goalsFor` = null,
+                       `m`.`goalsAgainst` = null,
+                       `m`.`lastF7Date` = `p`.`lastF7Date`,
+                       `m`.`lastF42Date` = `p`.`lastF42Date`,
+                       `m`.`lastFDate` = `p`.`lastFDate`,
+                       `m`.`createdIn` = `p`.`createdIn`,
+                       `m`.`updatedIn` = `p`.`updatedIn`
+                   WHERE `p`.`realPlayerID` = `p`.`baseRealPlayerID`
+                     AND `p`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q6, {'realCompetitionID': real_competition_id})
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+        except Exception as e:
+            results['status'] = 'error'
+            results['error'] = str(e)
+
+        return results
+
+    @staticmethod
+    def sync_real_matches(db: Session, real_competition_id: int) -> dict:
+        """Sync RealMatchTeams with team information."""
+        results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+        }
+
+        try:
+            # Query #1: Sync team info to RealMatchTeams
+            q1 = text("""
+                UPDATE `RealMatchTeams` `mt`
+                   LEFT OUTER JOIN `RealTeams` `t` ON `t`.`realTeamID` = `mt`.`realTeamID`
+                   SET `mt`.`realTeamMemberID` = `t`.`realTeamMemberID`,
+                       `mt`.`realTeamMemberKey` = `t`.`realTeamMemberKey`,
+                       `mt`.`realTeamUID` = `t`.`realTeamUID`,
+                       `mt`.`realTeamName` = `t`.`realTeamName`,
+                       `mt`.`realTeamShortName` = `t`.`realTeamShortName`,
+                       `mt`.`realTeamSide` = `t`.`realTeamSide`,
+                       `mt`.`realTeamNumber` = CASE `mt`.`realTeamSide`
+                                                  WHEN 'Home' THEN 1
+                                                  WHEN 'Away' THEN 2
+                                                  ELSE NULL
+                                               END
+                   WHERE `mt`.`realCompetitionID` = :realCompetitionID
+            """)
+            result = db.execute(q1, {'realCompetitionID': real_competition_id})
+            results['queries_executed'] += 1
+            results['rows_affected'] += result.rowcount
+
+        except Exception as e:
+            results['status'] = 'error'
+            results['error'] = str(e)
+
+        return results
