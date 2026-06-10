@@ -485,11 +485,12 @@ class FantasyTeamMembers:
     Maps member keys to draft positions: {'P123': '1', 'P456': '2', etc.}
     """
 
-    def __init__(self) -> None:
+    def __init__(self, get_dp: callable) -> None:
         """Initialize an empty fantasy team."""
         self._mkeys = MKeys(allow_dups=False)  # No duplicates allowed for team members
         self._mkeys.unpack(None, 1)  # Single group for all team members
         self._positions: dict[str, str] = {}  # Maps member_key -> draft_position
+        self._get_dp = get_dp  # Function to get draft position for a member key
         self._cnt: dict[str, int] = {
             GOALKEEPER: 0,
             DEFENDER: 0,
@@ -505,23 +506,81 @@ class FantasyTeamMembers:
 
     def is_valid(self) -> bool:
         """Check if team structure is valid."""
-        if self._mkeys.is_valid:
-            if (
-                self._cnt[GOALKEEPER] >= MIN_GOALKEEPER
-                and self._cnt[GOALKEEPER] <= MAX_GOALKEEPER
-                and self._cnt[DEFENDER] >= MIN_DEFENDER
-                and self._cnt[DEFENDER] <= MAX_DEFENDER
-                and self._cnt[MIDFIELDER] >= MIN_MIDFIELDER
-                and self._cnt[MIDFIELDER] <= MAX_MIDFIELDER
-                and self._cnt[STRIKER] >= MIN_STRIKER
-                and self._cnt[STRIKER] <= MAX_STRIKER
-                and self._cnt[EPL_TEAM] >= MIN_EPL_TEAM
-                and self._cnt[EPL_TEAM] <= MAX_EPL_TEAM
-            ):
-                return True
-            return False
-        return self._mkeys.is_valid
+        if self._mkeys.is_valid and self._valid_cnt(self._cnt):
+            return True
+        return False
 
+    def _valid_cnt(self, cnt: dict[str, int]) -> bool:
+        """Check if adding/removing a member with the given key would keep the team valid."""
+        return (
+            self._cnt[GOALKEEPER] >= MIN_GOALKEEPER
+            and self._cnt[GOALKEEPER] <= MAX_GOALKEEPER
+            and self._cnt[DEFENDER] >= MIN_DEFENDER
+            and self._cnt[DEFENDER] <= MAX_DEFENDER
+            and self._cnt[MIDFIELDER] >= MIN_MIDFIELDER
+            and self._cnt[MIDFIELDER] <= MAX_MIDFIELDER
+            and self._cnt[STRIKER] >= MIN_STRIKER
+            and self._cnt[STRIKER] <= MAX_STRIKER
+            and self._cnt[EPL_TEAM] >= MIN_EPL_TEAM
+            and self._cnt[EPL_TEAM] <= MAX_EPL_TEAM
+        )
+
+    def _calc_new_cnt(self, added: str | list | None = None, removed: str | list | None = None) -> dict[str, int] | None:
+        """Calculate the new count of positions if we were to add/remove the given member keys.
+        Returns the new count if valid, None if invalid."""
+        if not self.is_valid:
+            return None
+        cnt = self._cnt.copy()
+        if added is not None:
+            if isinstance(added, str):
+                added = [added]
+            for key in added:
+                pos = self._get_dp(key)
+                if pos in cnt:
+                    cnt[pos] += 1
+                else:
+                    # Invalid position
+                    return None
+        if removed is not None:
+            if isinstance(removed, str):
+                removed = [removed]
+            for key in removed:
+                pos = self._get_dp(key)
+                if pos in cnt:
+                    cnt[pos] -= 1
+                else:
+                    # Invalid position
+                    return None
+        return cnt if self._valid_cnt(cnt) else None
+    
+    def can_change(
+        self, added: str | list | None = None, removed: str | list | None = None
+    ) -> bool:
+        """Check if team can be changed (e.g., before draft lock)."""
+        return self._calc_new_cnt(added, removed) is not None
+
+    def change(self, added: str | list | None = None, removed: str | list | None = None) -> bool:
+        """Change team members by adding/removing the given member keys.
+        Returns True if successful, False if invalid (e.g., would violate position constraints)."""
+        new_cnt = self._calc_new_cnt(added, removed)
+        if new_cnt is not None:
+            # Update counts
+            self._cnt = new_cnt
+            # Remove members first (to allow replacing a member with another of the same position)
+            if removed is not None:
+                if isinstance(removed, str):
+                    removed = [removed]
+                for key in removed:
+                    self.remove_member(key)
+            # Add members
+            if added is not None:
+                if isinstance(added, str):
+                    added = [added]
+                for key in added:
+                    pos = self._get_dp(key)
+                    self.add_member(key, pos)
+            return True
+        return False
     def get_members(self) -> list[str]:
         """Get all members on team."""
         return self._mkeys.get_group(0)
