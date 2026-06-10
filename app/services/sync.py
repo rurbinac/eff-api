@@ -1037,6 +1037,9 @@ class SyncService:
                 teams[key]['goalsFor' + side] += score
                 teams[key]['goalsAgainst' + side] += op_score
 
+            # Aggregate points
+            teams[key]['pointsL1'] += points
+
             # Store realStandingID for later updates
             teams[key]['realStandingID'] = standing_id
 
@@ -1144,6 +1147,7 @@ class SyncService:
                         'lostAway': 0,
                         'goalsForAway': 0,
                         'goalsAgainstAway': 0,
+                        'pointsL1': 0,
                     }
                 elif member_key.startswith('P'):
                     players[member_key] = {
@@ -1798,3 +1802,78 @@ class SyncService:
                 'error': str(e),
                 'rows_affected': 0,
             }
+
+    @staticmethod
+    def _sync_rmt_read_rs_players(db: Session, rc: dict, matches: dict, match_day: int, teams: dict, players: dict) -> None:
+        """Read RealStandings players data and update players dict with match statistics.
+
+        Args:
+            db: Database session
+            rc: RealCompetition dict
+            matches: Dict of matches keyed by realTeamMemberKey
+            match_day: Match day number
+            teams: Teams dict (for reference)
+            players: Players dict to update (modified in place)
+        """
+        comp_id = rc.get('realCompetitionID')
+
+        # Query to get players from RealStandings for this match day
+        q = text("""
+            SELECT `realStandingID`,
+                   `realTeamMemberKey`,
+                   `matchTimePlayed`,
+                   `matchGamePlayed`,
+                   `matchGoals`,
+                   `matchAssists`,
+                   `matchYellowCards`,
+                   `matchRedCards`,
+                   `matchGoalsConceded`,
+                   `matchCleanSheet`,
+                   `matchPointsL1Played`,
+                   `matchPointsL1GoalsAllowed`,
+                   `matchPointsL1CleanSheet`,
+                   `matchPointsL1Cards`,
+                   `matchPointsL1Goals`,
+                   `matchPointsL1Assists`,
+                   `matchPointsL1OwnGoals`,
+                   `matchPointsL1`
+            FROM `RealStandings`
+            WHERE `realCompetitionID` = :comp_id
+              AND `realCompetitionMatchDay` = :match_day
+              AND LEFT(`realTeamMemberKey`, 1) = 'P'
+        """)
+        rows = db.execute(q, {
+            'comp_id': comp_id,
+            'match_day': match_day,
+        }).fetchall()
+
+        for row in rows:
+            row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
+            key = row_dict.get('realTeamMemberKey')
+            standing_id = row_dict.get('realStandingID')
+
+            if key not in players:
+                continue
+
+            # Aggregate match statistics
+            players[key]['timePlayed'] += row_dict.get('matchTimePlayed', 0)
+            players[key]['gamePlayed'] += row_dict.get('matchGamePlayed', 0)
+            players[key]['goals'] += row_dict.get('matchGoals', 0)
+            players[key]['assists'] += row_dict.get('matchAssists', 0)
+            players[key]['yellowCards'] += row_dict.get('matchYellowCards', 0)
+            players[key]['redCards'] += row_dict.get('matchRedCards', 0)
+            players[key]['goalsConceded'] += row_dict.get('matchGoalsConceded', 0)
+            players[key]['cleanSheet'] += row_dict.get('matchCleanSheet', 0)
+
+            # Aggregate points breakdown
+            players[key]['pointsL1Played'] += row_dict.get('matchPointsL1Played', 0)
+            players[key]['pointsL1GoalsAllowed'] += row_dict.get('matchPointsL1GoalsAllowed', 0)
+            players[key]['pointsL1CleanSheet'] += row_dict.get('matchPointsL1CleanSheet', 0)
+            players[key]['pointsL1Cards'] += row_dict.get('matchPointsL1Cards', 0)
+            players[key]['pointsL1Goals'] += row_dict.get('matchPointsL1Goals', 0)
+            players[key]['pointsL1Assists'] += row_dict.get('matchPointsL1Assists', 0)
+            players[key]['pointsL1OwnGoals'] += row_dict.get('matchPointsL1OwnGoals', 0)
+            players[key]['pointsL1'] += row_dict.get('matchPointsL1', 0)
+
+            # Store realStandingID for later updates
+            players[key]['realStandingID'] = standing_id
