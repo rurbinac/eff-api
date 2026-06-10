@@ -1,6 +1,28 @@
 from __future__ import annotations
 from typing import Any, Final, Iterator, TypeAlias, overload
 
+from app.constants import DraftPositions, RealTeamTypes
+from app.actions.leagues import LeaguesBuildAction
+
+# Position constants
+GOALKEEPER = DraftPositions.GOALKEEPER
+DEFENDER = DraftPositions.DEFENDER
+MIDFIELDER = DraftPositions.MIDFIELDER
+STRIKER = DraftPositions.STRIKER
+EPL_TEAM = RealTeamTypes.EPL_TEAM
+
+# Min/Max constraints
+MIN_GOALKEEPER = LeaguesBuildAction.MIN_GOALKEEPER
+MAX_GOALKEEPER = LeaguesBuildAction.MAX_GOALKEEPER
+MIN_DEFENDER = LeaguesBuildAction.MIN_DEFENDER
+MAX_DEFENDER = LeaguesBuildAction.MAX_DEFENDER
+MIN_MIDFIELDER = LeaguesBuildAction.MIN_MIDFIELDER
+MAX_MIDFIELDER = LeaguesBuildAction.MAX_MIDFIELDER
+MIN_STRIKER = LeaguesBuildAction.MIN_STRIKER
+MAX_STRIKER = LeaguesBuildAction.MAX_STRIKER
+MIN_EPL_TEAM = LeaguesBuildAction.MIN_EPL_TEAMS
+MAX_EPL_TEAM = LeaguesBuildAction.MAX_EPL_TEAMS
+
 GroupData: TypeAlias = list[str]
 PackedData: TypeAlias = list[GroupData]
 
@@ -463,15 +485,18 @@ class FantasyTeamMembers:
     Maps member keys to draft positions: {'P123': '1', 'P456': '2', etc.}
     """
 
-    def __init__(self, allow_dups: bool = False) -> None:
-        """Initialize an empty fantasy team.
-
-        Args:
-            allow_dups: Whether to allow duplicate members
-        """
-        self._mkeys = MKeys(allow_dups)
+    def __init__(self) -> None:
+        """Initialize an empty fantasy team."""
+        self._mkeys = MKeys(allow_dups=False)  # No duplicates allowed for team members
         self._mkeys.unpack(None, 1)  # Single group for all team members
         self._positions: dict[str, str] = {}  # Maps member_key -> draft_position
+        self._cnt: dict[str, int] = {
+            GOALKEEPER: 0,
+            DEFENDER: 0,
+            MIDFIELDER: 0,
+            STRIKER: 0,
+            EPL_TEAM: 0,
+        }
 
     @property
     def total_members(self) -> int:
@@ -480,6 +505,21 @@ class FantasyTeamMembers:
 
     def is_valid(self) -> bool:
         """Check if team structure is valid."""
+        if self._mkeys.is_valid:
+            if (
+                self._cnt[GOALKEEPER] >= MIN_GOALKEEPER
+                and self._cnt[GOALKEEPER] <= MAX_GOALKEEPER
+                and self._cnt[DEFENDER] >= MIN_DEFENDER
+                and self._cnt[DEFENDER] <= MAX_DEFENDER
+                and self._cnt[MIDFIELDER] >= MIN_MIDFIELDER
+                and self._cnt[MIDFIELDER] <= MAX_MIDFIELDER
+                and self._cnt[STRIKER] >= MIN_STRIKER
+                and self._cnt[STRIKER] <= MAX_STRIKER
+                and self._cnt[EPL_TEAM] >= MIN_EPL_TEAM
+                and self._cnt[EPL_TEAM] <= MAX_EPL_TEAM
+            ):
+                return True
+            return False
         return self._mkeys.is_valid
 
     def get_members(self) -> list[str]:
@@ -569,11 +609,11 @@ class FantasyTeamMembers:
 
     def get_players(self) -> list[str]:
         """Get all players (P*) on team."""
-        return [k for k in self.get_members() if k.startswith('P')]
+        return [k for k in self.get_members() if k.startswith("P")]
 
     def get_coaches(self) -> list[str]:
         """Get all coaches/staff (T*) on team."""
-        return [k for k in self.get_members() if k.startswith('T')]
+        return [k for k in self.get_members() if k.startswith("T")]
 
     def count_members(self) -> int:
         """Count total members on team."""
@@ -602,7 +642,9 @@ class FantasyTeamMembers:
             # Keep existing positions for members that are still there
             # Remove positions for members that are no longer there
             current_members = set(self.get_members())
-            self._positions = {k: v for k, v in self._positions.items() if k in current_members}
+            self._positions = {
+                k: v for k, v in self._positions.items() if k in current_members
+            }
             return True
         return False
 
