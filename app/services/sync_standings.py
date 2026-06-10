@@ -472,7 +472,7 @@ class SyncStandingsService:
                     continue
 
                 op_key = matches[key].get('op_realTeamMemberKey')
-                standing_id = team_data.get('realStandingID')
+                standing_id = team_data.pop('realStandingID', None)
 
                 # Build common parameters for both UPDATE and INSERT
                 params = {
@@ -681,7 +681,7 @@ class SyncStandingsService:
                     continue
 
                 op_key = matches[team_key].get('op_realTeamMemberKey')
-                standing_id = player_data.get('realStandingID')
+                standing_id = player_data.pop('realStandingID', None)
 
                 # Build common parameters for both UPDATE and INSERT
                 params = {
