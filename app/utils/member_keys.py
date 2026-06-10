@@ -457,111 +457,166 @@ class MKeys:
 
 
 class FantasyTeamMembers:
-    """Manages fantasy team members (players and coaches) using MKeys.
+    """Manages fantasy team members with position tracking using MKeys.
 
-    Organizes members into groups (e.g., roster, bench, injured, traded).
-    Keys format: 'P' prefix for players, 'T' prefix for coaches/team staff.
+    Stores team members (players and coaches) with their draft positions.
+    Maps member keys to draft positions: {'P123': '1', 'P456': '2', etc.}
     """
 
-    def __init__(self, num_groups: int = 1, allow_dups: bool = False) -> None:
-        """Initialize with specified number of groups.
+    def __init__(self, allow_dups: bool = False) -> None:
+        """Initialize an empty fantasy team.
 
         Args:
-            num_groups: Number of member groups (e.g., 1=roster, 2=roster+bench, etc.)
-            allow_dups: Whether to allow duplicate members across groups
+            allow_dups: Whether to allow duplicate members
         """
         self._mkeys = MKeys(allow_dups)
-        if num_groups > 0:
-            self._mkeys.unpack(None, num_groups)
-
-    @property
-    def num_groups(self) -> int:
-        """Return number of member groups."""
-        return self._mkeys.size
+        self._mkeys.unpack(None, 1)  # Single group for all team members
+        self._positions: dict[str, str] = {}  # Maps member_key -> draft_position
 
     @property
     def total_members(self) -> int:
-        """Return total number of members across all groups."""
+        """Return total number of members on team."""
         return len(self._mkeys)
 
     def is_valid(self) -> bool:
-        """Check if team members structure is valid."""
+        """Check if team structure is valid."""
         return self._mkeys.is_valid
 
-    def get_members(self, group: int = 0) -> list[str]:
-        """Get all members in a group."""
-        return self._mkeys.get_group(group)
+    def get_members(self) -> list[str]:
+        """Get all members on team."""
+        return self._mkeys.get_group(0)
 
-    def get_all_members(self) -> dict[int, list[str]]:
-        """Get all members organized by group."""
-        return {i: group for i, group in enumerate(self._mkeys.get_groups())}
+    def get_positions(self) -> dict[str, str]:
+        """Get mapping of member keys to draft positions."""
+        return self._positions.copy()
 
-    def add_member(self, member_key: str, group: int = 0) -> bool:
-        """Add a member to a group. Returns True if successful."""
-        return self._mkeys.append_key(member_key, group)
+    def add_member(self, member_key: str, position: str = "") -> bool:
+        """Add a single member with optional draft position.
 
-    def remove_member(self, member_key: str, group: int | None = None) -> bool:
-        """Remove a member from a group (or all groups if group is None)."""
-        return self._mkeys.remove_key(member_key, group)
+        Args:
+            member_key: Member key (e.g., 'P123')
+            position: Draft position (e.g., '1', '2', etc.)
 
-    def has_member(self, member_key: str, group: int | None = None) -> bool:
-        """Check if member exists in a group (or any group if group is None)."""
-        return self._mkeys.has_key(member_key, group)
-
-    def find_member(self, member_key: str) -> int:
-        """Find which group contains the member. Returns -1 if not found."""
-        return self._mkeys.find_group(member_key)
-
-    def move_member(self, member_key: str, from_group: int, to_group: int) -> bool:
-        """Move a member from one group to another."""
-        return self._mkeys.move_key(member_key, from_group, to_group)
-
-    def get_players(self, group: int = 0) -> list[str]:
-        """Get all players (P*) in a group."""
-        return [k for k in self._mkeys.get_group(group) if k.startswith('P')]
-
-    def get_coaches(self, group: int = 0) -> list[str]:
-        """Get all coaches/staff (T*) in a group."""
-        return [k for k in self._mkeys.get_group(group) if k.startswith('T')]
-
-    def count_members(self, group: int = 0) -> int:
-        """Count members in a group. Returns 0 if group doesn't exist."""
-        count = self._mkeys.count(group)
-        return count if count is not None else 0
-
-    def count_players(self, group: int = 0) -> int:
-        """Count players (P*) in a group."""
-        return len(self.get_players(group))
-
-    def count_coaches(self, group: int = 0) -> int:
-        """Count coaches/staff (T*) in a group."""
-        return len(self.get_coaches(group))
-
-    def clear_group(self, group: int = 0) -> bool:
-        """Clear all members from a group."""
-        if self._mkeys.has_group(group):
-            self._mkeys.set_group(None, group)
+        Returns:
+            True if successful, False if invalid or duplicate
+        """
+        if self._mkeys.append_key(member_key, 0):
+            self._positions[member_key] = position
             return True
         return False
 
+    def add_members(self, members: dict[str, str] | list[str]) -> int:
+        """Add multiple members at once.
+
+        Args:
+            members: Dict mapping member_key -> position, or list of keys
+                    (positions default to empty string)
+
+        Returns:
+            Number of members successfully added
+        """
+        added = 0
+        if isinstance(members, dict):
+            for key, position in members.items():
+                if self.add_member(key, position):
+                    added += 1
+        elif isinstance(members, list):
+            for key in members:
+                if self.add_member(key):
+                    added += 1
+        return added
+
+    def remove_member(self, member_key: str) -> bool:
+        """Remove a single member."""
+        if self._mkeys.remove_key(member_key, 0):
+            self._positions.pop(member_key, None)
+            return True
+        return False
+
+    def remove_members(self, member_keys: list[str]) -> int:
+        """Remove multiple members at once.
+
+        Args:
+            member_keys: List of member keys to remove
+
+        Returns:
+            Number of members successfully removed
+        """
+        removed = 0
+        for key in member_keys:
+            if self.remove_member(key):
+                removed += 1
+        return removed
+
+    def has_member(self, member_key: str) -> bool:
+        """Check if member exists on team."""
+        return self._mkeys.has_key(member_key, 0)
+
+    def get_position(self, member_key: str) -> str:
+        """Get draft position for a member. Returns empty string if not found."""
+        return self._positions.get(member_key, "")
+
+    def set_position(self, member_key: str, position: str) -> bool:
+        """Update draft position for a member."""
+        if self.has_member(member_key):
+            self._positions[member_key] = position
+            return True
+        return False
+
+    def get_by_position(self, position: str) -> list[str]:
+        """Get all members with a specific draft position."""
+        return [k for k, pos in self._positions.items() if pos == position]
+
+    def get_players(self) -> list[str]:
+        """Get all players (P*) on team."""
+        return [k for k in self.get_members() if k.startswith('P')]
+
+    def get_coaches(self) -> list[str]:
+        """Get all coaches/staff (T*) on team."""
+        return [k for k in self.get_members() if k.startswith('T')]
+
+    def count_members(self) -> int:
+        """Count total members on team."""
+        return self.total_members
+
+    def count_players(self) -> int:
+        """Count players (P*) on team."""
+        return len(self.get_players())
+
+    def count_coaches(self) -> int:
+        """Count coaches/staff (T*) on team."""
+        return len(self.get_coaches())
+
+    def clear(self) -> None:
+        """Clear all members from team."""
+        self._mkeys.clear()
+        self._positions.clear()
+
     def to_packed_string(self) -> str:
-        """Export members as packed string format."""
+        """Export member keys as packed string format."""
         return self._mkeys.pack()
 
     def from_packed_string(self, data: str) -> bool:
-        """Import members from packed string format."""
-        return self._mkeys.unpack(data, self.num_groups)
+        """Import member keys from packed string format. Preserves positions."""
+        if self._mkeys.unpack(data, 1):
+            # Keep existing positions for members that are still there
+            # Remove positions for members that are no longer there
+            current_members = set(self.get_members())
+            self._positions = {k: v for k, v in self._positions.items() if k in current_members}
+            return True
+        return False
 
     def copy(self) -> "FantasyTeamMembers":
         """Create a deep copy of team members."""
-        new_team = FantasyTeamMembers(self.num_groups, self._mkeys.dups is True)
+        new_team = FantasyTeamMembers(self._mkeys.dups is True)
         new_team._mkeys = self._mkeys.copy()
+        new_team._positions = self._positions.copy()
         return new_team
 
     def __str__(self) -> str:
-        """String representation of team members."""
-        return f"FantasyTeamMembers(groups={self.num_groups}, members={self.total_members})"
+        """String representation of team."""
+        return f"FantasyTeamMembers(members={self.total_members}, players={self.count_players()}, coaches={self.count_coaches()})"
 
     def __repr__(self) -> str:
         """Detailed representation."""
-        return f"FantasyTeamMembers(mkeys={self._mkeys!r})"
+        return f"FantasyTeamMembers(members={self.get_members()}, positions={self._positions})"
