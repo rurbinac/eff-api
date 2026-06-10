@@ -1877,3 +1877,64 @@ class SyncService:
 
             # Store realStandingID for later updates
             players[key]['realStandingID'] = standing_id
+
+    @staticmethod
+    def _sync_rmt_calc_places(teams: dict) -> None:
+        """Calculate league positions for teams across all/home/away sides.
+
+        Args:
+            teams: Teams dict to update (modified in place)
+        """
+        for side in ["", "Home", "Away"]:
+            data = []
+            for team_key, team in teams.items():
+                data.append({
+                    "key": team["realTeamMemberKey"],
+                    "pts": team['pointsL1'],
+                    "diff": team["goalsFor" + side] - team["goalsAgainst" + side],
+                    "goals": team["goalsFor" + side],
+                    "name": team["name"]
+                })
+
+            # Sort by: points (desc), goal difference (desc), goals (desc), name (asc)
+            sorted_data = sorted(data, key=lambda x: (-x['pts'], -x['diff'], -x['goals'], x['name']))
+
+            # Assign places
+            for i, item in enumerate(sorted_data):
+                teams[item["key"]]["place" + side] = i + 1
+
+    @staticmethod
+    def _sync_rmt_calc_ranking(teams: dict, players: dict) -> None:
+        """Calculate overall rankings for teams and players combined.
+
+        Args:
+            teams: Teams dict to update (modified in place)
+            players: Players dict to update (modified in place)
+        """
+        data = []
+
+        # Add teams to ranking pool
+        for team_key, team in teams.items():
+            data.append({
+                "key": team["realTeamMemberKey"],
+                "pts": team['pointsL1'],
+                "name": team["name"]
+            })
+
+        # Add players to ranking pool
+        for player_key, player in players.items():
+            data.append({
+                "key": player["realTeamMemberKey"],
+                "pts": player['pointsL1'],
+                "name": player["name"]
+            })
+
+        # Sort by: points (desc), name (asc)
+        sorted_data = sorted(data, key=lambda x: (-x['pts'], x['name']))
+
+        # Assign rankings
+        for i, item in enumerate(sorted_data):
+            if item["key"].startswith("T"):
+                teams[item["key"]]["ranking"] = i + 1
+            elif item["key"].startswith("P"):
+                players[item["key"]]["ranking"] = i + 1
