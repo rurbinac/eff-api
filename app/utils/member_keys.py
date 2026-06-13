@@ -660,8 +660,11 @@ class TeamMembers(BaseMembers):
         to_remove: str | list[str] | None = None,
     ) -> tuple[list[str], list[str]] | tuple[None, None]:
         """Check if the proposed changes to the team members are valid."""
-        def _can_change_dp(dp_stat: dict, cnt_add: int, cnt_remove: int, is_valid: bool) -> bool:
-            # 
+
+        def _can_change_dp(
+            dp_stat: dict, cnt_add: int, cnt_remove: int, is_valid: bool
+        ) -> bool:
+            #
             if cnt_add > dp_stat["can_add"]:
                 return False
             #
@@ -676,8 +679,8 @@ class TeamMembers(BaseMembers):
             return True
 
         # Get DP information from
-        keys_to_add = self._keys_to_add(to_add)
-        keys_to_remove = self._keys_to_remove(to_remove)
+        keys_to_add = self._prepare_keys(True, to_add)
+        keys_to_remove = self._prepare_keys(False, to_remove)
         # Validate keys to add and remove
         if keys_to_add is None or keys_to_remove is None:
             return (None, None)
@@ -696,45 +699,30 @@ class TeamMembers(BaseMembers):
                         cnt_after[PLAYER] += cnt_add - cnt_remove
                 else:
                     return (None, None)
-        
+
         for dp in [PLAYER, MEMBER]:
-            if (
-                cnt_after[dp] < dp_stats[dp]["min"]
-                or cnt_after[dp] > dp_stats[dp]["max"]
-            ):
+            cnt_dp = cnt_after[dp]
+            if cnt_dp < dp_stats[dp]["min"] or cnt_dp > dp_stats[dp]["max"]:
+                # In not valid after the changes.
                 if is_valid:
-                    # If we are here is because the data was valid before the changes and would become invalid after them
+                    # It was valid before the changes (Error).
                     return (None, None)
         # All validations passed
         return (self._to_keys_list(to_add), self._to_keys_list(to_remove))
 
-    def _keys_to_add(
-        self, to_add: str | list[str] | None = None
-    ) -> dict[str, list[str]] | None:
-        # Get DP information
-        keys_to_add = self.collect_by_dp(to_add)
-        # Validate
-        if isinstance(keys_to_add, dict):
-            for dp in keys_to_add:
-                for key in keys_to_add[dp]:
-                    if self._mkeys.has_key(key, 0):
+    def _prepare_keys(self, add: bool, keys: str | list[str] | None = None)    -> dict[str, list[str]] | None:
+        by_dp = self.collect_by_dp(keys)
+        if isinstance(by_dp, dict):
+            for dp in by_dp:
+                if add:
+                    if any(self._mkeys.has_key(k, 0) for k in by_dp[dp]):
                         return None
-            return keys_to_add
+                else:
+                    if any(not self._mkeys.has_key(k, 0) for k in by_dp[dp]):
+                        return None
+            return by_dp
         return None
 
-    def _keys_to_remove(
-        self, to_remove: str | list[str] | None = None
-    ) -> dict[str, list[str]] | None:
-        # Get DP information
-        keys_to_remove = self.collect_by_dp(to_remove)
-        # Validate
-        if isinstance(keys_to_remove, dict):
-            for dp in keys_to_remove:
-                for key in keys_to_remove[dp]:
-                    if not self._mkeys.has_key(key, 0):
-                        return None
-            return keys_to_remove
-        return None
 
 
 class DraftTeamMembers(BaseMembers):
