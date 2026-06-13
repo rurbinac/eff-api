@@ -500,13 +500,21 @@ class MKeys:
 
 class BaseMembers:
     LIMITS: dict[str, dict[str, int]] = {
-        GOALKEEPER: {"min": MIN_GOALKEEPER, "max": MAX_GOALKEEPER},
-        DEFENDER: {"min": MIN_DEFENDER, "max": MAX_DEFENDER},
-        MIDFIELDER: {"min": MIN_MIDFIELDER, "max": MAX_MIDFIELDER},
-        STRIKER: {"min": MIN_STRIKER, "max": MAX_STRIKER},
-        EPL_TEAM: {"min": MIN_EPL_TEAM, "max": MAX_EPL_TEAM},
-        PLAYER: {"min": MIN_PLAYERS, "max": MAX_PLAYERS},
-        MEMBER: {"min": MIN_MEMBERS, "max": MAX_MEMBERS},
+        GOALKEEPER: {
+            "min": MIN_GOALKEEPER,
+            "max": MAX_GOALKEEPER,
+            "auto": AUTO_GOALKEEPER,
+        },
+        DEFENDER: {"min": MIN_DEFENDER, "max": MAX_DEFENDER, "auto": AUTO_DEFENDER},
+        MIDFIELDER: {
+            "min": MIN_MIDFIELDER,
+            "max": MAX_MIDFIELDER,
+            "auto": AUTO_MIDFIELDER,
+        },
+        STRIKER: {"min": MIN_STRIKER, "max": MAX_STRIKER, "auto": AUTO_STRIKER},
+        EPL_TEAM: {"min": MIN_EPL_TEAM, "max": MAX_EPL_TEAM, "auto": AUTO_EPL_TEAM},
+        PLAYER: {"min": MIN_PLAYERS, "max": MAX_PLAYERS, "auto": 0},
+        MEMBER: {"min": MIN_MEMBERS, "max": MAX_MEMBERS, "auto": 0},
     }
 
     def __init__(
@@ -734,14 +742,7 @@ class DraftTeamMembers(BaseMembers):
     def should_add(self) -> list[str]:
         dp_cnt = self.dp_cnt
         should_add = []
-        if dp_cnt[GOALKEEPER] < AUTO_GOALKEEPER:
-            should_add.append(GOALKEEPER)
-        if dp_cnt[DEFENDER] < AUTO_DEFENDER:
-            should_add.append(DEFENDER)
-        if dp_cnt[MIDFIELDER] < AUTO_MIDFIELDER:
-            should_add.append(MIDFIELDER)
-        if dp_cnt[STRIKER] < AUTO_STRIKER:
-            should_add.append(STRIKER)
-        if dp_cnt[EPL_TEAM] < AUTO_EPL_TEAM:
-            should_add.append(EPL_TEAM)
+        for dp in self.LIMITS:
+            if dp_cnt[dp] < self.LIMITS[dp]["auto"]:
+                should_add.append(dp)
         return should_add
