@@ -710,19 +710,21 @@ class TeamMembers(BaseMembers):
         # All validations passed
         return (self._to_keys_list(to_add), self._to_keys_list(to_remove))
 
-    def _prepare_keys(self, add: bool, keys: str | list[str] | None = None)    -> dict[str, list[str]] | None:
+    def _prepare_keys(
+        self, add: bool, keys: str | list[str] | None = None
+    ) -> dict[str, list[str]] | None:
         by_dp = self.collect_by_dp(keys)
         if isinstance(by_dp, dict):
-            for dp in by_dp:
-                if add:
-                    if any(self._mkeys.has_key(k, 0) for k in by_dp[dp]):
-                        return None
-                else:
-                    if any(not self._mkeys.has_key(k, 0) for k in by_dp[dp]):
-                        return None
+            if add:
+                if any(self._mkeys.has_key(k, 0) for dp in by_dp for k in by_dp[dp]):
+                    return None
+            else:
+                if any(
+                    not self._mkeys.has_key(k, 0) for dp in by_dp for k in by_dp[dp]
+                ):
+                    return None
             return by_dp
         return None
-
 
 
 class DraftTeamMembers(BaseMembers):
