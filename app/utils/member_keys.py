@@ -498,34 +498,48 @@ class MKeys:
         return keys  # Will be None if there was an error unpacking (invalid keys or duplicates not allowed)
 
 
-class TeamMembers:
-    def __init__(self, get_dp: Callable[[str], str | None]) -> None:
+class BaseMembers:
+    LIMITS: dict[str, dict[str, int]] = {
+        GOALKEEPER: {"min": MIN_GOALKEEPER, "max": MAX_GOALKEEPER},
+        DEFENDER: {"min": MIN_DEFENDER, "max": MAX_DEFENDER},
+        MIDFIELDER: {"min": MIN_MIDFIELDER, "max": MAX_MIDFIELDER},
+        STRIKER: {"min": MIN_STRIKER, "max": MAX_STRIKER},
+        EPL_TEAM: {"min": MIN_EPL_TEAM, "max": MAX_EPL_TEAM},
+        PLAYER: {"min": MIN_PLAYERS, "max": MAX_PLAYERS},
+        MEMBER: {"min": MIN_MEMBERS, "max": MAX_MEMBERS},
+    }
+
+    def __init__(
+        self, get_dp: Callable[[str], str | None], ignore_dups: bool = True
+    ) -> None:
         """Initialize an empty fantasy team."""
+        self._ignore_dups = ignore_dups
         self._mkeys: MKeys = self._reset_mkeys()
-        self._dp_stats: dict[str, dict[str, int]] | None = None
-        self._get_dp: Callable[[str], str | None] = (
-            get_dp  # Function to get draft position for a member key
-        )
+        # Function to get draft position for a member key
+        self._get_dp: Callable[[str], str | None] = get_dp
 
     @cache
     def get_dp(self, key: str) -> str | None:
         return self._get_dp(key)
 
     def collect_by_dp(
-        self, keys: str | list[str] | None = None, ignore_dups: bool = True
+        self, keys: str | list[str] | None = None, allow_unknown: bool = False
     ) -> dict[str, list[str]] | None:
-        keys = self._to_list(keys)
+        keys = self._to_keys_list(keys)
         if keys is None:
             return None
         by_dp: dict[str, list[str]] = {}
         for key in keys:
             dp = self.get_dp(key)
             if dp is None:
-                dp = DP_UNKNOWN
+                if allow_unknown:
+                    dp = DP_UNKNOWN
+                else:
+                    return None
             if dp not in by_dp:
                 by_dp[dp] = []
             elif key in by_dp[dp]:
-                if ignore_dups:
+                if self._ignore_dups:
                     continue
                 return None
             by_dp[dp].append(key)
@@ -553,32 +567,9 @@ class TeamMembers:
         }
 
     @property
-    def dp_stats(self) -> dict[str, dict[str, int]]:
-        """Get the current draft position statistics for the team members."""
-        dp_stats = self._init_dp_stats()
-        for dp in dp_stats:
-            if dp not in {PLAYER, MEMBER}:
-                dp_stats[dp]["must_add"] = max(
-                    dp_stats[dp]["min"] - dp_stats[dp]["cnt"], 0
-                )
-                dp_stats[dp]["can_add"] = max(
-                    dp_stats[dp]["max"] - dp_stats[dp]["cnt"], 0
-                )
-                dp_stats[dp]["must_remove"] = max(
-                    dp_stats[dp]["cnt"] - dp_stats[dp]["max"], 0
-                )
-                dp_stats[dp]["can_remove"] = max(
-                    dp_stats[dp]["cnt"] - dp_stats[dp]["min"], 0
-                )
-        for x in ["must_add", "must_remove"]:
-            dp_stats[PLAYER][x] = (
-                dp_stats[GOALKEEPER][x]
-                + dp_stats[DEFENDER][x]
-                + dp_stats[MIDFIELDER][x]
-                + dp_stats[STRIKER][x]
-            )
-            dp_stats[MEMBER][x] = dp_stats[PLAYER][x] + dp_stats[EPL_TEAM][x]
-        return dp_stats
+    def is_valid(self) -> bool:
+        dp_stats = self.dp_stats
+        return not dp_stats[MEMBER]["deficit"] and not dp_stats[MEMBER]["surplus"]
 
     def unpack(self, data: str | PackedData | None = None) -> bool:
         """Unpack the team members from a string."""
@@ -588,6 +579,52 @@ class TeamMembers:
         """Pack the team members into a string."""
         return self._mkeys.pack()
 
+    @property
+    def dp_stats(self) -> dict[str, dict[str, int]]:
+        """Get the current draft position statistics for the team members."""
+        # Initialize
+        dp_stats = {}
+        deficit = False
+        surplus = False
+        #
+        for dp in self.dp_cnt:
+            # Get the values to use
+            cnt_dp = self.dp_cnt[dp]
+            min_dp = self.LIMITS[dp]["min"]
+            max_dp = self.LIMITS[dp]["max"]
+            # Create the record for dp
+            dp_stats[dp] = {"cnt": cnt_dp, "min": min_dp, "max": max_dp}
+            if dp not in {PLAYER, MEMBER}:
+                dp_stats[dp]["must_add"] = max(min_dp - cnt_dp, 0)
+                dp_stats[dp]["must_remove"] = max(cnt_dp - max_dp, 0)
+                dp_stats[dp]["can_add"] = max(max_dp - cnt_dp, 0)
+                dp_stats[dp]["can_remove"] = max(cnt_dp - min_dp, 0)
+                #
+                deficit = deficit or dp_stats[dp]["must_add"] > 0
+                surplus = surplus or dp_stats[dp]["must_remove"] > 0
+        #
+        dp_stats[MEMBER]["deficit"] = deficit
+        dp_stats[MEMBER]["surplus"] = surplus
+        return dp_stats
+
+    def _reset_mkeys(self) -> MKeys:
+        return MKeys(allow_dups=None if self._ignore_dups else False)
+
+    def _to_keys_list(self, keys: str | list[str] | None = None) -> list[str] | None:
+
+        if keys is None:
+            return []
+        elif isinstance(keys, str):
+            if MKeys.valid_key(keys):
+                return [keys]
+        elif isinstance(keys, list):
+            # Valid keys have to be string
+            if all(MKeys.valid_key(x) for x in keys):
+                return keys
+        return None
+
+
+class TeamMembers(BaseMembers):
     def can_change(
         self,
         to_add: str | list[str] | None = None,
@@ -617,132 +654,93 @@ class TeamMembers:
             self._mkeys.append_key(key, 0)
         return True
 
-    def _init_dp_stats(self) -> dict[str, dict[str, int]]:
-        return {
-            GOALKEEPER: {
-                "cnt": self.dp_cnt[GOALKEEPER],
-                "min": MIN_GOALKEEPER,
-                "max": MAX_GOALKEEPER,
-            },
-            DEFENDER: {
-                "cnt": self.dp_cnt[DEFENDER],
-                "min": MIN_DEFENDER,
-                "max": MAX_DEFENDER,
-            },
-            MIDFIELDER: {
-                "cnt": self.dp_cnt[MIDFIELDER],
-                "min": MIN_MIDFIELDER,
-                "max": MAX_MIDFIELDER,
-            },
-            STRIKER: {
-                "cnt": self.dp_cnt[STRIKER],
-                "min": MIN_STRIKER,
-                "max": MAX_STRIKER,
-            },
-            EPL_TEAM: {
-                "cnt": self.dp_cnt[EPL_TEAM],
-                "min": MIN_EPL_TEAM,
-                "max": MAX_EPL_TEAM,
-            },
-            PLAYER: {
-                "cnt": self.dp_cnt[PLAYER],
-                "min": MIN_PLAYERS,
-                "max": MAX_PLAYERS,
-            },
-            MEMBER: {
-                "cnt": self.dp_cnt[MEMBER],
-                "min": MIN_MEMBERS,
-                "max": MAX_MEMBERS,
-            },
-        }
-
     def _can_change(
         self,
         to_add: str | list[str] | None = None,
         to_remove: str | list[str] | None = None,
     ) -> tuple[list[str], list[str]] | tuple[None, None]:
         """Check if the proposed changes to the team members are valid."""
+        def _can_change_dp(dp_stat: dict, cnt_add: int, cnt_remove: int, is_valid: bool) -> bool:
+            # 
+            if cnt_add > dp_stat["can_add"]:
+                return False
+            #
+            if cnt_remove > dp_stat["can_remove"]:
+                return False
+            if not is_valid:
+                # Can only add or remove where we must
+                if cnt_add > 0 and dp_stat["must_add"] <= 0:
+                    return False
+                if cnt_remove > 0 and dp_stat["must_remove"] <= 0:
+                    return False
+            return True
+
         # Get DP information from
-        keys_to_add = self.collect_by_dp(to_add)
-        keys_to_remove = self.collect_by_dp(to_remove)
+        keys_to_add = self._keys_to_add(to_add)
+        keys_to_remove = self._keys_to_remove(to_remove)
         # Validate keys to add and remove
         if keys_to_add is None or keys_to_remove is None:
             return (None, None)
-        if not keys_to_add and not keys_to_remove:
-            return (None, None)
-        for dp in keys_to_add:
-            for key in keys_to_add[dp]:
-                if self._mkeys.has_key(key, 0):
-                    return (None, None)
-        for dp in keys_to_remove:
-            for key in keys_to_remove[dp]:
-                if not self._mkeys.has_key(key, 0):
-                    return (None, None)
         # Validate the changes against the DP stats
         dp_stats = self.dp_stats
 
+        is_valid = not dp_stats[MEMBER]["deficit"] and not dp_stats[MEMBER]["surplus"]
         cnt_after = {PLAYER: dp_stats[PLAYER]["cnt"], MEMBER: dp_stats[MEMBER]["cnt"]}
-
-        must_add_or_remove = (
-            dp_stats[PLAYER]["must_add"] > 0 or dp_stats[PLAYER]["must_remove"] > 0
-        )
         for dp in dp_stats:
             if dp not in {PLAYER, MEMBER}:
-                # See how many keys will be added/removed in this DP
                 cnt_add = len(keys_to_add.get(dp, []))
                 cnt_remove = len(keys_to_remove.get(dp, []))
-                if cnt_add <= 0 and cnt_remove <= 0:
-                    # Nothing to do
-                    continue
-                if (
-                    cnt_add > dp_stats[dp]["can_add"]
-                    or cnt_remove > dp_stats[dp]["can_remove"]
-                ):
-                    # Trying to add/remove too many keys
+                if _can_change_dp(dp_stats[dp], cnt_add, cnt_remove, is_valid):
+                    cnt_after[MEMBER] += cnt_add - cnt_remove
+                    if dp != EPL_TEAM:
+                        cnt_after[PLAYER] += cnt_add - cnt_remove
+                else:
                     return (None, None)
-                if must_add_or_remove:
-                    # There is at least one DP that must_add or must_remove keys
-                    if cnt_add > 0 and dp_stats[dp]["must_add"] <= 0:
-                        # In this case cannot add on a DP that doesn't must_add
-                        return (None, None)
-                    if cnt_remove > 0 and dp_stats[dp]["must_remove"] <= 0:
-                        # In this case cannot remove on a DP that doesn't must_remove
-                        return (None, None)
-                # Calculate the cnt values
-                cnt_after[MEMBER] += cnt_add - cnt_remove
-                if dp != EPL_TEAM:
-                    cnt_after[PLAYER] += cnt_add - cnt_remove
+        
         for dp in [PLAYER, MEMBER]:
             if (
-                dp_stats[dp]["cnt"] >= dp_stats[dp]["min"]
-                and dp_stats[dp]["cnt"] <= dp_stats[dp]["max"]
+                cnt_after[dp] < dp_stats[dp]["min"]
+                or cnt_after[dp] > dp_stats[dp]["max"]
             ):
-                if (
-                    cnt_after[dp] < dp_stats[dp]["min"]
-                    or cnt_after[dp] > dp_stats[dp]["max"]
-                ):
+                if is_valid:
                     # If we are here is because the data was valid before the changes and would become invalid after them
                     return (None, None)
         # All validations passed
-        return (self._to_list(to_add), self._to_list(to_remove))
+        return (self._to_keys_list(to_add), self._to_keys_list(to_remove))
 
-    def _reset_mkeys(self) -> MKeys:
-        return MKeys(allow_dups=False)
+    def _keys_to_add(
+        self, to_add: str | list[str] | None = None
+    ) -> dict[str, list[str]] | None:
+        # Get DP information
+        keys_to_add = self.collect_by_dp(to_add)
+        # Validate
+        if isinstance(keys_to_add, dict):
+            for dp in keys_to_add:
+                for key in keys_to_add[dp]:
+                    if self._mkeys.has_key(key, 0):
+                        return None
+            return keys_to_add
+        return None
 
-    def _to_list(self, keys: str | list[str] | None = None) -> list[str] | None:
-        if keys is None:
-            return []
-        elif isinstance(keys, str):
-            if MKeys.valid_key(keys):
-                return [keys]
-        elif isinstance(keys, list):
-            # Valid keys have to be string
-            if all(MKeys.valid_key(x) for x in keys):
-                return keys
+    def _keys_to_remove(
+        self, to_remove: str | list[str] | None = None
+    ) -> dict[str, list[str]] | None:
+        # Get DP information
+        keys_to_remove = self.collect_by_dp(to_remove)
+        # Validate
+        if isinstance(keys_to_remove, dict):
+            for dp in keys_to_remove:
+                for key in keys_to_remove[dp]:
+                    if not self._mkeys.has_key(key, 0):
+                        return None
+            return keys_to_remove
         return None
 
 
-class DraftTeamMembers(TeamMembers):
+class DraftTeamMembers(BaseMembers):
+    def draft(self) -> bool:
+        pass
+
     def should_add(self) -> list[str]:
         dp_cnt = self.dp_cnt
         should_add = []
