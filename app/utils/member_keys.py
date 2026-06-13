@@ -739,10 +739,29 @@ class DraftTeamMembers(BaseMembers):
     def draft(self) -> bool:
         pass
 
-    def should_add(self) -> list[str]:
+    def available_dp(self, auto_draft: bool) -> set[str]:
         dp_cnt = self.dp_cnt
-        should_add = []
-        for dp in self.LIMITS:
-            if dp_cnt[dp] < self.LIMITS[dp]["auto"]:
-                should_add.append(dp)
-        return should_add
+        free_dp = set()
+        if auto_draft:
+            # For auto draft try to fill the "auto", first
+            for dp in self.LIMITS:
+                if dp_cnt[dp] < self.LIMITS[dp]["auto"]:
+                    free_dp.add(dp)
+        if len(free_dp) <= 0:
+            dp_stats = self.dp_stats
+            cnt_must = 0
+            can_add_dp = set()
+            for dp in dp_stats:
+                if dp not in {PLAYER, MEMBER}:
+                    if dp_stats[dp]["must_add"] > 0:
+                        # The dp must add, so you can draft this dp
+                        cnt_must += dp_stats[dp]["must_add"]
+                        free_dp.add(dp)
+                    elif dp_stats[dp]["can_add"] > 0:
+                        # The dp can add, lets save it
+                        can_add_dp.add(dp)
+            if dp_stats[MEMBER]["cnt"] + cnt_must < dp_stats[MEMBER]["cnt"]:
+                # Still some spots that don't must_add
+                for dp in can_add_dp:
+                    free_dp.add(dp)
+        return free_dp
