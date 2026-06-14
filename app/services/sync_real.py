@@ -6,7 +6,7 @@ across competitions and seasons.
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.constants import RealTeamMemberPositions, RealTeamTypes
+from app.constants import DraftPositionConstants
 
 
 class SyncRealService:
@@ -220,7 +220,7 @@ class SyncRealService:
             """)
             result = db.execute(q1, {
                 'realCompetitionID': real_competition_id,
-                'draftPosition': RealTeamTypes.EPL_TEAM,
+                'draftPosition': DraftPositionConstants.EPL_TEAM,
             })
             results['queries_executed'] += 1
             results['rows_affected'] += result.rowcount
@@ -289,7 +289,7 @@ class SyncRealService:
             """)
             result = db.execute(q3, {
                 'realCompetitionID': real_competition_id,
-                'draftPosition': RealTeamTypes.EPL_TEAM,
+                'draftPosition': DraftPositionConstants.EPL_TEAM,
             })
             results['queries_executed'] += 1
             results['rows_affected'] += result.rowcount
@@ -362,7 +362,7 @@ class SyncRealService:
             """)
             result = db.execute(q5, {
                 'realCompetitionID': real_competition_id,
-                'draftPosition': RealTeamTypes.EPL_TEAM,
+                'draftPosition': DraftPositionConstants.EPL_TEAM,
             })
             results['queries_executed'] += 1
             results['rows_affected'] += result.rowcount
@@ -484,10 +484,10 @@ class SyncRealService:
             """)
             result = db.execute(q4, {
                 'realCompetitionID': real_competition_id,
-                'dp_1': RealTeamMemberPositions.GOALKEEPER,
-                'dp_2': RealTeamMemberPositions.DEFENDER,
-                'dp_3': RealTeamMemberPositions.MIDFIELDER,
-                'dp_4': RealTeamMemberPositions.STRIKER,
+                'dp_1': DraftPositionConstants.GOALKEEPER,
+                'dp_2': DraftPositionConstants.DEFENDER,
+                'dp_3': DraftPositionConstants.MIDFIELDER,
+                'dp_4': DraftPositionConstants.STRIKER,
             })
             results['queries_executed'] += 1
             results['rows_affected'] += result.rowcount

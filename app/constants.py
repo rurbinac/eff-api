@@ -50,23 +50,15 @@ class WaiversConstants:
     WAIVER_STATUS_OPEN = 4
 
 
-class RealTeamMemberPositions:
-    """Position/role constants for RealTeamMembers."""
+class DraftPositionConstants:
+    """Draft position order, name mappings, and team type constants."""
 
+    # Position constants
     GOALKEEPER = 'Goalkeeper'
     DEFENDER = 'Defender'
     MIDFIELDER = 'Midfielder'
     STRIKER = 'Striker'
-
-
-class RealTeamTypes:
-    """Team type constants for RealTeamMembers."""
-
     EPL_TEAM = 'EPLTeam'
-
-
-class DraftPositions:
-    """Draft position order and name mappings for real players."""
 
     @staticmethod
     def get_order(position: int | str, real_position: str | None = None) -> int:
@@ -89,15 +81,15 @@ class DraftPositions:
 
         # Map 'forward' to striker
         if pos == 'forward':
-            pos = DraftPositions.STRIKER
+            pos = DraftPositionConstants.STRIKER
 
         # Map position names to order numbers
         position_map = {
-            RealTeamMemberPositions.GOALKEEPER.lower(): 1,
-            RealTeamMemberPositions.DEFENDER.lower(): 2,
-            RealTeamMemberPositions.MIDFIELDER.lower(): 3,
-            RealTeamMemberPositions.STRIKER.lower(): 4,
-            RealTeamTypes.EPL_TEAM.lower(): 5,
+            DraftPositionConstants.GOALKEEPER.lower(): 1,
+            DraftPositionConstants.DEFENDER.lower(): 2,
+            DraftPositionConstants.MIDFIELDER.lower(): 3,
+            DraftPositionConstants.STRIKER.lower(): 4,
+            DraftPositionConstants.EPL_TEAM.lower(): 5,
         }
 
         # Try to find the position in the map
@@ -139,11 +131,11 @@ class DraftPositions:
             Position string (Goalkeeper, Defender, etc.) or None if invalid
         """
         positions = [
-            RealTeamMemberPositions.GOALKEEPER,
-            RealTeamMemberPositions.DEFENDER,
-            RealTeamMemberPositions.MIDFIELDER,
-            RealTeamMemberPositions.STRIKER,
-            RealTeamTypes.EPL_TEAM,
+            DraftPositionConstants.GOALKEEPER,
+            DraftPositionConstants.DEFENDER,
+            DraftPositionConstants.MIDFIELDER,
+            DraftPositionConstants.STRIKER,
+            DraftPositionConstants.EPL_TEAM,
         ]
         return positions[order - 1] if order >= 1 and order <= 5 else None
 

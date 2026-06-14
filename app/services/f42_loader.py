@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.services.f42_parser import F42Parser
-from app.constants import DraftPositions
+from app.constants import DraftPositionConstants
 
 
 class F42Loader:
@@ -416,8 +416,8 @@ class F42Loader:
             jersey_number = safe_int(player_data.get('jersey_number'))
 
             # Calculate draft position order and name
-            draft_position_order = DraftPositions.get_order(position, real_position)
-            draft_position = DraftPositions.get_position(draft_position_order) if draft_position_order else None
+            draft_position_order = DraftPositionConstants.get_order(position, real_position)
+            draft_position = DraftPositionConstants.get_position(draft_position_order) if draft_position_order else None
 
             if result:
                 # Update existing

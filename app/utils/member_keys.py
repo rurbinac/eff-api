@@ -3,15 +3,15 @@ from collections.abc import Callable
 from functools import cache
 from typing import Any, Final, Iterator, TypeAlias, overload
 
-from app.constants import RealTeamMemberPositions, RealTeamTypes
+from app.constants import DraftPositionConstants
 from app.actions.leagues import LeaguesBuildAction
 
 # Position constants
-GOALKEEPER = RealTeamMemberPositions.GOALKEEPER
-DEFENDER = RealTeamMemberPositions.DEFENDER
-MIDFIELDER = RealTeamMemberPositions.MIDFIELDER
-STRIKER = RealTeamMemberPositions.STRIKER
-EPL_TEAM = RealTeamTypes.EPL_TEAM
+GOALKEEPER = DraftPositionConstants.GOALKEEPER
+DEFENDER = DraftPositionConstants.DEFENDER
+MIDFIELDER = DraftPositionConstants.MIDFIELDER
+STRIKER = DraftPositionConstants.STRIKER
+EPL_TEAM = DraftPositionConstants.EPL_TEAM
 
 # Min/Max constraints
 MIN_GOALKEEPER = LeaguesBuildAction.MIN_GOALKEEPER
