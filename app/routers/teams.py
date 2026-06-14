@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.actions.teams import TeamsReadListAction, TeamsGetRealMembersRankingAction, TeamsWaiverMembersDetailAction
 from app.context import RequestContext
+from app.utils import JsonApiSerializer
 
 
 class TeamsRequest(BaseModel):
@@ -70,11 +71,16 @@ def rest_teams(
     payload: TeamsRequest,
     db: Session = Depends(get_db)
 ):
-    """REST endpoint: Get teams for league or division."""
+    """REST endpoint: Get teams for league or division (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         items = TeamsReadListAction.execute(db, league_id=payload.leagueID, division_id=payload.divisionID)
-        return items
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='teams',
+            resource_id_key='teamID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()
 
@@ -84,13 +90,18 @@ def rest_teams_real_members_ranking(
     payload: TeamsRequest,
     db: Session = Depends(get_db)
 ):
-    """REST endpoint: Get real members ranking for team."""
+    """REST endpoint: Get real members ranking for team (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         if payload.teamID is None:
-            return {"error": "teamID is required"}, 400
+            return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
         items = TeamsGetRealMembersRankingAction.execute(db, payload.teamID)
-        return items
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='team-members',
+            resource_id_key='realTeamMemberID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()
 
@@ -100,12 +111,17 @@ def rest_teams_waiver_members_detail(
     payload: TeamsRequest,
     db: Session = Depends(get_db)
 ):
-    """REST endpoint: Get waiver members detail for team."""
+    """REST endpoint: Get waiver members detail for team (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         if payload.teamID is None:
-            return {"error": "teamID is required"}, 400
+            return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
         items = TeamsWaiverMembersDetailAction.execute(db, payload.teamID)
-        return items
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='waiver-members',
+            resource_id_key='teamMemberID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()

@@ -1,3 +1,4 @@
+from app.utils import JsonApiSerializer
 from fastapi import APIRouter, Query, Form, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db

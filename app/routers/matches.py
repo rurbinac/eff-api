@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.context import RequestContext
 from app.actions.matches import MatchesReadListAction
+from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["matches"])
 
@@ -45,7 +46,7 @@ async def rest_matches(
     teamID: int | None = None,
     db: Session = Depends(get_db),
 ):
-    """REST endpoint for Matches ReadList."""
+    """REST endpoint for Matches ReadList (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         items = MatchesReadListAction.execute(
@@ -54,6 +55,11 @@ async def rest_matches(
             division_id=divisionID,
             team_id=teamID
         )
-        return items
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='matches',
+            resource_id_key='matchID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()
