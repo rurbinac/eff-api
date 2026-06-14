@@ -6,15 +6,11 @@ across competitions and seasons.
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.constants import DraftPositionConstants
+from app.constants import DraftPositionConstants, RealCompetitionConstants
 
 
 class SyncRealService:
     """Synchronize Real* table data."""
-
-    # Competition SYMIDs
-    BASE_SYMID = 'EN_PR'
-    EXTRA_SYMID = 'EN_FA'
 
     @staticmethod
     def sync_real(db: Session, real_competition_id: int = None) -> dict:
@@ -105,10 +101,10 @@ class SyncRealService:
         for row in rows:
             row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
             symid = row_dict.get('realCompetitionSYMID')
-            if symid == SyncRealService.BASE_SYMID:
-                real_comp[SyncRealService.BASE_SYMID] = row_dict
-            elif symid == SyncRealService.EXTRA_SYMID:
-                real_comp[SyncRealService.EXTRA_SYMID] = row_dict
+            if symid == RealCompetitionConstants.BASE_SYMID:
+                real_comp[RealCompetitionConstants.BASE_SYMID] = row_dict
+            elif symid == RealCompetitionConstants.EXTRA_SYMID:
+                real_comp[RealCompetitionConstants.EXTRA_SYMID] = row_dict
 
         return real_comp
 
@@ -135,8 +131,8 @@ class SyncRealService:
                        `rc`.`extraRealCompetitionID` = `rc_e`.`realCompetitionID`
             """)
             result = db.execute(q1, {
-                'baseRealCompetitionSYMID': SyncRealService.BASE_SYMID,
-                'extraRealCompetitionSYMID': SyncRealService.EXTRA_SYMID,
+                'baseRealCompetitionSYMID': RealCompetitionConstants.BASE_SYMID,
+                'extraRealCompetitionSYMID': RealCompetitionConstants.EXTRA_SYMID,
             })
             results['queries_executed'] += 1
             results['rows_affected'] += result.rowcount
