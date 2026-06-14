@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.context import RequestContext
 from app.actions.lookups import LookupsReadListAction
+from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["lookups"])
 
@@ -36,10 +37,15 @@ async def rest_lookups(
     lookupType: int,
     db: Session = Depends(get_db),
 ):
-    """REST endpoint for Lookups ReadList."""
+    """REST endpoint for Lookups ReadList (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         items = LookupsReadListAction.execute(db, lookup_num=lookupType)
-        return items
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='lookups',
+            resource_id_key='lookupID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()

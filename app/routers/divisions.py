@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.actions.divisions import DivisionsReadListAction, DivisionsTransactionsDetailAction
 from app.context import RequestContext
+from app.utils import JsonApiSerializer
 
 
 class DivisionsRequest(BaseModel):
@@ -55,25 +56,35 @@ async def legacy_divisions(
 
 @router.post("/api/divisions/readlist")
 def rest_divisions(payload: DivisionsRequest, db: Session = Depends(get_db)):
-    """REST endpoint: Get divisions for league."""
+    """REST endpoint: Get divisions for league (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         if payload.leagueID is None:
-            return {"error": "leagueID is required"}, 400
+            return JsonApiSerializer.serialize_error(400, "Bad Request", "leagueID is required")
         items = DivisionsReadListAction.execute(db, payload.leagueID)
-        return items
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='divisions',
+            resource_id_key='divisionID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()
 
 
 @router.post("/api/divisions/transactions-detail")
 def rest_divisions_transactions_detail(payload: DivisionsRequest, db: Session = Depends(get_db)):
-    """REST endpoint: Get transaction details for division."""
+    """REST endpoint: Get transaction details for division (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         if payload.divisionID is None:
-            return {"error": "divisionID is required"}, 400
+            return JsonApiSerializer.serialize_error(400, "Bad Request", "divisionID is required")
         items = DivisionsTransactionsDetailAction.execute(db, payload.divisionID)
-        return items
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='divisions',
+            resource_id_key='divisionID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.actions.division_notes import DivisionNotesReadListAction
 from app.context import RequestContext
+from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["division-notes"])
 
@@ -36,10 +37,15 @@ async def legacy_division_notes(
 
 @router.post("/api/divisionnotes/readlist")
 def rest_division_notes(divisionID: int, db: Session = Depends(get_db)):
-    """REST endpoint: Get notes for division."""
+    """REST endpoint: Get notes for division (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        result = DivisionNotesReadListAction.execute(db, division_id=divisionID)
-        return result
+        items = DivisionNotesReadListAction.execute(db, division_id=divisionID)
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='division-notes',
+            resource_id_key='divisionNoteID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()
