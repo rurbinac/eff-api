@@ -59,7 +59,6 @@ class LeaguesBuildAction:
 
     # Constants for league creation (league-specific)
     MAX_DIVISIONS = 6
-    MAX_WAIVERS = 3
     TOT_PROMOTED = 2
     MAX_FRANCHISE_MEMBERS = 2
 
@@ -182,7 +181,7 @@ class LeaguesBuildAction:
             availableTeams=available_teams,
             totPromoted=LeaguesBuildAction.TOT_PROMOTED,
             maxFranchiseMembers=LeaguesBuildAction.MAX_FRANCHISE_MEMBERS,
-            maxWaiver=LeaguesBuildAction.MAX_WAIVERS,
+            maxWaiver=WaiversConstants.MAX_WAIVERS,
             minEPLTeam=DraftPositionConstants.MIN_EPL_TEAMS,
             minPlayer=DraftPositionConstants.MIN_PLAYERS,
             minGoalkeeper=DraftPositionConstants.MIN_GOALKEEPER,

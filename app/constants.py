@@ -41,13 +41,17 @@ class DraftConstants:
 
 
 class WaiversConstants:
-    """Waiver status constants."""
+    """Waiver status and configuration constants."""
 
+    # Waiver status constants
     WAIVER_STATUS_HOLD = 0
     WAIVER_STATUS_NO_WAIVER = 1
     WAIVER_STATUS_FIRST = 2
     WAIVER_STATUS_SECOND = 3
     WAIVER_STATUS_OPEN = 4
+
+    # Waiver configuration
+    MAX_WAIVERS = 3
 
 
 class DraftPositionConstants:
