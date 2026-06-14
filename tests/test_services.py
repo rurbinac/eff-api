@@ -2,6 +2,7 @@ import pytest
 from datetime import datetime
 from app.services import QueryService
 from app.context import RequestContext
+from app.constants import RealCompetitionConstants
 
 
 class TestQueryService:
@@ -43,12 +44,12 @@ class TestQueryService:
 
     def test_season_start_month_constant(self):
         """Test that SEASON_START_MONTH is set correctly."""
-        assert QueryService.SEASON_START_MONTH == 8
+        assert RealCompetitionConstants.SEASON_START_MONTH == 8
 
     def test_base_and_extra_symid_constants(self):
         """Test that competition symbols are set correctly."""
-        assert QueryService.BASE_SYMID == 'EN_PR'
-        assert QueryService.EXTRA_SYMID == 'EN_FA'
+        assert RealCompetitionConstants.BASE_SYMID == 'EN_PR'
+        assert RealCompetitionConstants.EXTRA_SYMID == 'EN_FA'
 
     def test_get_season_id_edge_cases(self):
         """Test edge cases for season ID."""
