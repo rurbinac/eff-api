@@ -60,6 +60,29 @@ class DraftPositionConstants:
     STRIKER = 'Striker'
     EPL_TEAM = 'EPLTeam'
 
+    # Min constraints
+    MIN_EPL_TEAMS = 2
+    MIN_PLAYERS = 14
+    MIN_GOALKEEPER = 2
+    MIN_DEFENDER = 5
+    MIN_MIDFIELDER = 5
+    MIN_STRIKER = 2
+
+    # Max constraints
+    MAX_EPL_TEAMS = 2
+    MAX_PLAYERS = 17
+    MAX_GOALKEEPER = 2
+    MAX_DEFENDER = 7
+    MAX_MIDFIELDER = 7
+    MAX_STRIKER = 3
+
+    # Auto draft constraints
+    AUTO_EPL_TEAMS = 1
+    AUTO_GOALKEEPER = 1
+    AUTO_DEFENDER = 4
+    AUTO_MIDFIELDER = 4
+    AUTO_STRIKER = 2
+
     @staticmethod
     def get_order(position: int | str, real_position: str | None = None) -> int:
         """Calculate draft position order from position data.

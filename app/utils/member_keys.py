@@ -4,7 +4,6 @@ from functools import cache
 from typing import Any, Final, Iterator, TypeAlias, overload
 
 from app.constants import DraftPositionConstants
-from app.actions.leagues import LeaguesBuildAction
 
 # Position constants
 GOALKEEPER = DraftPositionConstants.GOALKEEPER
@@ -14,29 +13,29 @@ STRIKER = DraftPositionConstants.STRIKER
 EPL_TEAM = DraftPositionConstants.EPL_TEAM
 
 # Min/Max constraints
-MIN_GOALKEEPER = LeaguesBuildAction.MIN_GOALKEEPER
-MAX_GOALKEEPER = LeaguesBuildAction.MAX_GOALKEEPER
-MIN_DEFENDER = LeaguesBuildAction.MIN_DEFENDER
-MAX_DEFENDER = LeaguesBuildAction.MAX_DEFENDER
-MIN_MIDFIELDER = LeaguesBuildAction.MIN_MIDFIELDER
-MAX_MIDFIELDER = LeaguesBuildAction.MAX_MIDFIELDER
-MIN_STRIKER = LeaguesBuildAction.MIN_STRIKER
-MAX_STRIKER = LeaguesBuildAction.MAX_STRIKER
-MIN_EPL_TEAM = LeaguesBuildAction.MIN_EPL_TEAMS
-MAX_EPL_TEAM = LeaguesBuildAction.MAX_EPL_TEAMS
+MIN_GOALKEEPER = DraftPositionConstants.MIN_GOALKEEPER
+MAX_GOALKEEPER = DraftPositionConstants.MAX_GOALKEEPER
+MIN_DEFENDER = DraftPositionConstants.MIN_DEFENDER
+MAX_DEFENDER = DraftPositionConstants.MAX_DEFENDER
+MIN_MIDFIELDER = DraftPositionConstants.MIN_MIDFIELDER
+MAX_MIDFIELDER = DraftPositionConstants.MAX_MIDFIELDER
+MIN_STRIKER = DraftPositionConstants.MIN_STRIKER
+MAX_STRIKER = DraftPositionConstants.MAX_STRIKER
+MIN_EPL_TEAM = DraftPositionConstants.MIN_EPL_TEAMS
+MAX_EPL_TEAM = DraftPositionConstants.MAX_EPL_TEAMS
 
 # Player and Member totals
-MIN_PLAYERS = LeaguesBuildAction.MIN_PLAYERS
-MAX_PLAYERS = LeaguesBuildAction.MAX_PLAYERS
+MIN_PLAYERS = DraftPositionConstants.MIN_PLAYERS
+MAX_PLAYERS = DraftPositionConstants.MAX_PLAYERS
 MIN_MEMBERS = MIN_PLAYERS + MIN_EPL_TEAM
 MAX_MEMBERS = MAX_PLAYERS + MAX_EPL_TEAM
 
 # Automatic draft selections
-AUTO_GOALKEEPER = LeaguesBuildAction.AUTO_GOALKEEPER
-AUTO_DEFENDER = LeaguesBuildAction.AUTO_DEFENDER
-AUTO_MIDFIELDER = LeaguesBuildAction.AUTO_MIDFIELDER
-AUTO_STRIKER = LeaguesBuildAction.AUTO_STRIKER
-AUTO_EPL_TEAM = LeaguesBuildAction.AUTO_EPL_TEAMS
+AUTO_GOALKEEPER = DraftPositionConstants.AUTO_GOALKEEPER
+AUTO_DEFENDER = DraftPositionConstants.AUTO_DEFENDER
+AUTO_MIDFIELDER = DraftPositionConstants.AUTO_MIDFIELDER
+AUTO_STRIKER = DraftPositionConstants.AUTO_STRIKER
+AUTO_EPL_TEAM = DraftPositionConstants.AUTO_EPL_TEAMS
 
 # Aggregate position labels
 PLAYER = "Player"

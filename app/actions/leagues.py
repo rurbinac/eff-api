@@ -6,7 +6,7 @@ from sqlalchemy import text
 from app.models import League, Division, Team
 from app.services import QueryService
 from app.context import RequestContext, extract_match_day_status
-from app.constants import LookupConstants, DraftConstants, WaiversConstants
+from app.constants import LookupConstants, DraftConstants, WaiversConstants, DraftPositionConstants
 from app.security import verify_password
 from fastapi import HTTPException, status
 
@@ -57,29 +57,8 @@ class LeaguesReadListAction:
 class LeaguesBuildAction:
     """Create a new league with divisions and teams."""
 
-    # Constants for league creation
+    # Constants for league creation (league-specific)
     MAX_DIVISIONS = 6
-
-    MIN_EPL_TEAMS = 2
-    MIN_PLAYERS = 14
-    MIN_GOALKEEPER = 2
-    MIN_DEFENDER = 5
-    MIN_MIDFIELDER = 5
-    MIN_STRIKER = 2
-
-    MAX_EPL_TEAMS = 2
-    MAX_PLAYERS = 17
-    MAX_GOALKEEPER = 2
-    MAX_DEFENDER = 7
-    MAX_MIDFIELDER = 7
-    MAX_STRIKER = 3
-
-    AUTO_EPL_TEAMS = 1
-    AUTO_GOALKEEPER = 1
-    AUTO_DEFENDER = 4
-    AUTO_MIDFIELDER = 4
-    AUTO_STRIKER = 2
-
     MAX_WAIVERS = 3
     TOT_PROMOTED = 2
     MAX_FRANCHISE_MEMBERS = 2
@@ -204,23 +183,23 @@ class LeaguesBuildAction:
             totPromoted=LeaguesBuildAction.TOT_PROMOTED,
             maxFranchiseMembers=LeaguesBuildAction.MAX_FRANCHISE_MEMBERS,
             maxWaiver=LeaguesBuildAction.MAX_WAIVERS,
-            minEPLTeam=LeaguesBuildAction.MIN_EPL_TEAMS,
-            minPlayer=LeaguesBuildAction.MIN_PLAYERS,
-            minGoalkeeper=LeaguesBuildAction.MIN_GOALKEEPER,
-            minDefender=LeaguesBuildAction.MIN_DEFENDER,
-            minMidfielder=LeaguesBuildAction.MIN_MIDFIELDER,
-            minStriker=LeaguesBuildAction.MIN_STRIKER,
-            maxEPLTeam=LeaguesBuildAction.MAX_EPL_TEAMS,
-            maxPlayer=LeaguesBuildAction.MAX_PLAYERS,
-            maxGoalkeeper=LeaguesBuildAction.MAX_GOALKEEPER,
-            maxDefender=LeaguesBuildAction.MAX_DEFENDER,
-            maxMidfielder=LeaguesBuildAction.MAX_MIDFIELDER,
-            maxStriker=LeaguesBuildAction.MAX_STRIKER,
-            autoEPLTeam=LeaguesBuildAction.AUTO_EPL_TEAMS,
-            autoGoalkeeper=LeaguesBuildAction.AUTO_GOALKEEPER,
-            autoDefender=LeaguesBuildAction.AUTO_DEFENDER,
-            autoMidfielder=LeaguesBuildAction.AUTO_MIDFIELDER,
-            autoStriker=LeaguesBuildAction.AUTO_STRIKER,
+            minEPLTeam=DraftPositionConstants.MIN_EPL_TEAMS,
+            minPlayer=DraftPositionConstants.MIN_PLAYERS,
+            minGoalkeeper=DraftPositionConstants.MIN_GOALKEEPER,
+            minDefender=DraftPositionConstants.MIN_DEFENDER,
+            minMidfielder=DraftPositionConstants.MIN_MIDFIELDER,
+            minStriker=DraftPositionConstants.MIN_STRIKER,
+            maxEPLTeam=DraftPositionConstants.MAX_EPL_TEAMS,
+            maxPlayer=DraftPositionConstants.MAX_PLAYERS,
+            maxGoalkeeper=DraftPositionConstants.MAX_GOALKEEPER,
+            maxDefender=DraftPositionConstants.MAX_DEFENDER,
+            maxMidfielder=DraftPositionConstants.MAX_MIDFIELDER,
+            maxStriker=DraftPositionConstants.MAX_STRIKER,
+            autoEPLTeam=DraftPositionConstants.AUTO_EPL_TEAMS,
+            autoGoalkeeper=DraftPositionConstants.AUTO_GOALKEEPER,
+            autoDefender=DraftPositionConstants.AUTO_DEFENDER,
+            autoMidfielder=DraftPositionConstants.AUTO_MIDFIELDER,
+            autoStriker=DraftPositionConstants.AUTO_STRIKER,
             createdBy=user_id,
             createdIn=request_datetime,
         )
