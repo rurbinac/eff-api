@@ -1,4 +1,3 @@
-from app.utils import JsonApiSerializer
 from fastapi import APIRouter, Depends, Query, Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -6,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.actions.team_member_transfers import TeamMemberTransfersGetPendingByTeamIDAction
 from app.context import RequestContext
+from app.utils import JsonApiSerializer
 
 
 class TeamMemberTransfersRequest(BaseModel):
@@ -46,12 +46,17 @@ def rest_team_member_transfers_pending(
     payload: TeamMemberTransfersRequest,
     db: Session = Depends(get_db)
 ):
-    """REST endpoint: Get pending member transfers for team."""
+    """REST endpoint: Get pending member transfers for team (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         if payload.teamID is None:
-            return {"error": "teamID is required"}, 400
+            return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
         items = TeamMemberTransfersGetPendingByTeamIDAction.execute(db, payload.teamID)
-        return items
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='team-member-transfers',
+            resource_id_key='teamMemberTransferID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()

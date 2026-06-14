@@ -1,9 +1,9 @@
-from app.utils import JsonApiSerializer
 from fastapi import APIRouter, Query, Form, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.context import RequestContext
 from app.actions.team_standings import TeamStandingsReadListAction
+from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["team-standings"])
 
@@ -37,10 +37,15 @@ async def rest_team_standings(
     teamID: int,
     db: Session = Depends(get_db),
 ):
-    """REST endpoint for TeamStandings ReadList."""
+    """REST endpoint for TeamStandings ReadList (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         items = TeamStandingsReadListAction.execute(db, team_id=teamID)
-        return items
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='team-standings',
+            resource_id_key='teamStandingID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()
