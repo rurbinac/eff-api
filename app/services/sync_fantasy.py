@@ -6,6 +6,8 @@ Syncs application-level fantasy data across Leagues, Divisions, Teams, and Match
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from app.constants import RealCompetitionConstants
+
 
 class SyncFantasyService:
     """Synchronize application-level fantasy data."""
@@ -32,7 +34,7 @@ class SyncFantasyService:
         """)
         result = db.execute(q, {
             'season_id': current_season,
-            'symid': 'EN_PR',
+            'symid': RealCompetitionConstants.BASE_SYMID,
         }).first()
 
         return result[0] if result else None

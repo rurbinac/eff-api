@@ -7,13 +7,11 @@ calculating standings, places, and rankings.
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from app.constants import RealCompetitionConstants
+
 
 class SyncStandingsService:
     """Synchronize standings and calculate rankings."""
-
-    # Competition SYMIDs
-    BASE_SYMID = 'EN_PR'
-    EXTRA_SYMID = 'EN_FA'
 
     @staticmethod
     def sync_real_team_members(db: Session, real_competition_id: int) -> dict:
@@ -48,10 +46,10 @@ class SyncStandingsService:
             for row in comp_rows:
                 row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
                 symid = row_dict.get('realCompetitionSYMID')
-                if symid == SyncStandingsService.BASE_SYMID:
-                    real_comp[SyncStandingsService.BASE_SYMID] = row_dict
-                elif symid == SyncStandingsService.EXTRA_SYMID:
-                    real_comp[SyncStandingsService.EXTRA_SYMID] = row_dict
+                if symid == RealCompetitionConstants.BASE_SYMID:
+                    real_comp[RealCompetitionConstants.BASE_SYMID] = row_dict
+                elif symid == RealCompetitionConstants.EXTRA_SYMID:
+                    real_comp[RealCompetitionConstants.EXTRA_SYMID] = row_dict
 
             if not real_comp:
                 results['status'] = 'error'
@@ -59,8 +57,8 @@ class SyncStandingsService:
                 return results
 
             # Step 2: Load RealTeamMembers and separate into teams/players
-            base_comp_id = real_comp.get(SyncStandingsService.BASE_SYMID, {}).get('realCompetitionID')
-            extra_comp_id = real_comp.get(SyncStandingsService.EXTRA_SYMID, {}).get('realCompetitionID')
+            base_comp_id = real_comp.get(RealCompetitionConstants.BASE_SYMID, {}).get('realCompetitionID')
+            extra_comp_id = real_comp.get(RealCompetitionConstants.EXTRA_SYMID, {}).get('realCompetitionID')
 
             q_members = text("""
                 SELECT *
@@ -84,8 +82,8 @@ class SyncStandingsService:
                         'realTeamMemberID': row_dict.get('realTeamMemberID'),
                         'prevRealTeamMemberKey': row_dict.get('prevRealTeamMemberKey'),
                         'nextRealTeamMemberKey': row_dict.get('nextRealTeamMemberKey'),
-                        'baseRealCompetitionID': real_comp[SyncStandingsService.BASE_SYMID]['realCompetitionID'],
-                        'extraRealCompetitionID': real_comp[SyncStandingsService.EXTRA_SYMID]['realCompetitionID'],
+                        'baseRealCompetitionID': real_comp[RealCompetitionConstants.BASE_SYMID]['realCompetitionID'],
+                        'extraRealCompetitionID': real_comp[RealCompetitionConstants.EXTRA_SYMID]['realCompetitionID'],
                         'isTeam': 1,
                         'isPlayer': 0,
                         'realTeamID': row_dict.get('realTeamID'),
@@ -867,14 +865,14 @@ class SyncStandingsService:
             # Load RealCompetitions organized by SYMID
             real_comp = SyncStandingsService._load_real_competitions(db, real_competition_id)
 
-            if not real_comp or SyncStandingsService.BASE_SYMID not in real_comp:
+            if not real_comp or RealCompetitionConstants.BASE_SYMID not in real_comp:
                 return {
                     'status': 'error',
                     'error': 'Could not load RealCompetitions',
                     'rows_affected': 0,
                 }
 
-            base_comp_id = real_comp[SyncStandingsService.BASE_SYMID]['realCompetitionID']
+            base_comp_id = real_comp[RealCompetitionConstants.BASE_SYMID]['realCompetitionID']
 
             # Query #1: Update last_* fields from previous season
             q1 = text("""
@@ -966,9 +964,9 @@ class SyncStandingsService:
         for row in rows:
             row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
             symid = row_dict.get('realCompetitionSYMID')
-            if symid == SyncStandingsService.BASE_SYMID:
-                real_comp[SyncStandingsService.BASE_SYMID] = row_dict
-            elif symid == SyncStandingsService.EXTRA_SYMID:
-                real_comp[SyncStandingsService.EXTRA_SYMID] = row_dict
+            if symid == RealCompetitionConstants.BASE_SYMID:
+                real_comp[RealCompetitionConstants.BASE_SYMID] = row_dict
+            elif symid == RealCompetitionConstants.EXTRA_SYMID:
+                real_comp[RealCompetitionConstants.EXTRA_SYMID] = row_dict
 
         return real_comp
