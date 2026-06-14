@@ -555,7 +555,7 @@ class BaseMembers:
 
     @property
     def dp_cnt(self) -> dict[str, int]:
-        by_dp = self.collect_by_dp(list(self._mkeys.keys(0)))
+        by_dp = self.collect_by_dp(list(self._mkeys.keys()))
         if by_dp is None:
             by_dp = {}
         gk = len(by_dp.get(GOALKEEPER, []))
@@ -722,17 +722,16 @@ class TeamMembers(BaseMembers):
         self, add: bool, keys: str | list[str] | None = None
     ) -> dict[str, list[str]] | None:
         by_dp = self.collect_by_dp(keys)
-        if isinstance(by_dp, dict):
-            if add:
-                if any(self._mkeys.has_key(k, 0) for dp in by_dp for k in by_dp[dp]):
-                    return None
-            else:
-                if any(
-                    not self._mkeys.has_key(k, 0) for dp in by_dp for k in by_dp[dp]
-                ):
-                    return None
-            return by_dp
-        return None
+        if not isinstance(by_dp, dict):
+            return None
+        if add:
+            if any(self._mkeys.has_key(k) for dp in by_dp for k in by_dp[dp]):
+                # key(s) to add already 
+                return None
+        else:
+            if any(not self._mkeys.has_key(k) for dp in by_dp for k in by_dp[dp]):
+                return None
+        return by_dp
 
 
 class DraftTeamMembers(BaseMembers):
@@ -760,8 +759,8 @@ class DraftTeamMembers(BaseMembers):
                     elif dp_stats[dp]["can_add"] > 0:
                         # The dp can add, lets save it
                         can_add_dp.add(dp)
-            if dp_stats[MEMBER]["cnt"] + cnt_must < dp_stats[MEMBER]["cnt"]:
-                # Still some spots that don't must_add
+            if dp_stats[MEMBER]["cnt"] + cnt_must < dp_stats[MEMBER]["max"]:
+                # Still some spots available after must_add allocations
                 for dp in can_add_dp:
                     free_dp.add(dp)
         return free_dp
