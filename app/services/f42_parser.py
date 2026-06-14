@@ -3,6 +3,8 @@
 import xml.etree.ElementTree as ET
 from typing import Optional
 
+from app.constants import RealCompetitionConstants
+
 
 class F42Parser:
     """Parse F42 OPTA XML feeds using two-pass streaming approach.
@@ -64,7 +66,7 @@ class F42Parser:
                     'timestamp': elem.get('timestamp'),
                 }
                 # Derive country
-                comp_code = competition.get('competition_code', 'EN_PR')
+                comp_code = competition.get('competition_code', RealCompetitionConstants.BASE_SYMID)
                 competition['country'] = 'England' if comp_code.startswith('EN_') else 'England'
 
             # Track when we enter/exit Squads section
