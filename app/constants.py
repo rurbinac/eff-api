@@ -29,7 +29,7 @@ class LookupConstants:
 
 
 class DraftConstants:
-    """Draft status and constraints constants."""
+    """Draft status constants."""
 
     DRAFT_TIME = 120
 
@@ -38,9 +38,6 @@ class DraftConstants:
     DRAFT_STATUS_DRAFTING = 2
     DRAFT_STATUS_PAUSED = 3
     DRAFT_STATUS_DRAFTED = 4
-
-    # Position constraint limits (will be set after DraftPositionConstants is defined)
-    LIMITS: dict | None = None
 
 
 class WaiversConstants:
@@ -97,6 +94,9 @@ class DraftPositionConstants:
     AUTO_DEFENDER = 4
     AUTO_MIDFIELDER = 4
     AUTO_STRIKER = 2
+
+    # Position constraint limits (will be set after class definition)
+    LIMITS: dict | None = None
 
     @staticmethod
     def get_order(position: int | str, real_position: str | None = None) -> int:
@@ -272,9 +272,9 @@ class MatchConstants:
     MATCHES_LEA_SD = 4
 
 
-# Initialize DraftConstants.LIMITS after DraftPositionConstants is defined
+# Initialize DraftPositionConstants.LIMITS after class definition
 # This maps position names to their constraint limits (min, max, auto)
-DraftConstants.LIMITS = {
+DraftPositionConstants.LIMITS = {
     DraftPositionConstants.GOALKEEPER: {
         "min": DraftPositionConstants.MIN_GOALKEEPER,
         "max": DraftPositionConstants.MAX_GOALKEEPER,

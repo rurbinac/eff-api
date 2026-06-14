@@ -3,7 +3,7 @@ from collections.abc import Callable
 from functools import cache
 from typing import Any, Final, Iterator, TypeAlias, overload
 
-from app.constants import DraftPositionConstants, DraftConstants
+from app.constants import DraftPositionConstants
 
 # Position constants
 GOALKEEPER = DraftPositionConstants.GOALKEEPER
@@ -579,8 +579,8 @@ class BaseMembers:
         for dp in self.dp_cnt:
             # Get the values to use
             cnt_dp = self.dp_cnt[dp]
-            min_dp = DraftConstants.LIMITS[dp]["min"]
-            max_dp = DraftConstants.LIMITS[dp]["max"]
+            min_dp = DraftPositionConstants.LIMITS[dp]["min"]
+            max_dp = DraftPositionConstants.LIMITS[dp]["max"]
             # Create the record for dp
             dp_stats[dp] = {"cnt": cnt_dp, "min": min_dp, "max": max_dp}
             if dp not in {PLAYER, MEMBER}:
@@ -724,8 +724,8 @@ class DraftTeamMembers(BaseMembers):
         free_dp = set()
         if auto_draft:
             # For auto draft try to fill the "auto", first
-            for dp in DraftConstants.LIMITS:
-                if dp_cnt[dp] < DraftConstants.LIMITS[dp]["auto"]:
+            for dp in DraftPositionConstants.LIMITS:
+                if dp_cnt[dp] < DraftPositionConstants.LIMITS[dp]["auto"]:
                     free_dp.add(dp)
         if len(free_dp) <= 0:
             dp_stats = self.dp_stats
