@@ -16,6 +16,7 @@ class TestDivisionNotesEndpoints:
             league = LeaguesBuildAction.execute(
                 test_db,
                 user_id=test_user.userID,
+                user_name=test_user.userName,
                 league_name="Test League",
                 league_password="password",
                 league_type=1,
@@ -24,7 +25,7 @@ class TestDivisionNotesEndpoints:
                 trade_deadline="2026-06-15 14:00:00",
                 publish_league=1,
                 season_status=1,
-                teams_per_division=[8]
+                teams_per_division="8"
             )
 
             # Get first division
@@ -59,6 +60,7 @@ class TestDivisionNotesEndpoints:
             league = LeaguesBuildAction.execute(
                 test_db,
                 user_id=test_user.userID,
+                user_name=test_user.userName,
                 league_name="Test League",
                 league_password="password",
                 league_type=1,
@@ -67,7 +69,7 @@ class TestDivisionNotesEndpoints:
                 trade_deadline="2026-06-15 14:00:00",
                 publish_league=1,
                 season_status=1,
-                teams_per_division=[8]
+                teams_per_division="8"
             )
 
             # Get first division
@@ -97,6 +99,7 @@ class TestDivisionNotesEndpoints:
             league = LeaguesBuildAction.execute(
                 test_db,
                 user_id=test_user.userID,
+                user_name=test_user.userName,
                 league_name="Empty Notes League",
                 league_password="password",
                 league_type=1,
@@ -105,7 +108,7 @@ class TestDivisionNotesEndpoints:
                 trade_deadline="2026-06-15 14:00:00",
                 publish_league=1,
                 season_status=1,
-                teams_per_division=[8]
+                teams_per_division="8"
             )
 
             division = test_db.scalar(select(Division).filter(Division.leagueID == league["leagueID"]).limit(1))

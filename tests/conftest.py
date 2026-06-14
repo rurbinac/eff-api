@@ -83,6 +83,22 @@ def test_lookups(test_db):
     test_db.add(Lookup(lookupNum=LookupNum.STATE_CODE, position=2, lookupKey="NY", lookupCode="NY", lookupText="New York"))
     test_db.add(Lookup(lookupNum=LookupNum.STATE_CODE, position=3, lookupKey="TX", lookupCode="TX", lookupText="Texas"))
 
+    # Add league types
+    test_db.add(Lookup(lookupNum=LookupNum.LEAGUE_TYPE, position=1, lookupKey="1", lookupCode="LEAGUE", lookupText="League"))
+    test_db.add(Lookup(lookupNum=LookupNum.LEAGUE_TYPE, position=2, lookupKey="2", lookupCode="TOURNAMENT", lookupText="Tournament"))
+
+    # Add game types
+    test_db.add(Lookup(lookupNum=LookupNum.GAME_TYPE, position=1, lookupKey="1", lookupCode="PPR", lookupText="Points Per Reception"))
+    test_db.add(Lookup(lookupNum=LookupNum.GAME_TYPE, position=2, lookupKey="2", lookupCode="HALF_PPR", lookupText="Half Points Per Reception"))
+
+    # Add league scoring systems
+    test_db.add(Lookup(lookupNum=LookupNum.LEAGUE_SCORING_SYSTEM, position=1, lookupKey="1", lookupCode="STANDARD", lookupText="Standard"))
+    test_db.add(Lookup(lookupNum=LookupNum.LEAGUE_SCORING_SYSTEM, position=2, lookupKey="2", lookupCode="CUSTOM", lookupText="Custom"))
+
+    # Add season status
+    test_db.add(Lookup(lookupNum=LookupNum.SEASON_STATUS, position=1, lookupKey="1", lookupCode="PRESEASON", lookupText="Preseason"))
+    test_db.add(Lookup(lookupNum=LookupNum.SEASON_STATUS, position=2, lookupKey="2", lookupCode="REGULAR", lookupText="Regular Season"))
+
     test_db.commit()
 
 

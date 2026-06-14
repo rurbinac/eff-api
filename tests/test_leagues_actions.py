@@ -31,6 +31,7 @@ class TestLeaguesBuildAction:
             result = LeaguesBuildAction.execute(
                 test_db,
                 user_id=test_user.userID,
+                user_name=test_user.userName,
                 league_name="Test League",
                 league_password="password123",
                 league_type=1,
@@ -39,7 +40,7 @@ class TestLeaguesBuildAction:
                 trade_deadline="2026-06-15 14:00:00",
                 publish_league=1,
                 season_status=1,
-                teams_per_division=[8, 10]
+                teams_per_division="8,10"
             )
 
             assert isinstance(result, dict)
@@ -57,6 +58,7 @@ class TestLeaguesBuildAction:
             result = LeaguesBuildAction.execute(
                 test_db,
                 user_id=test_user.userID,
+                user_name=test_user.userName,
                 league_name="Single Div League",
                 league_password="password123",
                 league_type=1,
@@ -65,7 +67,7 @@ class TestLeaguesBuildAction:
                 trade_deadline="2026-06-15 14:00:00",
                 publish_league=1,
                 season_status=1,
-                teams_per_division=[10]
+                teams_per_division="10"
             )
 
             assert isinstance(result, dict)
@@ -86,6 +88,7 @@ class TestLeaguesJoinAction:
             league_result = LeaguesBuildAction.execute(
                 test_db,
                 user_id=test_user.userID,
+                user_name=test_user.userName,
                 league_name="Join Test League",
                 league_password="joinpass",
                 league_type=1,
@@ -94,7 +97,7 @@ class TestLeaguesJoinAction:
                 trade_deadline="2026-06-15 14:00:00",
                 publish_league=1,
                 season_status=1,
-                teams_per_division=[8, 10]
+                teams_per_division="8,10"
             )
             league_id = league_result["leagueID"]
 
