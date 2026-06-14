@@ -6,7 +6,7 @@ from sqlalchemy import text
 from app.models import League, Division, Team
 from app.services import QueryService
 from app.context import RequestContext, extract_match_day_status
-from app.constants import LookupConstants, DraftConstants
+from app.constants import LookupConstants, DraftConstants, WaiversConstants
 from app.security import verify_password
 from fastapi import HTTPException, status
 
@@ -287,7 +287,7 @@ class LeaguesBuildAction:
                 numTeams=num_teams,
                 availableTeams=available_teams,
                 divisionType=division_type,
-                waiverStatus=DraftConstants.WAIVER_STATUS_NO_WAIVER,
+                waiverStatus=WaiversConstants.WAIVER_STATUS_NO_WAIVER,
                 createdBy=new_league.commissionerID,
                 createdIn=request_datetime,
             )

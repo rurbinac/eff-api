@@ -29,7 +29,7 @@ class LookupConstants:
 
 
 class DraftConstants:
-    """Draft and waiver status constants."""
+    """Draft status constants."""
 
     DRAFT_TIME = 120
 
@@ -38,6 +38,10 @@ class DraftConstants:
     DRAFT_STATUS_DRAFTING = 2
     DRAFT_STATUS_PAUSED = 3
     DRAFT_STATUS_DRAFTED = 4
+
+
+class WaiversConstants:
+    """Waiver status constants."""
 
     WAIVER_STATUS_HOLD = 0
     WAIVER_STATUS_NO_WAIVER = 1
