@@ -2,8 +2,8 @@
 from datetime import datetime, timedelta
 
 
-class LookupNum:
-    """Lookup numbers for validation against Lookups table."""
+class LookupConstants:
+    """Lookup constants for validation against Lookups table."""
 
     COUNTRY_CODE = 1
     STATE_CODE = 2

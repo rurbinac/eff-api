@@ -12,7 +12,7 @@ from app.database import get_db
 from app.models import User, Lookup, RealCompetition
 from app.security import hash_password
 from app.context import RequestContext
-from app.constants import LookupNum
+from app.constants import LookupConstants
 
 
 # Use file-based SQLite database for tests (in-memory doesn't work with TestClient)
@@ -74,30 +74,30 @@ def test_db(test_engine):
 def test_lookups(test_db):
     """Create test lookup data."""
     # Add country codes
-    test_db.add(Lookup(lookupNum=LookupNum.COUNTRY_CODE, position=1, lookupKey="US", lookupCode="USA", lookupText="United States"))
-    test_db.add(Lookup(lookupNum=LookupNum.COUNTRY_CODE, position=2, lookupKey="GB", lookupCode="GBR", lookupText="United Kingdom"))
-    test_db.add(Lookup(lookupNum=LookupNum.COUNTRY_CODE, position=3, lookupKey="CA", lookupCode="CAN", lookupText="Canada"))
+    test_db.add(Lookup(lookupNum=LookupConstants.COUNTRY_CODE, position=1, lookupKey="US", lookupCode="USA", lookupText="United States"))
+    test_db.add(Lookup(lookupNum=LookupConstants.COUNTRY_CODE, position=2, lookupKey="GB", lookupCode="GBR", lookupText="United Kingdom"))
+    test_db.add(Lookup(lookupNum=LookupConstants.COUNTRY_CODE, position=3, lookupKey="CA", lookupCode="CAN", lookupText="Canada"))
 
     # Add state codes
-    test_db.add(Lookup(lookupNum=LookupNum.STATE_CODE, position=1, lookupKey="CA", lookupCode="CA", lookupText="California"))
-    test_db.add(Lookup(lookupNum=LookupNum.STATE_CODE, position=2, lookupKey="NY", lookupCode="NY", lookupText="New York"))
-    test_db.add(Lookup(lookupNum=LookupNum.STATE_CODE, position=3, lookupKey="TX", lookupCode="TX", lookupText="Texas"))
+    test_db.add(Lookup(lookupNum=LookupConstants.STATE_CODE, position=1, lookupKey="CA", lookupCode="CA", lookupText="California"))
+    test_db.add(Lookup(lookupNum=LookupConstants.STATE_CODE, position=2, lookupKey="NY", lookupCode="NY", lookupText="New York"))
+    test_db.add(Lookup(lookupNum=LookupConstants.STATE_CODE, position=3, lookupKey="TX", lookupCode="TX", lookupText="Texas"))
 
     # Add league types
-    test_db.add(Lookup(lookupNum=LookupNum.LEAGUE_TYPE, position=1, lookupKey="1", lookupCode="LEAGUE", lookupText="League"))
-    test_db.add(Lookup(lookupNum=LookupNum.LEAGUE_TYPE, position=2, lookupKey="2", lookupCode="TOURNAMENT", lookupText="Tournament"))
+    test_db.add(Lookup(lookupNum=LookupConstants.LEAGUE_TYPE, position=1, lookupKey="1", lookupCode="LEAGUE", lookupText="League"))
+    test_db.add(Lookup(lookupNum=LookupConstants.LEAGUE_TYPE, position=2, lookupKey="2", lookupCode="TOURNAMENT", lookupText="Tournament"))
 
     # Add game types
-    test_db.add(Lookup(lookupNum=LookupNum.GAME_TYPE, position=1, lookupKey="1", lookupCode="PPR", lookupText="Points Per Reception"))
-    test_db.add(Lookup(lookupNum=LookupNum.GAME_TYPE, position=2, lookupKey="2", lookupCode="HALF_PPR", lookupText="Half Points Per Reception"))
+    test_db.add(Lookup(lookupNum=LookupConstants.GAME_TYPE, position=1, lookupKey="1", lookupCode="PPR", lookupText="Points Per Reception"))
+    test_db.add(Lookup(lookupNum=LookupConstants.GAME_TYPE, position=2, lookupKey="2", lookupCode="HALF_PPR", lookupText="Half Points Per Reception"))
 
     # Add league scoring systems
-    test_db.add(Lookup(lookupNum=LookupNum.LEAGUE_SCORING_SYSTEM, position=1, lookupKey="1", lookupCode="STANDARD", lookupText="Standard"))
-    test_db.add(Lookup(lookupNum=LookupNum.LEAGUE_SCORING_SYSTEM, position=2, lookupKey="2", lookupCode="CUSTOM", lookupText="Custom"))
+    test_db.add(Lookup(lookupNum=LookupConstants.LEAGUE_SCORING_SYSTEM, position=1, lookupKey="1", lookupCode="STANDARD", lookupText="Standard"))
+    test_db.add(Lookup(lookupNum=LookupConstants.LEAGUE_SCORING_SYSTEM, position=2, lookupKey="2", lookupCode="CUSTOM", lookupText="Custom"))
 
     # Add season status
-    test_db.add(Lookup(lookupNum=LookupNum.SEASON_STATUS, position=1, lookupKey="1", lookupCode="PRESEASON", lookupText="Preseason"))
-    test_db.add(Lookup(lookupNum=LookupNum.SEASON_STATUS, position=2, lookupKey="2", lookupCode="REGULAR", lookupText="Regular Season"))
+    test_db.add(Lookup(lookupNum=LookupConstants.SEASON_STATUS, position=1, lookupKey="1", lookupCode="PRESEASON", lookupText="Preseason"))
+    test_db.add(Lookup(lookupNum=LookupConstants.SEASON_STATUS, position=2, lookupKey="2", lookupCode="REGULAR", lookupText="Regular Season"))
 
     test_db.commit()
 

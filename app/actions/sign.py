@@ -5,7 +5,7 @@ from app.models import User
 from app.security import verify_password, create_access_token, hash_password, decode_token
 from app.services import QueryService
 from app.context import RequestContext
-from app.constants import LookupNum
+from app.constants import LookupConstants
 from fastapi import HTTPException, status
 
 
@@ -185,14 +185,14 @@ class UpdateUserAction:
 
         # Validate country and state if provided
         if country is not None and country:
-            if not QueryService.validate_lookup(db, LookupNum.COUNTRY_CODE, country):
+            if not QueryService.validate_lookup(db, LookupConstants.COUNTRY_CODE, country):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid country: {country}"
                 )
 
         if state is not None and state:
-            if not QueryService.validate_lookup(db, LookupNum.STATE_CODE, state):
+            if not QueryService.validate_lookup(db, LookupConstants.STATE_CODE, state):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid state: {state}"
@@ -263,13 +263,13 @@ class SignUpAction:
             )
 
         # Validate country and state if provided
-        if country and not QueryService.validate_lookup(db, LookupNum.COUNTRY_CODE, country):
+        if country and not QueryService.validate_lookup(db, LookupConstants.COUNTRY_CODE, country):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid country: {country}"
             )
 
-        if state and not QueryService.validate_lookup(db, LookupNum.STATE_CODE, state):
+        if state and not QueryService.validate_lookup(db, LookupConstants.STATE_CODE, state):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid state: {state}"

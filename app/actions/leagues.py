@@ -6,7 +6,7 @@ from sqlalchemy import text
 from app.models import League, Division, Team
 from app.services import QueryService
 from app.context import RequestContext, extract_match_day_status
-from app.constants import LookupNum, DraftConstants
+from app.constants import LookupConstants, DraftConstants
 from app.security import verify_password
 from fastapi import HTTPException, status
 
@@ -131,25 +131,25 @@ class LeaguesBuildAction:
         request_datetime = RequestContext.get_datetime()
 
         # Validate lookup fields against Lookups table
-        if not QueryService.validate_lookup(db, LookupNum.LEAGUE_TYPE, league_type):
+        if not QueryService.validate_lookup(db, LookupConstants.LEAGUE_TYPE, league_type):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid leagueType: {league_type}"
             )
 
-        if not QueryService.validate_lookup(db, LookupNum.GAME_TYPE, game_type):
+        if not QueryService.validate_lookup(db, LookupConstants.GAME_TYPE, game_type):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid gameType: {game_type}"
             )
 
-        if not QueryService.validate_lookup(db, LookupNum.LEAGUE_SCORING_SYSTEM, scoring_system):
+        if not QueryService.validate_lookup(db, LookupConstants.LEAGUE_SCORING_SYSTEM, scoring_system):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid scoringSystem: {scoring_system}"
             )
 
-        if not QueryService.validate_lookup(db, LookupNum.SEASON_STATUS, season_status):
+        if not QueryService.validate_lookup(db, LookupConstants.SEASON_STATUS, season_status):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid seasonStatus: {season_status}"
@@ -230,8 +230,8 @@ class LeaguesBuildAction:
         db.refresh(new_league)
 
         # Fetch division type and draft type lookups
-        division_types = QueryService.get_lookups_by_num(db, LookupNum.DIVISION_TYPE)
-        draft_types = QueryService.get_lookups_by_num(db, LookupNum.DRAFT_TYPE)
+        division_types = QueryService.get_lookups_by_num(db, LookupConstants.DIVISION_TYPE)
+        draft_types = QueryService.get_lookups_by_num(db, LookupConstants.DRAFT_TYPE)
 
         if not division_types:
             raise HTTPException(
