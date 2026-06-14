@@ -3,7 +3,7 @@ from collections.abc import Callable
 from functools import cache
 from typing import Any, Final, Iterator, TypeAlias, overload
 
-from app.constants import DraftPositionConstants
+from app.constants import DraftPositionConstants, DraftConstants
 
 # Position constants
 GOALKEEPER = DraftPositionConstants.GOALKEEPER
@@ -498,24 +498,6 @@ class MKeys:
 
 
 class BaseMembers:
-    LIMITS: dict[str, dict[str, int]] = {
-        GOALKEEPER: {
-            "min": MIN_GOALKEEPER,
-            "max": MAX_GOALKEEPER,
-            "auto": AUTO_GOALKEEPER,
-        },
-        DEFENDER: {"min": MIN_DEFENDER, "max": MAX_DEFENDER, "auto": AUTO_DEFENDER},
-        MIDFIELDER: {
-            "min": MIN_MIDFIELDER,
-            "max": MAX_MIDFIELDER,
-            "auto": AUTO_MIDFIELDER,
-        },
-        STRIKER: {"min": MIN_STRIKER, "max": MAX_STRIKER, "auto": AUTO_STRIKER},
-        EPL_TEAM: {"min": MIN_EPL_TEAM, "max": MAX_EPL_TEAM, "auto": AUTO_EPL_TEAM},
-        PLAYER: {"min": MIN_PLAYERS, "max": MAX_PLAYERS, "auto": 0},
-        MEMBER: {"min": MIN_MEMBERS, "max": MAX_MEMBERS, "auto": 0},
-    }
-
     def __init__(
         self, get_dp: Callable[[str], str | None], ignore_dups: bool = True
     ) -> None:
@@ -597,8 +579,8 @@ class BaseMembers:
         for dp in self.dp_cnt:
             # Get the values to use
             cnt_dp = self.dp_cnt[dp]
-            min_dp = self.LIMITS[dp]["min"]
-            max_dp = self.LIMITS[dp]["max"]
+            min_dp = DraftConstants.LIMITS[dp]["min"]
+            max_dp = DraftConstants.LIMITS[dp]["max"]
             # Create the record for dp
             dp_stats[dp] = {"cnt": cnt_dp, "min": min_dp, "max": max_dp}
             if dp not in {PLAYER, MEMBER}:
@@ -742,8 +724,8 @@ class DraftTeamMembers(BaseMembers):
         free_dp = set()
         if auto_draft:
             # For auto draft try to fill the "auto", first
-            for dp in self.LIMITS:
-                if dp_cnt[dp] < self.LIMITS[dp]["auto"]:
+            for dp in DraftConstants.LIMITS:
+                if dp_cnt[dp] < DraftConstants.LIMITS[dp]["auto"]:
                     free_dp.add(dp)
         if len(free_dp) <= 0:
             dp_stats = self.dp_stats

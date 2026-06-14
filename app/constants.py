@@ -29,7 +29,7 @@ class LookupConstants:
 
 
 class DraftConstants:
-    """Draft status constants."""
+    """Draft status and constraints constants."""
 
     DRAFT_TIME = 120
 
@@ -38,6 +38,9 @@ class DraftConstants:
     DRAFT_STATUS_DRAFTING = 2
     DRAFT_STATUS_PAUSED = 3
     DRAFT_STATUS_DRAFTED = 4
+
+    # Position constraint limits (will be set after DraftPositionConstants is defined)
+    LIMITS: dict | None = None
 
 
 class WaiversConstants:
@@ -259,3 +262,44 @@ class MatchConstants:
     MATCHES_DIV_RR = 2
     MATCHES_DIV_SD = 3
     MATCHES_LEA_SD = 4
+
+
+# Initialize DraftConstants.LIMITS after DraftPositionConstants is defined
+# This maps position names to their constraint limits (min, max, auto)
+DraftConstants.LIMITS = {
+    DraftPositionConstants.GOALKEEPER: {
+        "min": DraftPositionConstants.MIN_GOALKEEPER,
+        "max": DraftPositionConstants.MAX_GOALKEEPER,
+        "auto": DraftPositionConstants.AUTO_GOALKEEPER,
+    },
+    DraftPositionConstants.DEFENDER: {
+        "min": DraftPositionConstants.MIN_DEFENDER,
+        "max": DraftPositionConstants.MAX_DEFENDER,
+        "auto": DraftPositionConstants.AUTO_DEFENDER,
+    },
+    DraftPositionConstants.MIDFIELDER: {
+        "min": DraftPositionConstants.MIN_MIDFIELDER,
+        "max": DraftPositionConstants.MAX_MIDFIELDER,
+        "auto": DraftPositionConstants.AUTO_MIDFIELDER,
+    },
+    DraftPositionConstants.STRIKER: {
+        "min": DraftPositionConstants.MIN_STRIKER,
+        "max": DraftPositionConstants.MAX_STRIKER,
+        "auto": DraftPositionConstants.AUTO_STRIKER,
+    },
+    DraftPositionConstants.EPL_TEAM: {
+        "min": DraftPositionConstants.MIN_EPL_TEAMS,
+        "max": DraftPositionConstants.MAX_EPL_TEAMS,
+        "auto": DraftPositionConstants.AUTO_EPL_TEAMS,
+    },
+    "Player": {
+        "min": DraftPositionConstants.MIN_PLAYERS,
+        "max": DraftPositionConstants.MAX_PLAYERS,
+        "auto": 0,
+    },
+    "Member": {
+        "min": DraftPositionConstants.MIN_PLAYERS + DraftPositionConstants.MIN_EPL_TEAMS,
+        "max": DraftPositionConstants.MAX_PLAYERS + DraftPositionConstants.MAX_EPL_TEAMS,
+        "auto": 0,
+    },
+}
