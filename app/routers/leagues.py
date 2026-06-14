@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.actions.leagues import LeaguesReadListAction
 from app.context import RequestContext
+from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["leagues"])
 
@@ -39,10 +40,16 @@ async def legacy_leagues(
 
 @router.post("/api/leagues/readlist")
 def rest_leagues(userID: int, season: int | None = None, db: Session = Depends(get_db)):
-    """REST endpoint: Get leagues for user."""
+    """REST endpoint: Get leagues for user (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        # Get data from action and return as REST array
-        return LeaguesReadListAction.execute(db, userID, season)
+        items = LeaguesReadListAction.execute(db, userID, season)
+        # Format as JSON:API response
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='leagues',
+            resource_id_key='leagueID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()
