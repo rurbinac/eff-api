@@ -4,14 +4,11 @@ from sqlalchemy import text
 
 from app.models import RealCompetition, MatchDaysStatus, League, Division, Team, User, DivisionNotes, Lookup
 from app.context import RequestContext
+from app.constants import RealCompetitionConstants
 
 
 class QueryService:
     """Service class for common database queries."""
-
-    SEASON_START_MONTH = 8
-    BASE_SYMID = 'EN_PR'
-    EXTRA_SYMID = 'EN_FA'
 
     @staticmethod
     def get_season_id(dt: datetime | None = None) -> int:
@@ -23,7 +20,7 @@ class QueryService:
         if dt is None:
             dt = RequestContext.get_datetime()
 
-        if dt.month < QueryService.SEASON_START_MONTH:
+        if dt.month < RealCompetitionConstants.SEASON_START_MONTH:
             return dt.year
         else:
             return dt.year - 1
@@ -33,7 +30,7 @@ class QueryService:
         """Get the current base RealCompetition (EN_PR)."""
         season_id = QueryService.get_season_id()
         rc = db.query(RealCompetition).filter(
-            RealCompetition.realCompetitionSYMID == QueryService.BASE_SYMID,
+            RealCompetition.realCompetitionSYMID == RealCompetitionConstants.BASE_SYMID,
             RealCompetition.realCompetitionSeasonId == str(season_id)
         ).first()
 

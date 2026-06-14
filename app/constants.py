@@ -57,6 +57,14 @@ class WaiversConstants:
     MAX_WAIVERS = 3
 
 
+class RealCompetitionConstants:
+    """Real competition identifiers and configuration constants."""
+
+    SEASON_START_MONTH = 8
+    BASE_SYMID = 'EN_PR'
+    EXTRA_SYMID = 'EN_FA'
+
+
 class DraftPositionConstants:
     """Draft position order, name mappings, and team type constants."""
 
