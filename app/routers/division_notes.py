@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Request, Query, Form
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.actions.division_notes import DivisionNotesReadListAction
@@ -7,6 +8,10 @@ from app.context import RequestContext
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["division-notes"])
+
+
+class DivisionNotesRequest(BaseModel):
+    divisionID: int
 
 
 @router.post("/eff/eff_api/DivisionNotes.php")
@@ -36,11 +41,11 @@ async def legacy_division_notes(
 
 
 @router.post("/api/divisionnotes/readlist")
-def rest_division_notes(divisionID: int, db: Session = Depends(get_db)):
+def rest_division_notes(payload: DivisionNotesRequest, db: Session = Depends(get_db)):
     """REST endpoint: Get notes for division (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        items = DivisionNotesReadListAction.execute(db, division_id=divisionID)
+        items = DivisionNotesReadListAction.execute(db, division_id=payload.divisionID)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='division-notes',

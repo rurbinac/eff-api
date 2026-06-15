@@ -33,10 +33,13 @@ class TestLookupsEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
+        assert "data" in data
+        assert isinstance(data["data"], list)
+        assert "meta" in data
+        assert "timestamp" in data["meta"]
         # Should be sorted by position
-        if len(data) > 1:
-            positions = [item["position"] for item in data]
+        if len(data["data"]) > 1:
+            positions = [item["attributes"]["position"] for item in data["data"]]
             assert positions == sorted(positions)
 
     def test_lookups_readlist_country(self, test_client):
@@ -48,10 +51,14 @@ class TestLookupsEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) > 0
+        assert "data" in data
+        assert isinstance(data["data"], list)
+        assert len(data["data"]) > 0
         # Verify structure of lookup items
-        for item in data:
-            assert "lookupID" in item
-            assert "lookupType" in item
-            assert "position" in item
+        for item in data["data"]:
+            assert "type" in item
+            assert "id" in item
+            assert "attributes" in item
+            assert "lookupID" in item["attributes"]
+            assert "lookupType" in item["attributes"]
+            assert "position" in item["attributes"]

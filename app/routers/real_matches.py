@@ -1,11 +1,17 @@
 from fastapi import APIRouter, Query, Form, Depends
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from app.database import get_db
 from app.context import RequestContext
 from app.actions.real_matches import RealMatchesReadListAction
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["real-matches"])
+
+
+class RealMatchesRequest(BaseModel):
+    realCompetitionID: int
+    realCompetitionSeasonID: int
 
 
 @router.post("/eff/eff_api/RealMatches.php")
@@ -39,8 +45,7 @@ async def legacy_real_matches(
 
 @router.post("/api/realmatches/readlist")
 async def rest_real_matches(
-    realCompetitionID: int,
-    realCompetitionSeasonID: int,
+    payload: RealMatchesRequest,
     db: Session = Depends(get_db),
 ):
     """REST endpoint for RealMatches ReadList (JSON:API format)."""
@@ -48,8 +53,8 @@ async def rest_real_matches(
     try:
         items = RealMatchesReadListAction.execute(
             db,
-            real_competition_id=realCompetitionID,
-            real_competition_season_id=realCompetitionSeasonID
+            real_competition_id=payload.realCompetitionID,
+            real_competition_season_id=payload.realCompetitionSeasonID
         )
         response = JsonApiSerializer.serialize_collection(
             items,

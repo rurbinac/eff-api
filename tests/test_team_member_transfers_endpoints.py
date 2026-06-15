@@ -41,7 +41,10 @@ class TestTeamMemberTransfersEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
+        assert "data" in data
+        assert isinstance(data["data"], list)
+        assert "meta" in data
+        assert "timestamp" in data["meta"]
 
     def test_rest_team_member_transfers_missing_team_id(self, test_client):
         """Test REST TeamMemberTransfers endpoint with missing teamID."""
@@ -52,4 +55,4 @@ class TestTeamMemberTransfersEndpoints:
 
         assert response.status_code == 400
         data = response.json()
-        assert "error" in data
+        assert "errors" in data

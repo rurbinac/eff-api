@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Request, Query, Form
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.actions.leagues import LeaguesReadListAction
@@ -7,6 +8,11 @@ from app.context import RequestContext
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["leagues"])
+
+
+class LeaguesRequest(BaseModel):
+    userID: int
+    season: int | None = None
 
 
 @router.post("/eff/eff_api/Leagues.php")
@@ -39,11 +45,11 @@ async def legacy_leagues(
 
 
 @router.post("/api/leagues/readlist")
-def rest_leagues(userID: int, season: int | None = None, db: Session = Depends(get_db)):
+def rest_leagues(payload: LeaguesRequest, db: Session = Depends(get_db)):
     """REST endpoint: Get leagues for user (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        items = LeaguesReadListAction.execute(db, userID, season)
+        items = LeaguesReadListAction.execute(db, payload.userID, payload.season)
         # Format as JSON:API response
         response = JsonApiSerializer.serialize_collection(
             items,

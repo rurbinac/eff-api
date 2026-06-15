@@ -1,11 +1,16 @@
 from fastapi import APIRouter, Query, Form, Depends
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from app.database import get_db
 from app.context import RequestContext
 from app.actions.match_teams import MatchTeamsReadListAction
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["match-teams"])
+
+
+class MatchTeamsRequest(BaseModel):
+    matchID: int
 
 
 @router.post("/eff/eff_api/MatchTeams.php")
@@ -34,13 +39,13 @@ async def legacy_match_teams(
 
 @router.post("/api/matchteams/readlist")
 async def rest_match_teams(
-    matchID: int,
+    payload: MatchTeamsRequest,
     db: Session = Depends(get_db),
 ):
     """REST endpoint for MatchTeams ReadList (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        items = MatchTeamsReadListAction.execute(db, match_id=matchID)
+        items = MatchTeamsReadListAction.execute(db, match_id=payload.matchID)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='match-teams',

@@ -33,8 +33,11 @@ class TestLeaguesEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        # REST should return direct array
-        assert isinstance(data, list)
+        # REST should return JSON:API format
+        assert "data" in data
+        assert isinstance(data["data"], list)
+        assert "meta" in data
+        assert "timestamp" in data["meta"]
 
     def test_gaming_api_league_build(self, test_client, test_user, test_db, test_lookups):
         """Test Gaming API League Build endpoint."""

@@ -83,7 +83,10 @@ class TestDivisionNotesEndpoints:
 
                 assert response.status_code == 200
                 data = response.json()
-                assert isinstance(data, list)
+                assert "data" in data
+                assert "meta" in data
+                assert "timestamp" in data["meta"]
+                assert isinstance(data["data"], list)
         finally:
             RequestContext.reset()
 
@@ -121,8 +124,11 @@ class TestDivisionNotesEndpoints:
 
                 assert response.status_code == 200
                 data = response.json()
-                assert isinstance(data, list)
+                assert "data" in data
+                assert "meta" in data
+                assert "timestamp" in data["meta"]
+                assert isinstance(data["data"], list)
                 # Notes should be empty for new division
-                assert len(data) == 0
+                assert len(data["data"]) == 0
         finally:
             RequestContext.reset()

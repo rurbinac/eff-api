@@ -81,7 +81,10 @@ class TestMatchTeamsEndpoints:
 
                 assert response.status_code == 200
                 data = response.json()
-                assert isinstance(data, list)
+                assert "data" in data
+                assert isinstance(data["data"], list)
+                assert "meta" in data
+                assert "timestamp" in data["meta"]
         finally:
             RequestContext.reset()
 
@@ -118,12 +121,13 @@ class TestMatchTeamsEndpoints:
 
                 assert response.status_code == 200
                 data = response.json()
-                assert isinstance(data, list)
+                assert "data" in data
+                assert isinstance(data["data"], list)
 
                 # Verify datetime fields are ISO formatted strings
-                for item in data:
+                for item in data["data"]:
                     # DateTime fields should be strings if present
-                    if "matchDayDate" in item and item["matchDayDate"]:
-                        assert isinstance(item["matchDayDate"], str)
+                    if "matchDayDate" in item["attributes"] and item["attributes"]["matchDayDate"]:
+                        assert isinstance(item["attributes"]["matchDayDate"], str)
         finally:
             RequestContext.reset()

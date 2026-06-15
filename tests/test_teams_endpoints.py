@@ -46,7 +46,10 @@ class TestTeamsEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
+        assert "data" in data
+        assert isinstance(data["data"], list)
+        assert "meta" in data
+        assert "timestamp" in data["meta"]
 
     def test_legacy_teams_get_real_members_ranking(self, test_client):
         """Test Legacy Teams GetRealMembersRanking endpoint."""
@@ -74,7 +77,10 @@ class TestTeamsEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
+        assert "data" in data
+        assert isinstance(data["data"], list)
+        assert "meta" in data
+        assert "timestamp" in data["meta"]
 
     def test_gaming_api_teams_get_current_members(self, test_client):
         """Test Gaming API Teams GetCurrentMembers endpoint."""
@@ -188,4 +194,7 @@ class TestTeamsEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
+        assert "data" in data
+        assert isinstance(data["data"], list)
+        assert "meta" in data
+        assert "timestamp" in data["meta"]

@@ -1,9 +1,15 @@
 from fastapi import APIRouter, Query, Form, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.context import RequestContext
 from app.actions.lookups import LookupsReadListAction
 from app.utils import JsonApiSerializer
+
+
+class LookupsRequest(BaseModel):
+    lookupType: int
+
 
 router = APIRouter(tags=["lookups"])
 
@@ -34,13 +40,13 @@ async def legacy_lookups(
 
 @router.post("/api/lookups/readlist")
 async def rest_lookups(
-    lookupType: int,
+    payload: LookupsRequest,
     db: Session = Depends(get_db),
 ):
     """REST endpoint for Lookups ReadList (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        items = LookupsReadListAction.execute(db, lookup_num=lookupType)
+        items = LookupsReadListAction.execute(db, lookup_num=payload.lookupType)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='lookups',

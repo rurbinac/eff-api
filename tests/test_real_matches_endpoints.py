@@ -50,7 +50,10 @@ class TestRealMatchesEndpoints:
 
             assert response.status_code == 200
             data = response.json()
-            assert isinstance(data, list)
+            assert "data" in data
+            assert isinstance(data["data"], list)
+            assert "meta" in data
+            assert "timestamp" in data["meta"]
         finally:
             RequestContext.reset()
 
@@ -76,6 +79,9 @@ class TestRealMatchesEndpoints:
                 # Should return 200 regardless of whether data exists
                 assert response.status_code == 200
                 data = response.json()
-                assert isinstance(data, list)
+                assert "data" in data
+                assert isinstance(data["data"], list)
+                assert "meta" in data
+                assert "timestamp" in data["meta"]
         finally:
             RequestContext.reset()
