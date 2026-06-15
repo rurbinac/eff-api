@@ -72,6 +72,11 @@ class DraftPositionConstants:
     STRIKER = 'Striker'
     EPL_TEAM = 'EPLTeam'
 
+    # Aggregate position labels
+    PLAYERS = 'Players'
+    MEMBERS = 'Members'
+    DP_UNKNOWN = ''
+
     # Min constraints
     MIN_EPL_TEAMS = 2
     MIN_PLAYERS = 14

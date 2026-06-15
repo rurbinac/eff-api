@@ -38,9 +38,9 @@ AUTO_STRIKER = DraftPositionConstants.AUTO_STRIKER
 AUTO_EPL_TEAM = DraftPositionConstants.AUTO_EPL_TEAMS
 
 # Aggregate position labels
-PLAYER = "Player"
-MEMBER = "Member"
-DP_UNKNOWN = "Unknown"
+PLAYERS = DraftPositionConstants.PLAYERS
+MEMBERS = DraftPositionConstants.MEMBERS
+DP_UNKNOWN = DraftPositionConstants.DP_UNKNOWN
 
 GroupData: TypeAlias = list[str]
 PackedData: TypeAlias = list[GroupData]
@@ -551,14 +551,14 @@ class BaseMembers:
             MIDFIELDER: mf,
             STRIKER: st,
             EPL_TEAM: tm,
-            PLAYER: pl,
-            MEMBER: pl + tm,
+            PLAYERS: pl,
+            MEMBERS: pl + tm,
         }
 
     @property
     def is_valid(self) -> bool:
         dp_stats = self.dp_stats
-        return not dp_stats[MEMBER]["deficit"] and not dp_stats[MEMBER]["surplus"]
+        return not dp_stats[MEMBERS]["deficit"] and not dp_stats[MEMBERS]["surplus"]
 
     def unpack(self, data: str | PackedData | None = None) -> bool:
         """Unpack the team members from a string."""
@@ -583,7 +583,7 @@ class BaseMembers:
             max_dp = DraftPositionConstants.LIMITS[dp]["max"]
             # Create the record for dp
             dp_stats[dp] = {"cnt": cnt_dp, "min": min_dp, "max": max_dp}
-            if dp not in {PLAYER, MEMBER}:
+            if dp not in {PLAYERS, MEMBERS}:
                 dp_stats[dp]["must_add"] = max(min_dp - cnt_dp, 0)
                 dp_stats[dp]["must_remove"] = max(cnt_dp - max_dp, 0)
                 dp_stats[dp]["can_add"] = max(max_dp - cnt_dp, 0)
@@ -592,8 +592,8 @@ class BaseMembers:
                 deficit = deficit or dp_stats[dp]["must_add"] > 0
                 surplus = surplus or dp_stats[dp]["must_remove"] > 0
         #
-        dp_stats[MEMBER]["deficit"] = deficit
-        dp_stats[MEMBER]["surplus"] = surplus
+        dp_stats[MEMBERS]["deficit"] = deficit
+        dp_stats[MEMBERS]["surplus"] = surplus
         return dp_stats
 
     def _reset_mkeys(self) -> MKeys:
@@ -676,20 +676,20 @@ class TeamMembers(BaseMembers):
         # Validate the changes against the DP stats
         dp_stats = self.dp_stats
 
-        is_valid = not dp_stats[MEMBER]["deficit"] and not dp_stats[MEMBER]["surplus"]
-        cnt_after = {PLAYER: dp_stats[PLAYER]["cnt"], MEMBER: dp_stats[MEMBER]["cnt"]}
+        is_valid = not dp_stats[MEMBERS]["deficit"] and not dp_stats[MEMBERS]["surplus"]
+        cnt_after = {PLAYERS: dp_stats[PLAYERS]["cnt"], MEMBERS: dp_stats[MEMBERS]["cnt"]}
         for dp in dp_stats:
-            if dp not in {PLAYER, MEMBER}:
+            if dp not in {PLAYERS, MEMBERS}:
                 cnt_add = len(keys_to_add.get(dp, []))
                 cnt_remove = len(keys_to_remove.get(dp, []))
                 if _can_change_dp(dp_stats[dp], cnt_add, cnt_remove, is_valid):
-                    cnt_after[MEMBER] += cnt_add - cnt_remove
+                    cnt_after[MEMBERS] += cnt_add - cnt_remove
                     if dp != EPL_TEAM:
-                        cnt_after[PLAYER] += cnt_add - cnt_remove
+                        cnt_after[PLAYERS] += cnt_add - cnt_remove
                 else:
                     return (None, None)
 
-        for dp in [PLAYER, MEMBER]:
+        for dp in [PLAYERS, MEMBERS]:
             cnt_dp = cnt_after[dp]
             if cnt_dp < dp_stats[dp]["min"] or cnt_dp > dp_stats[dp]["max"]:
                 # In not valid after the changes.
@@ -732,7 +732,7 @@ class DraftTeamMembers(BaseMembers):
             cnt_must = 0
             can_add_dp = set()
             for dp in dp_stats:
-                if dp not in {PLAYER, MEMBER}:
+                if dp not in {PLAYERS, MEMBERS}:
                     if dp_stats[dp]["must_add"] > 0:
                         # The dp must add, so you can draft this dp
                         cnt_must += dp_stats[dp]["must_add"]
@@ -740,7 +740,7 @@ class DraftTeamMembers(BaseMembers):
                     elif dp_stats[dp]["can_add"] > 0:
                         # The dp can add, lets save it
                         can_add_dp.add(dp)
-            if dp_stats[MEMBER]["cnt"] + cnt_must < dp_stats[MEMBER]["max"]:
+            if dp_stats[MEMBERS]["cnt"] + cnt_must < dp_stats[MEMBERS]["max"]:
                 # Still some spots available after must_add allocations
                 for dp in can_add_dp:
                     free_dp.add(dp)
