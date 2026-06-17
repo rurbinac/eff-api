@@ -5,8 +5,49 @@ from app.database import get_db
 from app.schemas import SignInRequest, SignUpRequest, UpdateUserRequest
 from app.actions.sign import SignInAction, SignOutAction, SignInfoAction, SignUpAction, UpdateUserAction
 from app.context import RequestContext
+from app.models import MatchDaysStatus
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+@router.get("/debug/matchdays/{real_competition_id}")
+def debug_matchdays(real_competition_id: int, db: Session = Depends(get_db)) -> dict:
+    """DEBUG: Check MatchDaysStatus records for a given competition."""
+    RequestContext.set_datetime()
+    try:
+        current_datetime = RequestContext.get_datetime()
+
+        # Get all records for this competition
+        all_records = db.query(MatchDaysStatus).filter(
+            MatchDaysStatus.matchDayMapKey == str(real_competition_id)
+        ).limit(5).all()
+
+        # Get records matching our current query
+        matching_records = db.query(MatchDaysStatus).filter(
+            MatchDaysStatus.matchDayMapKey == str(real_competition_id),
+            MatchDaysStatus.startMatchDay <= current_datetime,
+            MatchDaysStatus.finishMatchDay > current_datetime
+        ).all()
+
+        return {
+            "current_datetime": current_datetime.isoformat(),
+            "competition_id": real_competition_id,
+            "matchDayMapKey_filter": str(real_competition_id),
+            "total_records_with_key": len(all_records),
+            "matching_records": len(matching_records),
+            "sample_records": [
+                {
+                    "matchDayMapKey": r.matchDayMapKey,
+                    "realCompetitionMatchDay": r.realCompetitionMatchDay,
+                    "startMatchDay": r.startMatchDay.isoformat() if r.startMatchDay else None,
+                    "finishMatchDay": r.finishMatchDay.isoformat() if r.finishMatchDay else None,
+                    "scriptsStatus": r.scriptsStatus,
+                }
+                for r in all_records[:3]
+            ]
+        }
+    finally:
+        RequestContext.reset()
 
 
 @router.post("/signin")
