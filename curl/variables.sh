@@ -8,8 +8,8 @@ export LEGACY_API="$BASE_URL/eff/eff_api"
 export REST_API="$BASE_URL/api"
 
 # Test Credentials
-export TEST_EMAIL="admin@effootball.com"
-export TEST_PASSWORD="PASSWORD_1"
+export TEST_EMAIL="nigel@bowmantx.com"
+export TEST_PASSWORD="PASSWORD_9"
 export TEST_USER_ID="1"
 
 # New User for Testing
