@@ -21,7 +21,7 @@ Content-Type: application/x-www-form-urlencoded
 _format=json&_type=byMatchID&matchID=1
 
 ### 4. MatchTeams ReadList (REST)
-POST {{baseUrl}}/api/match-teams/readlist
+POST {{baseUrl}}/api/matchteams/readlist
 Content-Type: application/json
 
 {
@@ -35,12 +35,12 @@ Content-Type: application/x-www-form-urlencoded
 _format=json&_type=byCompetition&realCompetitionID={{testRealCompetitionID}}&realCompetitionMatchDay={{testRealCompetitionMatchDay}}
 
 ### 6. RealMatches ReadList (REST)
-POST {{baseUrl}}/api/real-matches/readlist
+POST {{baseUrl}}/api/realmatches/readlist
 Content-Type: application/json
 
 {
   "realCompetitionID": {{testRealCompetitionID}},
-  "realCompetitionMatchDay": {{testRealCompetitionMatchDay}}
+  "realCompetitionSeasonID": {{testRealCompetitionMatchDay}}
 }
 
 ### 7. RealMatches ReadList - Filter by SYMID and MatchDay

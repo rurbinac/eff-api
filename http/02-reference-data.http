@@ -11,7 +11,7 @@ POST {{baseUrl}}/api/lookups/readlist
 Content-Type: application/json
 
 {
-  "lookupNum": 2
+  "lookupType": 2
 }
 
 ### 3. Lookups ReadList - All Countries (lookupNum=2)

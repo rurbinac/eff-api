@@ -7,10 +7,12 @@ Content-Type: application/x-www-form-urlencoded
 _format=json
 
 ### 2. TeamStandings ReadList (REST)
-POST {{baseUrl}}/api/team-standings/readlist
+POST {{baseUrl}}/api/teamstandings/readlist
 Content-Type: application/json
 
-{}
+{
+  "teamID": {{testTeamID}}
+}
 
 ### 3. RealStandings ReadList (Legacy) - By Competition and MatchDay
 POST {{baseUrl}}/eff/eff_api/RealStandings.php?f=ReadList
@@ -19,12 +21,12 @@ Content-Type: application/x-www-form-urlencoded
 _format=json&_type=byCompetition&realCompetitionID={{testRealCompetitionID}}&realCompetitionMatchDay={{testRealCompetitionMatchDay}}
 
 ### 4. RealStandings ReadList (REST)
-POST {{baseUrl}}/api/real-standings/readlist
+POST {{baseUrl}}/api/realstandings/readlist
 Content-Type: application/json
 
 {
   "realCompetitionID": {{testRealCompetitionID}},
-  "realCompetitionMatchDay": {{testRealCompetitionMatchDay}}
+  "realCompetitionSeasonID": {{testRealCompetitionMatchDay}}
 }
 
 ### 5. RealStandings ReadList - Filter by SYMID
@@ -40,10 +42,10 @@ Content-Type: application/x-www-form-urlencoded
 _format=json&_type=byTeam&realCompetitionID={{testRealCompetitionID}}&realTeamID=1
 
 ### 7. RealTeamStandings ReadList (REST)
-POST {{baseUrl}}/api/real-team-standings/readlist
+POST {{baseUrl}}/api/realteamstandings/readlist
 Content-Type: application/json
 
 {
   "realCompetitionID": {{testRealCompetitionID}},
-  "realTeamID": 1
+  "realCompetitionSeasonID": {{testRealCompetitionMatchDay}}
 }

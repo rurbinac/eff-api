@@ -63,7 +63,7 @@ Content-Type: application/x-www-form-urlencoded
 _format=json&_type=byDivisionID&divisionID={{testDivisionID}}
 
 ### 10. DivisionNotes ReadList (REST)
-POST {{baseUrl}}/api/division-notes/readlist
+POST {{baseUrl}}/api/divisionnotes/readlist
 Content-Type: application/json
 
 {
