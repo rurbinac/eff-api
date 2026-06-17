@@ -14,13 +14,13 @@ class QueryService:
     def get_season_id(dt: datetime | None = None) -> int:
         """
         Calculate current season ID based on month.
-        If current month is 1-7 (Jan-Jul), season = current year
-        If current month is 8-12 (Aug-Dec), season = current year - 1
+        If current month is 1-7 (Jan-Jul), season = previous year
+        If current month is 8-12 (Aug-Dec), season = current year
         """
         if dt is None:
             dt = RequestContext.get_datetime()
 
-        if dt.month < RealCompetitionConstants.SEASON_START_MONTH:
+        if dt.month >= RealCompetitionConstants.SEASON_START_MONTH:
             return dt.year
         else:
             return dt.year - 1
