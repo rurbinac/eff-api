@@ -52,8 +52,8 @@ class QueryService:
 
         mds = db.query(MatchDaysStatus).filter(
             MatchDaysStatus.matchDayMapKey == str(base_real_competition_id),
-            MatchDaysStatus.startMatchDay <= current_datetime,
-            MatchDaysStatus.finishMatchDay > current_datetime
+            MatchDaysStatus.startWaivers <= current_datetime,
+            MatchDaysStatus.finishPostMatch > current_datetime
         ).first()
 
         if not mds:
