@@ -86,6 +86,10 @@ class SignInAction:
         # Add context data
         SignInAction._add_context_data(db, session_data)
 
+        # Add request tracking
+        session_data["firstRequest"] = request_datetime.isoformat()
+        session_data["lastRequest"] = request_datetime.isoformat()
+
         # Return pure data (no response wrapper)
         return session_data
 
@@ -119,6 +123,11 @@ class SignInfoAction:
         # Add context data
         SignInAction._add_context_data(db, session_data)
 
+        # Add request tracking
+        current_time = RequestContext.get_datetime().isoformat()
+        session_data["firstRequest"] = current_time
+        session_data["lastRequest"] = current_time
+
         # Return pure data (no response wrapper)
         return session_data
 
@@ -150,6 +159,14 @@ class SignInfoAction:
 
         # Add context data
         SignInAction._add_context_data(db, session_data)
+
+        # Add request tracking
+        # firstRequest comes from token creation time (iat claim)
+        first_request_timestamp = payload.get("iat")
+        first_request = datetime.fromtimestamp(first_request_timestamp).isoformat() if first_request_timestamp else None
+
+        session_data["firstRequest"] = first_request
+        session_data["lastRequest"] = RequestContext.get_datetime().isoformat()
 
         # Return pure data (no response wrapper)
         return session_data
