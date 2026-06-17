@@ -10,40 +10,58 @@ from app.context import RequestContext
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-@router.get("/debug/original-query")
-def debug_original_query(db: Session = Depends(get_db)) -> dict:
-    """DEBUG: Execute the original query to see what it returns."""
+@router.get("/debug/query-comparison")
+def debug_query_comparison(db: Session = Depends(get_db)) -> dict:
+    """DEBUG: Compare original vs fixed query for match day 35."""
     RequestContext.set_datetime()
     try:
-        # Original query from before the fix
-        query = text("""
-            SELECT * FROM `MatchDaysStatus`
-            WHERE `matchDayMapKey` = '21'
+        # Original query
+        original_query = text("""
+            SELECT matchDayMapKey, realCompetitionMatchDay, startWaivers, finishPostMatch, scriptsStatus
+            FROM `MatchDaysStatus`
+            WHERE `matchDayMapKey` = '21' AND realCompetitionMatchDay = 35
             AND CURRENT_TIMESTAMP >= `startWaivers`
             AND CURRENT_TIMESTAMP < `finishPostMatch`
         """)
 
-        result = db.execute(query).fetchall()
+        # Fixed query
+        fixed_query = text("""
+            SELECT matchDayMapKey, realCompetitionMatchDay, startMatchDay, finishMatchDay, scriptsStatus
+            FROM `MatchDaysStatus`
+            WHERE `matchDayMapKey` = '21' AND realCompetitionMatchDay = 35
+            AND CURRENT_TIMESTAMP >= `startMatchDay`
+            AND CURRENT_TIMESTAMP < `finishMatchDay`
+        """)
+
+        # Get the full record to show all date fields
+        full_record = text("""
+            SELECT matchDayMapKey, realCompetitionMatchDay,
+                   startWaivers, finishPostMatch,
+                   startMatchDay, finishMatchDay,
+                   scriptsStatus
+            FROM `MatchDaysStatus`
+            WHERE `matchDayMapKey` = '21' AND realCompetitionMatchDay = 35
+        """)
+
+        original_result = db.execute(original_query).fetchone()
+        fixed_result = db.execute(fixed_query).fetchone()
+        full_data = db.execute(full_record).fetchone()
 
         return {
-            "query": "SELECT * FROM MatchDaysStatus WHERE matchDayMapKey='21' AND CURRENT_TIMESTAMP >= startWaivers AND CURRENT_TIMESTAMP < finishPostMatch",
-            "matching_records": len(result),
-            "records": [
-                {
-                    "matchDayMapKey": row[3],
-                    "realCompetitionMatchDay": row[8],
-                    "startWaivers": str(row[27]) if row[27] else None,
-                    "finishPostMatch": str(row[41]) if row[41] else None,
-                    "scriptsStatus": row[20],
-                }
-                for row in result
-            ] if result else []
+            "match_day": 35,
+            "database_dates": {
+                "startWaivers": str(full_data[2]) if full_data and full_data[2] else None,
+                "finishPostMatch": str(full_data[3]) if full_data and full_data[3] else None,
+                "startMatchDay": str(full_data[4]) if full_data and full_data[4] else None,
+                "finishMatchDay": str(full_data[5]) if full_data and full_data[5] else None,
+                "scriptsStatus": full_data[6] if full_data else None,
+            },
+            "original_query_result": "MATCHES" if original_result else "NO MATCH",
+            "fixed_query_result": "MATCHES" if fixed_result else "NO MATCH",
+            "note": "Original query uses waivers period, fixed query uses match day period"
         }
     except Exception as e:
-        return {
-            "error": str(e),
-            "query": "SELECT * FROM MatchDaysStatus WHERE matchDayMapKey='21' AND CURRENT_TIMESTAMP >= startWaivers AND CURRENT_TIMESTAMP < finishPostMatch"
-        }
+        return {"error": str(e)}
     finally:
         RequestContext.reset()
 
