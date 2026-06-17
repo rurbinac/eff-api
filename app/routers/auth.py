@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.database import get_db
 from app.schemas import SignInRequest, SignUpRequest, UpdateUserRequest
@@ -7,6 +8,44 @@ from app.actions.sign import SignInAction, SignOutAction, SignInfoAction, SignUp
 from app.context import RequestContext
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+@router.get("/debug/original-query")
+def debug_original_query(db: Session = Depends(get_db)) -> dict:
+    """DEBUG: Execute the original query to see what it returns."""
+    RequestContext.set_datetime()
+    try:
+        # Original query from before the fix
+        query = text("""
+            SELECT * FROM `MatchDaysStatus`
+            WHERE `matchDayMapKey` = '21'
+            AND CURRENT_TIMESTAMP >= `startWaivers`
+            AND CURRENT_TIMESTAMP < `finishPostMatch`
+        """)
+
+        result = db.execute(query).fetchall()
+
+        return {
+            "query": "SELECT * FROM MatchDaysStatus WHERE matchDayMapKey='21' AND CURRENT_TIMESTAMP >= startWaivers AND CURRENT_TIMESTAMP < finishPostMatch",
+            "matching_records": len(result),
+            "records": [
+                {
+                    "matchDayMapKey": row[3],
+                    "realCompetitionMatchDay": row[8],
+                    "startWaivers": str(row[27]) if row[27] else None,
+                    "finishPostMatch": str(row[41]) if row[41] else None,
+                    "scriptsStatus": row[20],
+                }
+                for row in result
+            ] if result else []
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "query": "SELECT * FROM MatchDaysStatus WHERE matchDayMapKey='21' AND CURRENT_TIMESTAMP >= startWaivers AND CURRENT_TIMESTAMP < finishPostMatch"
+        }
+    finally:
+        RequestContext.reset()
 
 
 @router.post("/signin")
