@@ -47,9 +47,10 @@ class QueryService:
 
     @staticmethod
     def get_current_match_day_status(db: Session, base_real_competition_id: int) -> dict | None:
-        """Get current MatchDayStatus for the base competition."""
+        """Get current MatchDayStatus for the base competition, determining which phase we're in."""
         current_datetime = RequestContext.get_datetime()
 
+        # Find a MatchDaysStatus record that spans the current time
         mds = db.query(MatchDaysStatus).filter(
             MatchDaysStatus.matchDayMapKey == str(base_real_competition_id),
             MatchDaysStatus.startWaivers <= current_datetime,
@@ -59,19 +60,32 @@ class QueryService:
         if not mds:
             return None
 
-        return {
+        # Determine which phase of the match day we're in
+        mds_dict = {
             "realCompetitionID": mds.realCompetitionID,
             "realCompetitionMatchDay": mds.realCompetitionMatchDay,
             "baseRealCompetitionMatchDay": mds.realCompetitionMatchDay,
-            "matchDayStatus": mds.scriptsStatus,
-            "matchDayStatusStart": mds.startMatchDay.isoformat() if mds.startMatchDay else None,
-            "matchDayStatusFinish": mds.finishMatchDay.isoformat() if mds.finishMatchDay else None,
+            "matchDayStatus": None,
+            "matchDayStatusStart": None,
+            "matchDayStatusFinish": None,
             "realCompetitionMatchDaySort": mds.realCompetitionMatchDaySort,
             "prevActiveRealCompetitionID": mds.prevActiveRealCompetitionID,
             "prevActiveRealCompetitionMatchDay": mds.prevActiveRealCompetitionMatchDay,
             "nextActiveRealCompetitionID": mds.nextActiveRealCompetitionID,
             "nextActiveRealCompetitionMatchDay": mds.nextActiveRealCompetitionMatchDay,
         }
+
+        # Check each phase in order to find the current one
+        phases = ['Waivers', 'WaiversSettle', 'OpenWaivers', 'OpenWaiversSettle', 'PreMatch', 'Match', 'PostMatch']
+        for phase in phases:
+            finish_field = getattr(mds, f'finish{phase}', None)
+            if finish_field and current_datetime < finish_field:
+                mds_dict['matchDayStatus'] = phase
+                mds_dict['matchDayStatusStart'] = getattr(mds, f'start{phase}').isoformat() if getattr(mds, f'start{phase}') else None
+                mds_dict['matchDayStatusFinish'] = finish_field.isoformat() if finish_field else None
+                break
+
+        return mds_dict
 
     @staticmethod
     def get_show_data(db: Session) -> dict | None:
