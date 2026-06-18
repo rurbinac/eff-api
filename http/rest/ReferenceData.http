@@ -1,0 +1,31 @@
+@base-url = https://eff-api-150703383580.us-central1.run.app
+@user-name = nigel@bowmantx.com
+@user-pass = PASSWORD_9
+@lookup-type = 2
+
+
+### SignIn (Token)
+# @name signin
+
+POST {{base-url}}/api/auth/signin
+Content-Type: application/json
+
+{
+  "userEmail": "{{user-name}}",
+  "userPassword": "{{user-pass}}"
+}
+
+
+### Extract token
+@access-token = {{signin.response.body.token}}
+
+
+### Lookups ReadList
+
+POST {{base-url}}/api/lookups/readlist
+Content-Type: application/json
+Authorization: Bearer {{access-token}}
+
+{
+  "lookupType": {{lookup-type}}
+}

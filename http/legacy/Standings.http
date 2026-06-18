@@ -1,0 +1,53 @@
+@base-url = https://eff-api-150703383580.us-central1.run.app
+@user-name = nigel@bowmantx.com
+@user-pass = PASSWORD_9
+@format = json
+@division-id = 130
+@real-competition-id = 21
+
+
+### SignIn (Token)
+# @name signin
+
+POST {{base-url}}/eff/eff_api/Users.php?f=SignIn
+Content-Type: application/x-www-form-urlencoded
+
+_format={{format}}
+&userEmail={{user-name}}
+&userPassword={{user-pass}}
+
+
+### Extract token
+@access-token = {{signin.response.body.items[0].values.token}}
+
+
+### Legacy Team Standings ReadList
+
+POST {{base-url}}/eff/eff_api/TeamStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&divisionID={{division-id}}
+
+
+### Legacy Real Standings ReadList
+
+POST {{base-url}}/eff/eff_api/RealStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&realCompetitionID={{real-competition-id}}
+&realCompetitionSeasonID=2025
+
+
+### Legacy Real Team Standings ReadList
+
+POST {{base-url}}/eff/eff_api/RealTeamStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&realCompetitionID={{real-competition-id}}
+&realCompetitionSeasonID=2025

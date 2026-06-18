@@ -1,0 +1,33 @@
+@base-url = https://eff-api-150703383580.us-central1.run.app
+@user-agent = Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
+@format = json
+@user-name = nigel@bowmantx.com
+@user-pass = PASSWORD_9
+
+@lookup-type = 2
+
+### SignIn
+# @name login
+
+POST {{base-url}}/eff/eff_api/SignIn.php HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+User-Agent: {{user-agent}}
+
+_format={{format}}
+&userEmail={{user-name}}
+&userPassword={{user-pass}}
+
+
+### Get the access token
+@access-token = {{login.response.body.values.token}}
+
+
+### Legacy Lookups ReadList
+
+POST {{base-url}}/eff/eff_api/Lookups.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&lookupType={{lookup-type}}

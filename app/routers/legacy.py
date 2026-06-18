@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request, Query, Form
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.actions.sign import SignInAction, SignOutAction, SignInfoAction
+from app.actions.top_epl import TopEPLAction
 from app.context import RequestContext
 from app.security import decode_token
 
@@ -127,3 +128,18 @@ async def legacy_signinfo(
     }
     RequestContext.reset()
     return result
+
+
+@router.post("/eff/eff_api/TopEPL.php")
+async def legacy_top_epl(
+    format: str | None = Query("json", alias="_format"),
+    db: Session = Depends(get_db),
+):
+    """Legacy TopEPL endpoint - returns top 4 EPL teams by standings."""
+    RequestContext.set_datetime()
+    try:
+        # Get top EPL teams (default limit 4)
+        data = TopEPLAction.execute(db, limit=4)
+        return data
+    finally:
+        RequestContext.reset()
