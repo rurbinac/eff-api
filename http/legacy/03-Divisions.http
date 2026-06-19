@@ -27,20 +27,24 @@ _format={{format}}
 ### --> Get the token
 @access-token = {{login.response.body.values.token}}
 
+### 02. Divisions - ReadList - byLeagueID = {{league-id}}
 
-### 02. SignInfo
-
-POST {{base-url}}/eff/eff_api/Users.php?f=SignInfo
+POST {{base-url}}/eff/eff_api/Divisions.php?f=ReadList
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
-_format=json
+_format={{format}}
+&_type=byLeagueID
+&leagueID={{league-id}}
 
 
-### 03. SignOut
+### 03. Divisions - DraftResult = {{division-id}}
 
-POST {{base-url}}/eff/eff_api/Users.php?f=SignOut
+POST {{base-url}}/eff/eff_api/Divisions.php?f=DraftResult
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
-_format=json
+_format={{format}}
+&divisionID={{division-id}}

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.context import RequestContext
 from app.actions.lookups import LookupsReadListAction
+from app.actions.top_epl import TopEPLAction
 from app.utils import JsonApiSerializer
 
 
@@ -38,20 +39,34 @@ async def legacy_lookups(
         RequestContext.reset()
 
 
-@router.post("/api/lookups/readlist")
+@router.get("/api/v1/lookups")
 async def rest_lookups(
-    payload: LookupsRequest,
+    lookupType: int | None = None,
     db: Session = Depends(get_db),
 ):
     """REST endpoint for Lookups ReadList (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        items = LookupsReadListAction.execute(db, lookup_num=payload.lookupType)
+        items = LookupsReadListAction.execute(db, lookup_num=lookupType)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='lookups',
             resource_id_key='lookupID',
         )
         return JsonApiSerializer.add_timestamp(response)
+    finally:
+        RequestContext.reset()
+
+
+@router.get("/api/v1/top_epl")
+async def rest_top_epl(
+    limit: int | None = 4,
+    db: Session = Depends(get_db),
+):
+    """REST endpoint: Get top EPL teams by standings (JSON:API format)."""
+    RequestContext.set_datetime()
+    try:
+        data = TopEPLAction.execute(db, limit=limit or 4)
+        return data
     finally:
         RequestContext.reset()

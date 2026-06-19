@@ -54,14 +54,14 @@ async def legacy_divisions(
         RequestContext.reset()
 
 
-@router.post("/api/divisions/readlist")
-def rest_divisions(payload: DivisionsRequest, db: Session = Depends(get_db)):
+@router.get("/api/v1/divisions")
+def rest_divisions(leagueID: int | None = None, db: Session = Depends(get_db)):
     """REST endpoint: Get divisions for league (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        if payload.leagueID is None:
+        if leagueID is None:
             return JsonApiSerializer.serialize_error(400, "Bad Request", "leagueID is required")
-        items = DivisionsReadListAction.execute(db, payload.leagueID)
+        items = DivisionsReadListAction.execute(db, leagueID)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='divisions',
@@ -72,14 +72,14 @@ def rest_divisions(payload: DivisionsRequest, db: Session = Depends(get_db)):
         RequestContext.reset()
 
 
-@router.post("/api/divisions/transactions-detail")
-def rest_divisions_transactions_detail(payload: DivisionsRequest, db: Session = Depends(get_db)):
+@router.get("/api/v1/divisions/transactions-detail")
+def rest_divisions_transactions_detail(divisionID: int | None = None, db: Session = Depends(get_db)):
     """REST endpoint: Get transaction details for division (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        if payload.divisionID is None:
+        if divisionID is None:
             return JsonApiSerializer.serialize_error(400, "Bad Request", "divisionID is required")
-        items = DivisionsTransactionsDetailAction.execute(db, payload.divisionID)
+        items = DivisionsTransactionsDetailAction.execute(db, divisionID)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='divisions',

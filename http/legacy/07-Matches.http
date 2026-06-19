@@ -28,19 +28,25 @@ _format={{format}}
 @access-token = {{login.response.body.values.token}}
 
 
-### 02. SignInfo
+### 02. Matches - ReadList - byLeagueID = {{league-id}}
 
-POST {{base-url}}/eff/eff_api/Users.php?f=SignInfo
+POST {{base-url}}/eff/eff_api/Matches.php?f=ReadList
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
-_format=json
+_format={{format}}
+&_type=byLeagueID
+&leagueID={{league-id}}
 
 
-### 03. SignOut
+### 03. Matches - ReadList - byDivisionID = {{division-id}}
 
-POST {{base-url}}/eff/eff_api/Users.php?f=SignOut
+POST {{base-url}}/eff/eff_api/Matches.php?f=ReadList
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
-_format=json
+_format={{format}}
+&_type=byDivisionID
+&divisionID={{division-id}}

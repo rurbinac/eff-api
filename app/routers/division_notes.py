@@ -40,12 +40,12 @@ async def legacy_division_notes(
         RequestContext.reset()
 
 
-@router.post("/api/divisionnotes/readlist")
-def rest_division_notes(payload: DivisionNotesRequest, db: Session = Depends(get_db)):
+@router.get("/api/v1/division_notes")
+def rest_division_notes(divisionID: int | None = None, db: Session = Depends(get_db)):
     """REST endpoint: Get notes for division (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        items = DivisionNotesReadListAction.execute(db, division_id=payload.divisionID)
+        items = DivisionNotesReadListAction.execute(db, division_id=divisionID)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='division-notes',

@@ -37,7 +37,7 @@ async def legacy_match_teams(
         RequestContext.reset()
 
 
-@router.post("/api/matchteams/readlist")
+@router.get("/api/v1/match_teams")
 async def rest_match_teams(
     payload: MatchTeamsRequest,
     db: Session = Depends(get_db),

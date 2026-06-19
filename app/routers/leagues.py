@@ -44,12 +44,12 @@ async def legacy_leagues(
         RequestContext.reset()
 
 
-@router.post("/api/leagues/readlist")
-def rest_leagues(payload: LeaguesRequest, db: Session = Depends(get_db)):
+@router.get("/api/v1/leagues")
+def rest_leagues(userID: int, season: int | None = None, db: Session = Depends(get_db)):
     """REST endpoint: Get leagues for user (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        items = LeaguesReadListAction.execute(db, payload.userID, payload.season)
+        items = LeaguesReadListAction.execute(db, userID, season)
         # Format as JSON:API response
         response = JsonApiSerializer.serialize_collection(
             items,

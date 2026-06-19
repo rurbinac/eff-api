@@ -43,7 +43,7 @@ async def legacy_real_matches(
         RequestContext.reset()
 
 
-@router.post("/api/realmatches/readlist")
+@router.get("/api/v1/real_matches")
 async def rest_real_matches(
     payload: RealMatchesRequest,
     db: Session = Depends(get_db),
@@ -53,8 +53,8 @@ async def rest_real_matches(
     try:
         items = RealMatchesReadListAction.execute(
             db,
-            real_competition_id=payload.realCompetitionID,
-            real_competition_season_id=payload.realCompetitionSeasonID
+            real_competition_id=realCompetitionID,
+            real_competition_season_id=realCompetitionSeasonID
         )
         response = JsonApiSerializer.serialize_collection(
             items,

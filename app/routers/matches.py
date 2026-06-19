@@ -46,7 +46,7 @@ async def legacy_matches(
         RequestContext.reset()
 
 
-@router.post("/api/matches/readlist")
+@router.get("/api/v1/matches")
 async def rest_matches(
     payload: MatchesRequest,
     db: Session = Depends(get_db),
@@ -57,7 +57,7 @@ async def rest_matches(
         items = MatchesReadListAction.execute(
             db,
             league_id=payload.leagueID,
-            division_id=payload.divisionID,
+            division_id=divisionID,
             team_id=payload.teamID
         )
         response = JsonApiSerializer.serialize_collection(

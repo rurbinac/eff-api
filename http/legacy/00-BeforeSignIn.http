@@ -11,36 +11,31 @@
 @team-id = 1187
 @match-team-id = 16971
 
+### 01. TopEPL
 
-### 01. SignIn
-# @name login
-
-POST {{base-url}}/eff/eff_api/SignIn.php HTTP/1.1
+POST {{base-url}}/eff/eff_api/TopEPL.php
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
 User-Agent: {{user-agent}}
 
 _format={{format}}
-&userEmail={{user-name}}
-&userPassword={{user-pass}}
 
+### 02. Lookups - ReadList - byLookupNum = 1
 
-### --> Get the token
-@access-token = {{login.response.body.values.token}}
-
-
-### 02. SignInfo
-
-POST {{base-url}}/eff/eff_api/Users.php?f=SignInfo
+POST {{base-url}}/eff/eff_api/Lookups.php?f=ReadList
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
-Authorization: Bearer {{access-token}}
+User-Agent: {{user-agent}}
 
 _format=json
+&_type=byLookupNum
+&lookupNum=1
 
+### 03. Lookups - ReadList - byLookupNum = 2
 
-### 03. SignOut
-
-POST {{base-url}}/eff/eff_api/Users.php?f=SignOut
+POST {{base-url}}/eff/eff_api/Lookups.php?f=ReadList
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
-Authorization: Bearer {{access-token}}
+User-Agent: {{user-agent}}
 
 _format=json
+&_type=byLookupNum
+&lookupNum=2
+

@@ -2,14 +2,14 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas import SignInRequest, SignUpRequest, UpdateUserRequest
-from app.actions.sign import SignInAction, SignOutAction, SignInfoAction, SignUpAction, UpdateUserAction
+from app.schemas import SignInRequest
+from app.actions.sign import SignInAction, SignOutAction, SignInfoAction
 from app.context import RequestContext
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-@router.post("/signin")
+@router.post("/sign_in")
 def rest_signin(payload: SignInRequest, http_request: Request, db: Session = Depends(get_db)) -> dict:
     """REST endpoint: Sign in user."""
     RequestContext.set_datetime()
@@ -24,63 +24,26 @@ def rest_signin(payload: SignInRequest, http_request: Request, db: Session = Dep
         RequestContext.reset()
 
 
-@router.post("/signout")
+@router.get("/sign_info")
+def rest_signinfo(http_request: Request, db: Session = Depends(get_db)) -> dict:
+    """REST endpoint: Get current user info from token."""
+    RequestContext.set_datetime()
+    try:
+        # Get token from Authorization header
+        auth_header = http_request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return {"error": "Missing or invalid token"}
+
+        token = auth_header[7:]
+        # Get data from action
+        session_data = SignInfoAction.execute_with_token(db, token)
+        # Return as REST object
+        return session_data
+    finally:
+        RequestContext.reset()
+
+
+@router.post("/sign_out")
 def rest_signout() -> dict:
     """REST endpoint: Sign out user."""
     return SignOutAction.execute(0)
-
-
-@router.post("/signup")
-def rest_signup(payload: SignUpRequest, db: Session = Depends(get_db)) -> dict:
-    """REST endpoint: Create new user account."""
-    RequestContext.set_datetime()
-    try:
-        # Get data from action
-        session_data = SignUpAction.execute(
-            db=db,
-            user_email=payload.userEmail,
-            user_password=payload.userPassword,
-            user_name=payload.userName,
-            first_name=payload.firstName,
-            last_name=payload.lastName,
-            birthday=payload.birthday,
-            country=payload.country,
-            state=payload.state,
-            city=payload.city,
-            phone_number=payload.phoneNumber,
-            time_zone=payload.timeZone,
-            favorite_team=payload.favoriteTeam,
-        )
-        # Return as REST object
-        return session_data
-    finally:
-        RequestContext.reset()
-
-
-@router.patch("/users/{user_id}")
-def rest_update_user(
-    user_id: int,
-    payload: UpdateUserRequest,
-    db: Session = Depends(get_db),
-) -> dict:
-    """REST endpoint: Update user profile."""
-    RequestContext.set_datetime()
-    try:
-        # Get data from action
-        session_data = UpdateUserAction.execute(
-            db=db,
-            user_id=user_id,
-            first_name=payload.firstName,
-            last_name=payload.lastName,
-            birthday=payload.birthday,
-            country=payload.country,
-            state=payload.state,
-            city=payload.city,
-            phone_number=payload.phoneNumber,
-            time_zone=payload.timeZone,
-            favorite_team=payload.favoriteTeam,
-        )
-        # Return as REST object
-        return session_data
-    finally:
-        RequestContext.reset()

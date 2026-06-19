@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.actions.teams import TeamsReadListAction, TeamsGetRealMembersRankingAction, TeamsWaiverMembersDetailAction
+from app.actions.teams import TeamsReadListAction, TeamsGetRealMembersRankingAction, TeamsWaiverMembersDetailAction, TeamsGetCurrentMembersAction
 from app.context import RequestContext
 from app.utils import JsonApiSerializer
 
@@ -66,15 +66,16 @@ async def legacy_teams(
         RequestContext.reset()
 
 
-@router.post("/api/teams/readlist")
+@router.get("/api/v1/teams")
 def rest_teams(
-    payload: TeamsRequest,
+    leagueID: int | None = None,
+    divisionID: int | None = None,
     db: Session = Depends(get_db)
 ):
     """REST endpoint: Get teams for league or division (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        items = TeamsReadListAction.execute(db, league_id=payload.leagueID, division_id=payload.divisionID)
+        items = TeamsReadListAction.execute(db, league_id=leagueID, division_id=divisionID)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='teams',
@@ -85,42 +86,85 @@ def rest_teams(
         RequestContext.reset()
 
 
-@router.post("/api/teams/real-members-ranking")
-def rest_teams_real_members_ranking(
-    payload: TeamsRequest,
+@router.get("/api/v1/teams/waiver_members_detail")
+def rest_teams_waiver_members_detail(
+    teamID: int | None = None,
     db: Session = Depends(get_db)
 ):
-    """REST endpoint: Get real members ranking for team (JSON:API format)."""
+    """REST endpoint: Get waiver members detail for team (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        if payload.teamID is None:
+        if teamID is None:
             return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
-        items = TeamsGetRealMembersRankingAction.execute(db, payload.teamID)
+        items = TeamsWaiverMembersDetailAction.execute(db, teamID)
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='team-members',
-            resource_id_key='realTeamMemberID',
+            resource_type='waiver-members',
+            resource_id_key='teamMemberID',
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()
 
 
-@router.post("/api/teams/waiver-members-detail")
-def rest_teams_waiver_members_detail(
-    payload: TeamsRequest,
+@router.get("/api/v1/teams/wish_list_detail")
+def rest_teams_wish_list_detail(
+    teamID: int | None = None,
     db: Session = Depends(get_db)
 ):
-    """REST endpoint: Get waiver members detail for team (JSON:API format)."""
+    """REST endpoint: Get wish list detail for team (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        if payload.teamID is None:
+        if teamID is None:
             return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
-        items = TeamsWaiverMembersDetailAction.execute(db, payload.teamID)
+        # TODO: Implement TeamsWishListDetailAction
+        items = []
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='waiver-members',
-            resource_id_key='teamMemberID',
+            resource_type='wish-list',
+            resource_id_key='teamID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
+    finally:
+        RequestContext.reset()
+
+
+@router.get("/api/v1/teams/current_members")
+def rest_teams_current_members(
+    teamID: int | None = None,
+    db: Session = Depends(get_db)
+):
+    """REST endpoint: Get current members for team (JSON:API format)."""
+    RequestContext.set_datetime()
+    try:
+        if teamID is None:
+            return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
+        items = TeamsGetCurrentMembersAction.execute(db, teamID)
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='team-members',
+            resource_id_key='realTeamMemberKey',
+        )
+        return JsonApiSerializer.add_timestamp(response)
+    finally:
+        RequestContext.reset()
+
+
+@router.get("/api/v1/teams/real_members_ranking")
+def rest_teams_real_members_ranking(
+    teamID: int | None = None,
+    db: Session = Depends(get_db)
+):
+    """REST endpoint: Get real members ranking for team (JSON:API format)."""
+    RequestContext.set_datetime()
+    try:
+        if teamID is None:
+            return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
+        items = TeamsGetRealMembersRankingAction.execute(db, teamID)
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='team-members',
+            resource_id_key='realTeamMemberID',
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:

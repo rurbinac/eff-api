@@ -37,7 +37,7 @@ async def legacy_team_standings(
         RequestContext.reset()
 
 
-@router.post("/api/teamstandings/readlist")
+@router.get("/api/v1/team_standings")
 async def rest_team_standings(
     payload: TeamStandingsRequest,
     db: Session = Depends(get_db),

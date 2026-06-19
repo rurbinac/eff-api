@@ -41,7 +41,7 @@ async def legacy_team_member_transfers(
         RequestContext.reset()
 
 
-@router.post("/api/team-member-transfers/pending")
+@router.get("/api/v1/team-member-transfers/pending")
 def rest_team_member_transfers_pending(
     payload: TeamMemberTransfersRequest,
     db: Session = Depends(get_db)
@@ -49,9 +49,9 @@ def rest_team_member_transfers_pending(
     """REST endpoint: Get pending member transfers for team (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        if payload.teamID is None:
+        if teamID is None:
             return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
-        items = TeamMemberTransfersGetPendingByTeamIDAction.execute(db, payload.teamID)
+        items = TeamMemberTransfersGetPendingByTeamIDAction.execute(db, teamID)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='team-member-transfers',
