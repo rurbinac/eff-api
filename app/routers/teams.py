@@ -21,7 +21,7 @@ router = APIRouter(tags=["teams"])
 async def legacy_teams(
     f: str = Query(..., description="Action name"),
     format: str | None = Query("json", alias="_format"),
-    type: str | None = Query(None, alias="_type"),
+    type: str | None = Form(None, alias="_type"),
     leagueID: int | None = Form(None),
     divisionID: int | None = Form(None),
     teamID: int | None = Form(None),
