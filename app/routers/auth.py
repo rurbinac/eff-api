@@ -6,7 +6,7 @@ from app.schemas import SignInRequest
 from app.actions.sign import SignInAction, SignOutAction, SignInfoAction
 from app.context import RequestContext
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
 @router.post("/sign_in")
