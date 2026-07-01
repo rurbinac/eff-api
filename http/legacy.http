@@ -1,0 +1,373 @@
+#
+# VARIABLES
+#
+@base-url = https://eff-api-150703383580.us-central1.run.app/eff/eff_api
+@user-agent = Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
+@format = json
+@user-name = nigel@bowmantx.com
+@user-pass = PASSWORD_9
+@user-id = 9
+@real-competition-id = 21
+@real-competition-match-day = 38
+@league-id = 63
+@division-id = 130
+@team-id = 1187
+@match-team-id = 16971
+
+
+#
+#   00.00 => BeforeSignIn
+#
+
+
+### 00.01 -> TopEPL
+
+POST {{base-url}}/TopEPL.php
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+
+_format={{format}}
+
+
+### 00.02 -> Lookups - ReadList - byLookupNum - 1
+
+POST {{base-url}}/Lookups.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+
+_format=json
+&_type=byLookupNum
+&lookupNum=1
+
+
+### 00.02 -> Lookups - ReadList - byLookupNum - 2
+
+POST {{base-url}}/Lookups.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+
+_format=json
+&_type=byLookupNum
+&lookupNum=2
+
+
+#
+#   01    => Authentication
+#
+
+
+### 01.01 -> SignIn
+# @name login
+
+POST {{base-url}}/SignIn.php
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+
+_format={{format}}
+&userEmail={{user-name}}
+&userPassword={{user-pass}}
+
+### --> Get the token
+@access-token = {{login.response.body.values.token}}
+
+
+### 01.02 -> SignInfo
+
+POST {{base-url}}/Users.php?f=SignInfo
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+Authorization: Bearer {{access-token}}
+
+_format=json
+
+
+### 01.03 -> SignOut
+
+POST {{base-url}}/Users.php?f=SignOut
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+Authorization: Bearer {{access-token}}
+
+_format=json
+
+
+#
+#   02    => Leagues
+#
+
+### 02.01 -> Leagues - ReadList - byUserID - {{user-id}}
+
+POST {{base-url}}/Leagues.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byUserID
+&userID={{user-id}}
+
+
+#
+#   03    => Divisions
+#
+
+### 03.01 -> Divisions - ReadList - byLeagueID - {{league-id}}
+
+POST {{base-url}}/Divisions.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byLeagueID
+&leagueID={{league-id}}
+
+
+### 03.02 -> Divisions - DraftResult - {{division-id}}
+
+POST {{base-url}}/Divisions.php?f=DraftResult
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&divisionID={{division-id}}
+
+
+#
+#   04    => DivisionNotes
+#
+
+### 04.01 -> Divisions - ReadList - byDivisionID - {{division-id}}
+
+POST {{base-url}}/DivisionNotes.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byDivisionID
+&divisionID={{division-id}}
+
+
+#
+#   04    => DivisionNotes
+#
+
+### 04.01 -> DivisionNotes - ReadList - byDivisionID - {{division-id}}
+
+POST {{base-url}}/DivisionNotes.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byDivisionID
+&divisionID={{division-id}}
+
+#
+#   05    => Teams
+#
+
+### 05.01 -> Teams - ReadList - byLeagueID - {{league-id}}
+
+POST {{base-url}}/Teams.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byLeagueID
+&leagueID={{league-id}}
+
+
+### 05.02 -> Teams - ReadList - byDivisionID - {{division-id}}
+
+POST {{base-url}}/Teams.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byDivisionID
+&divisionID={{division-id}}
+
+
+### 05.03 -> Teams - WaiverMembersDetail - {{team-id}}
+
+POST {{base-url}}/Teams.php?f=WaiverMembersDetail
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+
+
+### 05.04 -> Teams - WishListDetail - {{team-id}}
+
+POST {{base-url}}/Teams.php?f=WishListDetail
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+
+
+### 05.05 -> Teams - GetCurrentMembers - {{team-id}}
+
+POST {{base-url}}/Teams.php?f=GetCurrentMembers
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+
+
+### 05.06 -> Teams - GetRealMembersRanking - {{team-id}}
+
+POST {{base-url}}/Teams.php?f=GetRealMembersRanking
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+
+
+#
+#   06    => TeamMemberTransfers
+#
+
+### 06.01 -> TeamMemberTransfers - ReadList - byLeagueID - {{league-id}}
+
+POST {{base-url}}/TeamMemberTransfers.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byLeagueID
+&leagueID={{league-id}}
+
+
+### 06.02 -> TeamMemberTransfers - GetPendingByTeamID - {{team-id}}
+
+POST {{base-url}}/TeamMemberTransfers.php?f=GetPendingByTeamID
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+
+
+#
+#   07    => Matches
+#
+
+### 07.01 -> Matches - ReadList - byLeagueID - {{league-id}}
+
+POST {{base-url}}/Matches.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byLeagueID
+&leagueID={{league-id}}
+
+
+### 07.02 -> Matches - ReadList - byDivisionID - {{division-id}}
+
+POST {{base-url}}/Matches.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byDivisionID
+&divisionID={{division-id}}
+
+
+#
+#   08    => Matches
+#
+
+### 08.01 -> MatchTeams - GetLineupByMatchTeamID - {{match-team-id}}
+
+POST {{base-url}}/MatchTeams.php?f=GetLineupByMatchTeamID
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&matchTeamID={{match-team-id}}
+
+
+#
+#   09    => TeamStandings
+#
+
+### 09.01 -> TeamStandings - ReadList - byLeagueID - {{league-id}}
+
+POST {{base-url}}/TeamStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byLeagueID
+&leagueID={{league-id}}
+
+
+#
+#   10    => RealMatches
+#
+
+### 10.01 -> RealMatches - ReadList - byMatchDay - {{real-competition-id}},{{real-competition-match-day}}
+
+POST {{base-url}}/RealMatches.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byMatchDay
+&realCompetitionID={{real-competition-id}}
+&realCompetitionMatchDay={{real-competition-match-day}}
+
+
+#
+#   11    => RealStandings
+#
+
+### 11.01 -> RealStandings - ReadList - byDivisionID - {{division-id}},{{real-competition-id}},{{real-competition-match-day}}
+
+POST {{base-url}}/RealStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byDivisionID
+&realCompetitionID={{real-competition-id}}
+&realCompetitionMatchDay={{real-competition-match-day}}
+&divisionID={{division-id}}
+
+
+#
+#   12    => RealTeamStandings
+#
+
+### 12.01 -> RealTeamStandings - ReadList - byRealCompetitionMatchDay - {{real-competition-id}},{{real-competition-match-day}}
+
+POST {{base-url}}/RealTeamStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byRealCompetitionMatchDay
+&realCompetitionID={{real-competition-id}}
+&realCompetitionMatchDay={{real-competition-match-day}}

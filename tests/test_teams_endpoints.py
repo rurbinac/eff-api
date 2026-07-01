@@ -40,7 +40,7 @@ class TestTeamsEndpoints:
     def test_rest_teams_readlist(self, test_client):
         """Test REST Teams ReadList endpoint."""
         response = test_client.post(
-            "/api/teams/readlist",
+            "/api/teams",
             json={"leagueID": 1}
         )
 

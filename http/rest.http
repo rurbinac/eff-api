@@ -1,0 +1,309 @@
+#
+# VARIABLES
+#
+@base-url = https://eff-api-150703383580.us-central1.run.app/api/v1
+@user-agent = Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
+@format = json
+@user-name = nigel@bowmantx.com
+@user-pass = PASSWORD_9
+@user-id = 9
+@new-user-email = test@test123.com
+@new-user-pass = PASS_123
+@real-competition-id = 21
+@real-competition-match-day = 38
+@league-id = 63
+@division-id = 130
+@team-id = 1187
+@match-team-id = 16971
+
+
+#
+#   00.00 => BeforeSignIn
+#
+
+
+### 00.01 -> GET top_epl
+
+GET {{base-url}}/top_epl
+Content-Type: application/json
+User-Agent: {{user-agent}}
+
+
+### 00.02 -> GET lookups - lookupType - 1
+
+GET {{base-url}}/lookups?lookupType=1
+Content-Type: application/json
+User-Agent: {{user-agent}}
+
+
+### 00.03 -> GET lookups - lookupType - 2
+
+GET {{base-url}}/lookups?lookupType=2
+Content-Type: application/json
+User-Agent: {{user-agent}}
+
+
+### 00.04 -> POST users
+
+POST {{base-url}}/users
+Content-Type: application/json
+User-Agent: {{user-agent}}
+
+{
+  "userEmail": "{{new-user-email}}",
+  "userPassword": "{{new-user-pass}}",
+  "userName": "TestUser",
+  "firstName": "Test",
+  "lastName": "User",
+  "birthday": "2000-01-01",
+  "country": "US",
+  "state": "US-TX",
+  "city": "Austin",
+  "phoneNumber": "5551234567",
+  "timeZone": "1",
+  "favoriteTeam": "Arsenal"
+}
+
+
+#
+#   01    => Authentication
+#
+
+### 01.01 -> POST auth
+# @name login
+
+POST {{base-url}}/auth
+Content-Type: application/json
+User-Agent: {{user-agent}}
+
+{
+  "userEmail": "{{user-name}}",
+  "userPassword": "{{user-pass}}"
+}
+
+
+### --> Get the token
+@access-token = {{login.response.body.token}}
+
+
+### 01.02 -> GET auth
+
+GET {{base-url}}/auth
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 01.03 -> DELETE auth
+
+POST {{base-url}}/auth/sign_out
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+
+### 01.04 -> PATCH users/{{user-id}}
+
+PATCH {{base-url}}/users/{{user-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+
+{
+  "firstName": "Nigel",
+  "lastName": "Bowman",
+  "birthday": "1957-06-19",
+  "country": "US",
+  "state": "US-TX",
+  "city": "Austin",
+  "phoneNumber": "5126338928",
+  "timeZone": "1",
+  "favoriteTeam": "Bristol City"
+}
+
+
+#
+#   02    => Leagues
+#
+
+### 02.01 -> GET leagues?userID={{user-id}}
+
+GET {{base-url}}/leagues?userID={{user-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+#
+#   03    => Divisions
+#
+
+### 03.01 -> GET divisions?leagueID={{league-id}}
+
+GET {{base-url}}/divisions?leagueID={{league-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+#
+#   04    => DivisionNotes
+#
+
+### 04.01 -> GET division_notes?divisionID={{division-id}}
+
+GET {{base-url}}/division_notes?divisionID={{division-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+#
+#   05    => Teams
+#
+
+### 05.01 -> GET teams?leagueID={{league-id}}
+
+GET {{base-url}}/teams?leagueID={{league-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 05.02 -> GET teams?divisionID={{division-id}}
+
+GET {{base-url}}/teams?divisionID={{division-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 05.03 -> GET teams/waiver_members_detail?teamID={{team-id}}
+
+GET {{base-url}}/teams/waiver_members_detail?teamID={{team-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 05.04 -> GET teams/wish_list_detail?teamID={{team-id}}
+
+GET {{base-url}}/teams/wish_list_detail?teamID={{team-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 05.05 -> GET teams/current_members?teamID={{team-id}}
+
+GET {{base-url}}/teams/current_members?teamID={{team-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 05.06 -> GET teams/real_members_ranking?teamID={{team-id}}
+
+GET {{base-url}}/teams/real_members_ranking?teamID={{team-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+#
+#   06    => TeamMemberTransfers
+#
+
+### 06.01 -> GET team_member_transfers?leagueID={{league-id}}
+
+GET {{base-url}}/team_member_transfers?leagueID={{league-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 06.02 -> GET team_member_transfers?teamID={{team-id}}
+
+GET {{base-url}}/team_member_transfers?teamID={{team-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+#
+#   07    => Matches
+#
+
+### 07.01 -> GET matches?leagueID={{league-id}}
+
+GET {{base-url}}/matches?leagueID={{league-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 07.02 -> GET matches?divisionID={{division-id}}
+
+GET {{base-url}}/matches?divisionID={{division-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+#
+#   08    => Matches
+#
+
+### 08.01 -> GET match_teams/lineup?matchTeamID={{match-team-id}}
+
+GET {{base-url}}/match_teams/lineup?matchTeamID={{match-team-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+#
+#   09    => TeamStandings
+#
+
+### 09.01 -> GET team_standings?leagueID={{league-id}}
+
+GET {{base-url}}/team_standings?leagueID={{league-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+#
+#   10    => RealMatches
+#
+
+### 10.01 -> GET real_matches?realCompetitionID={{real-competition-id}}&realCompetitionMatchDay={{real-competition-match-day}}
+
+GET {{base-url}}/real_matches?realCompetitionID={{real-competition-id}}&realCompetitionMatchDay={{real-competition-match-day}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+#
+#   11    => RealStandings
+#
+
+### 11.01 -> GET real_standings?realCompetitionID={{real-competition-id}}&realCompetitionMatchDay={{real-competition-match-day}}&divisionID={{division-id}}
+
+GET {{base-url}}/real_standings?realCompetitionID={{real-competition-id}}&realCompetitionMatchDay={{real-competition-match-day}}&divisionID={{division-id}}
+
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+#
+#   12    => RealTeamStandings
+#
+
+### 12.01 -> GET real_team_standings?realCompetitionID={{real-competition-id}}&realCompetitionMatchDay={{real-competition-match-day}}
+
+GET {{base-url}}/real_team_standings?realCompetitionID={{real-competition-id}}&realCompetitionMatchDay={{real-competition-match-day}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
