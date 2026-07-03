@@ -12,29 +12,32 @@ C:\Users\rurbi\Projects\EFF\google\scripts\start-cloud-sql-proxy.ps1
 Or manually (cloud-sql-proxy v2 syntax):
 ```powershell
 $proxy = "C:\Users\rurbi\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\cloud-sql-proxy.exe"
-& $proxy eff-dev-497918:us-central1:eff-dev-db --port 3306 --address 127.0.0.1
+& $proxy sublime-scion-499902-m5:us-central1:eff-db --port 3306 --address 127.0.0.1
 ```
 
 The proxy will start and listen on `localhost:3306`.
 
 ### 2. Configure DBeaver Connection
 
+Create two connections — one for prod, one for dev. All settings are the same except the database name.
+
+| Setting | Prod | Dev |
+|---------|------|-----|
+| **Server Host** | localhost | localhost |
+| **Port** | 3306 | 3306 |
+| **Database** | `eff_db` | `eff_db_dev` |
+| **Username** | appuser | appuser |
+| **Password** | W5JAo9NFIX0tXSaVEuZlSs8LVbcwa8en | W5JAo9NFIX0tXSaVEuZlSs8LVbcwa8en |
+
+Both databases are on the same Cloud SQL instance — the proxy connection is shared.
+
 1. Open DBeaver
 2. **File → New → DBeaver → Database Connection**
 3. Select **MySQL** → Next
-4. Fill in the connection settings:
-
-| Setting | Value |
-|---------|-------|
-| **Server Host** | localhost |
-| **Port** | 3306 |
-| **Database** | eff_dev_db |
-| **Username** | appuser |
-| **Password** | [From Secret Manager - copied to clipboard] |
-| **Save password locally** | ✓ (optional) |
-
+4. Fill in the settings from the table above
 5. Click **Test Connection** → Should see "Connected"
 6. Click **Finish**
+7. Repeat for the second connection
 
 ### 3. Verify Connection
 
@@ -110,11 +113,15 @@ AND scriptsStatus IS NULL;
 
 ## Cloud SQL Instance Details
 
-- **Project**: eff-dev-497918
+- **Project**: sublime-scion-499902-m5 (EFFootball)
 - **Region**: us-central1
-- **Instance Name**: eff-dev-db
-- **Database**: eff_dev_db
-- **MySQL Version**: Check in Google Cloud Console
+- **Instance Name**: eff-db
+- **MySQL Version**: 8.4
+
+| Database | Used by |
+|----------|---------|
+| `eff_db` | Production — `https://eff-api-338220807664.us-central1.run.app` |
+| `eff_db_dev` | Dev — `https://eff-api-dev-338220807664.us-central1.run.app` |
 
 ## Security Notes
 

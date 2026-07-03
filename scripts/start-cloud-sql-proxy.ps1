@@ -4,12 +4,12 @@
 Write-Host "=== Starting Cloud SQL Proxy ===" -ForegroundColor Green
 Write-Host ""
 Write-Host "This will create a local connection at: localhost:3306" -ForegroundColor Cyan
-Write-Host "Connection String: eff-dev-497918:us-central1:eff-dev-db" -ForegroundColor Cyan
+Write-Host "Connection String: sublime-scion-499902-m5:us-central1:eff-db" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "In DBeaver, use:" -ForegroundColor Yellow
 Write-Host "  Host: localhost"
 Write-Host "  Port: 3306"
-Write-Host "  Database: eff_dev_db"
+Write-Host "  Database: eff_db"
 Write-Host "  Username: appuser"
 Write-Host "  Password: (from Secret Manager)"
 Write-Host ""
@@ -26,7 +26,7 @@ Write-Host "Starting proxy..." -ForegroundColor Green
 Write-Host ""
 
 # Start the proxy (cloud-sql-proxy v2 syntax)
-& $proxyPath eff-dev-497918:us-central1:eff-dev-db `
+& $proxyPath sublime-scion-499902-m5:us-central1:eff-db `
     --port 3306 `
     --address 127.0.0.1
 
