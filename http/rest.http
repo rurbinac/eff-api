@@ -2,6 +2,7 @@
 # VARIABLES
 #
 @base-url = https://eff-api-dev-338220807664.us-central1.run.app/api/v1
+# @base-url = https://eff-api-338220807664.us-central1.run.app/api/v1
 @user-agent = Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
 @format = json
 @user-name = nigel@bowmantx.com
@@ -141,6 +142,14 @@ Authorization: Bearer {{access-token}}
 ### 03.01 -> GET divisions?leagueID={{league-id}}
 
 GET {{base-url}}/divisions?leagueID={{league-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 03.02 -> GET divisions/draft_result?divisionID={{division-id}}
+
+GET {{base-url}}/divisions/draft_result?divisionID={{division-id}}
 Content-Type: application/json
 User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}

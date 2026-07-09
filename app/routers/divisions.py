@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.actions.divisions import DivisionsReadListAction, DivisionsTransactionsDetailAction
+from app.actions.draft import DraftResultAction
 from app.context import RequestContext
 from app.utils import JsonApiSerializer
 
@@ -48,6 +49,15 @@ async def legacy_divisions(
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
                 "items": [{"values": item} for item in items]
             }
+        elif f == "DraftResult":
+            if divisionID is None:
+                return {"error": "divisionID is required for DraftResult"}, 400
+            items = DraftResultAction.execute(db, divisionID)
+            return {
+                "table": "DraftResult",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "items": [{"values": item} for item in items]
+            }
         else:
             return {"error": f"Unknown action: {f}"}, 400
     finally:
@@ -66,6 +76,22 @@ def rest_divisions(leagueID: int | None = None, db: Session = Depends(get_db)):
             items,
             resource_type='divisions',
             resource_id_key='divisionID',
+        )
+        return JsonApiSerializer.add_timestamp(response)
+    finally:
+        RequestContext.reset()
+
+
+@router.get("/api/v1/divisions/draft_result")
+def rest_divisions_draft_result(divisionID: int, db: Session = Depends(get_db)):
+    """REST endpoint: Get draft result for a division."""
+    RequestContext.set_datetime()
+    try:
+        items = DraftResultAction.execute(db, divisionID)
+        response = JsonApiSerializer.serialize_collection(
+            items,
+            resource_type='draft_result',
+            resource_id_key='teamID',
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:
