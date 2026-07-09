@@ -40,6 +40,15 @@ class DraftConstants:
     DRAFT_STATUS_DRAFTED = 4
 
 
+class DraftNotice:
+    """Draft real-time event name constants."""
+
+    DRAFT_START_EVENT    = 'draft-started'
+    DRAFT_PAUSE_EVENT    = 'draft-paused'
+    MEMBER_DRAFTED_EVENT = 'member-drafted'
+    DRAFT_MESSAGE_EVENT  = 'draft-message'
+
+
 class WaiversConstants:
     """Waiver status and configuration constants."""
 
