@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from app.constants import DraftNotice as Events
+from app.constants import DraftEvents as Events
 from app.services import pusher as pusher_service
 
 
@@ -14,6 +14,10 @@ class DraftNotice:
         Events.MEMBER_DRAFTED_EVENT,
         Events.DRAFT_MESSAGE_EVENT,
     }
+
+    @staticmethod
+    def division_channel(division_id: int) -> str:
+        return f"presence-draft-{division_id}"
 
     def __init__(self, division_id: int):
         self._division_id = division_id
@@ -43,7 +47,7 @@ class DraftNotice:
         payload = self._get_payload()
         if payload is not None:
             pusher_service.trigger(
-                f"presence-draft-{self._division_id}",
+                self.division_channel(self._division_id),
                 self._event_name,
                 payload,
             )

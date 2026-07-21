@@ -155,6 +155,38 @@ User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
 
+### 03.03 -> GET divisions/draft_situation?divisionID={{division-id}}
+
+GET {{base-url}}/divisions/draft_situation?divisionID={{division-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 03.04 -> POST divisions/start_draft?divisionID={{division-id}}
+
+POST {{base-url}}/divisions/start_draft?divisionID={{division-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 03.05 -> POST divisions/pause_draft?divisionID={{division-id}}
+
+POST {{base-url}}/divisions/pause_draft?divisionID={{division-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
+### 03.06 -> POST divisions/restart_draft?divisionID={{division-id}}
+
+POST {{base-url}}/divisions/restart_draft?divisionID={{division-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
 #
 #   04    => DivisionNotes
 #

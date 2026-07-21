@@ -2,6 +2,7 @@
 # VARIABLES
 #
 @base-url = https://effootball.com/eff/eff_api
+@gaming-url = https://effootball.com/gaming/api
 @user-agent = Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
 @format = json
 @user-name = nigel@bowmantx.com
@@ -116,6 +117,46 @@ _format={{format}}
 ### 03.02 -> Divisions - DraftResult - {{division-id}}
 
 POST {{base-url}}/Divisions.php?f=DraftResult
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+
+_format={{format}}
+&divisionID={{division-id}}
+
+
+### 03.03 -> Divisions - DraftSituation - {{division-id}}
+
+POST {{gaming-url}}/Divisions.php?f=DraftSituation
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+
+_format={{format}}
+&divisionID={{division-id}}
+
+
+### 03.04 -> Divisions - StartDraft - {{division-id}}
+
+POST {{gaming-url}}/Divisions.php?f=StartDraft
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+
+_format={{format}}
+&divisionID={{division-id}}
+
+
+### 03.05 -> Divisions - PauseDraft - {{division-id}}
+
+POST {{gaming-url}}/Divisions.php?f=PauseDraft
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+
+_format={{format}}
+&divisionID={{division-id}}
+
+
+### 03.06 -> Divisions - RestartDraft - {{division-id}}
+
+POST {{gaming-url}}/Divisions.php?f=RestartDraft
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
 User-Agent: {{user-agent}}
 

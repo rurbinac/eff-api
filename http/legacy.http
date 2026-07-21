@@ -134,6 +134,50 @@ _format={{format}}
 &divisionID={{division-id}}
 
 
+### 03.03 -> Divisions - DraftSituation - {{division-id}}
+
+POST {{base-url}}/Divisions.php?f=DraftSituation
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&divisionID={{division-id}}
+
+
+### 03.04 -> Divisions - StartDraft - {{division-id}}
+
+POST {{base-url}}/Divisions.php?f=StartDraft
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&divisionID={{division-id}}
+
+
+### 03.05 -> Divisions - PauseDraft - {{division-id}}
+
+POST {{base-url}}/Divisions.php?f=PauseDraft
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&divisionID={{division-id}}
+
+
+### 03.06 -> Divisions - RestartDraft - {{division-id}}
+
+POST {{base-url}}/Divisions.php?f=RestartDraft
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&divisionID={{division-id}}
+
+
 #
 #   04    => DivisionNotes
 #

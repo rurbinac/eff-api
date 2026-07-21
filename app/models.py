@@ -102,11 +102,11 @@ class League(SQLModel, table=True):
     maxDefender: int
     maxMidfielder: int
     maxStriker: int
-    autoEPLTeam: int
-    autoGoalkeeper: int
-    autoDefender: int
-    autoMidfielder: int
-    autoStriker: int
+    lowestEPLTeam: int
+    lowestGoalkeeper: int
+    lowestDefender: int
+    lowestMidfielder: int
+    lowestStriker: int
     createdBy: int
     createdIn: datetime
     updatedBy: Optional[int] = None

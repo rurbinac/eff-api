@@ -6,7 +6,7 @@ from sqlalchemy import text
 from app.models import League, Division, Team
 from app.services import QueryService
 from app.context import RequestContext, extract_match_day_status
-from app.constants import LookupConstants, DraftConstants, WaiversConstants, DraftPositionConstants
+from app.constants import LookupConstants, DraftConstants, MatchCreationConstants, WaiversConstants, DraftPositionConstants
 from app.security import verify_password
 from fastapi import HTTPException, status
 
@@ -182,23 +182,23 @@ class LeaguesBuildAction:
             totPromoted=LeaguesBuildAction.TOT_PROMOTED,
             maxFranchiseMembers=LeaguesBuildAction.MAX_FRANCHISE_MEMBERS,
             maxWaiver=WaiversConstants.MAX_WAIVERS,
-            minEPLTeam=DraftPositionConstants.MIN_EPL_TEAMS,
-            minPlayer=DraftPositionConstants.MIN_PLAYERS,
+            minEPLTeam=DraftPositionConstants.MIN_EPL_TEAM,
+            minPlayer=DraftPositionConstants.MIN_PLAYER,
             minGoalkeeper=DraftPositionConstants.MIN_GOALKEEPER,
             minDefender=DraftPositionConstants.MIN_DEFENDER,
             minMidfielder=DraftPositionConstants.MIN_MIDFIELDER,
             minStriker=DraftPositionConstants.MIN_STRIKER,
-            maxEPLTeam=DraftPositionConstants.MAX_EPL_TEAMS,
-            maxPlayer=DraftPositionConstants.MAX_PLAYERS,
+            maxEPLTeam=DraftPositionConstants.MAX_EPL_TEAM,
+            maxPlayer=DraftPositionConstants.MAX_PLAYER,
             maxGoalkeeper=DraftPositionConstants.MAX_GOALKEEPER,
             maxDefender=DraftPositionConstants.MAX_DEFENDER,
             maxMidfielder=DraftPositionConstants.MAX_MIDFIELDER,
             maxStriker=DraftPositionConstants.MAX_STRIKER,
-            autoEPLTeam=DraftPositionConstants.AUTO_EPL_TEAMS,
-            autoGoalkeeper=DraftPositionConstants.AUTO_GOALKEEPER,
-            autoDefender=DraftPositionConstants.AUTO_DEFENDER,
-            autoMidfielder=DraftPositionConstants.AUTO_MIDFIELDER,
-            autoStriker=DraftPositionConstants.AUTO_STRIKER,
+            lowestEPLTeam=DraftPositionConstants.LOWEST_EPL_TEAM,
+            lowestGoalkeeper=DraftPositionConstants.LOWEST_GOALKEEPER,
+            lowestDefender=DraftPositionConstants.LOWEST_DEFENDER,
+            lowestMidfielder=DraftPositionConstants.LOWEST_MIDFIELDER,
+            lowestStriker=DraftPositionConstants.LOWEST_STRIKER,
             createdBy=user_id,
             createdIn=request_datetime,
         )
@@ -252,8 +252,8 @@ class LeaguesBuildAction:
                 commissionerID=new_league.commissionerID,
                 season=new_league.season,
                 seasonNum=new_league.seasonNum,
-                leagueMatches=DraftConstants.MATCHES_NONE,
-                divisionMatches=DraftConstants.MATCHES_NONE,
+                leagueMatches=MatchCreationConstants.NONE,
+                divisionMatches=MatchCreationConstants.NONE,
                 draftType=first_draft_type,
                 draftDate=draft_date,
                 draftStatus=DraftConstants.DRAFT_STATUS_NOT_DRAFTED,

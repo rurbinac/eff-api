@@ -21,25 +21,25 @@ MIN_MIDFIELDER = DraftPositionConstants.MIN_MIDFIELDER
 MAX_MIDFIELDER = DraftPositionConstants.MAX_MIDFIELDER
 MIN_STRIKER = DraftPositionConstants.MIN_STRIKER
 MAX_STRIKER = DraftPositionConstants.MAX_STRIKER
-MIN_EPL_TEAM = DraftPositionConstants.MIN_EPL_TEAMS
-MAX_EPL_TEAM = DraftPositionConstants.MAX_EPL_TEAMS
+MIN_EPL_TEAM = DraftPositionConstants.MIN_EPL_TEAM
+MAX_EPL_TEAM = DraftPositionConstants.MAX_EPL_TEAM
 
 # Player and Member totals
-MIN_PLAYERS = DraftPositionConstants.MIN_PLAYERS
-MAX_PLAYERS = DraftPositionConstants.MAX_PLAYERS
-MIN_MEMBERS = MIN_PLAYERS + MIN_EPL_TEAM
-MAX_MEMBERS = MAX_PLAYERS + MAX_EPL_TEAM
+MIN_PLAYER = DraftPositionConstants.MIN_PLAYER
+MAX_PLAYER = DraftPositionConstants.MAX_PLAYER
+MIN_MEMBER = DraftPositionConstants.MIN_MEMBER
+MAX_MEMBER = DraftPositionConstants.MAX_MEMBER
 
-# Automatic draft selections
-AUTO_GOALKEEPER = DraftPositionConstants.AUTO_GOALKEEPER
-AUTO_DEFENDER = DraftPositionConstants.AUTO_DEFENDER
-AUTO_MIDFIELDER = DraftPositionConstants.AUTO_MIDFIELDER
-AUTO_STRIKER = DraftPositionConstants.AUTO_STRIKER
-AUTO_EPL_TEAM = DraftPositionConstants.AUTO_EPL_TEAMS
+# Lowest draft selections
+LOWEST_GOALKEEPER = DraftPositionConstants.LOWEST_GOALKEEPER
+LOWEST_DEFENDER = DraftPositionConstants.LOWEST_DEFENDER
+LOWEST_MIDFIELDER = DraftPositionConstants.LOWEST_MIDFIELDER
+LOWEST_STRIKER = DraftPositionConstants.LOWEST_STRIKER
+LOWEST_EPL_TEAM = DraftPositionConstants.LOWEST_EPL_TEAM
 
 # Aggregate position labels
-PLAYERS = DraftPositionConstants.PLAYERS
-MEMBERS = DraftPositionConstants.MEMBERS
+PLAYER = DraftPositionConstants.PLAYER
+MEMBER = DraftPositionConstants.MEMBER
 DP_UNKNOWN = DraftPositionConstants.DP_UNKNOWN
 
 GroupData: TypeAlias = list[str]
@@ -536,7 +536,7 @@ class BaseMembers:
 
     @property
     def dp_cnt(self) -> dict[str, int]:
-        by_dp = self.collect_by_dp(list(self._mkeys.keys()))
+        by_dp = self.collect_by_dp([key for _, key in self._mkeys.keys()])
         if by_dp is None:
             by_dp = {}
         gk = len(by_dp.get(GOALKEEPER, []))
@@ -551,14 +551,14 @@ class BaseMembers:
             MIDFIELDER: mf,
             STRIKER: st,
             EPL_TEAM: tm,
-            PLAYERS: pl,
-            MEMBERS: pl + tm,
+            PLAYER: pl,
+            MEMBER: pl + tm,
         }
 
     @property
     def is_valid(self) -> bool:
         dp_stats = self.dp_stats
-        return not dp_stats[MEMBERS]["deficit"] and not dp_stats[MEMBERS]["surplus"]
+        return not dp_stats[MEMBER]["deficit"] and not dp_stats[MEMBER]["surplus"]
 
     def unpack(self, data: str | PackedData | None = None) -> bool:
         """Unpack the team members from a string."""
@@ -583,7 +583,7 @@ class BaseMembers:
             max_dp = DraftPositionConstants.LIMITS[dp]["max"]
             # Create the record for dp
             dp_stats[dp] = {"cnt": cnt_dp, "min": min_dp, "max": max_dp}
-            if dp not in {PLAYERS, MEMBERS}:
+            if dp not in {PLAYER, MEMBER}:
                 dp_stats[dp]["must_add"] = max(min_dp - cnt_dp, 0)
                 dp_stats[dp]["must_remove"] = max(cnt_dp - max_dp, 0)
                 dp_stats[dp]["can_add"] = max(max_dp - cnt_dp, 0)
@@ -592,8 +592,8 @@ class BaseMembers:
                 deficit = deficit or dp_stats[dp]["must_add"] > 0
                 surplus = surplus or dp_stats[dp]["must_remove"] > 0
         #
-        dp_stats[MEMBERS]["deficit"] = deficit
-        dp_stats[MEMBERS]["surplus"] = surplus
+        dp_stats[MEMBER]["deficit"] = deficit
+        dp_stats[MEMBER]["surplus"] = surplus
         return dp_stats
 
     def _reset_mkeys(self) -> MKeys:
@@ -676,20 +676,20 @@ class TeamMembers(BaseMembers):
         # Validate the changes against the DP stats
         dp_stats = self.dp_stats
 
-        is_valid = not dp_stats[MEMBERS]["deficit"] and not dp_stats[MEMBERS]["surplus"]
-        cnt_after = {PLAYERS: dp_stats[PLAYERS]["cnt"], MEMBERS: dp_stats[MEMBERS]["cnt"]}
+        is_valid = not dp_stats[MEMBER]["deficit"] and not dp_stats[MEMBER]["surplus"]
+        cnt_after = {PLAYER: dp_stats[PLAYER]["cnt"], MEMBER: dp_stats[MEMBER]["cnt"]}
         for dp in dp_stats:
-            if dp not in {PLAYERS, MEMBERS}:
+            if dp not in {PLAYER, MEMBER}:
                 cnt_add = len(keys_to_add.get(dp, []))
                 cnt_remove = len(keys_to_remove.get(dp, []))
                 if _can_change_dp(dp_stats[dp], cnt_add, cnt_remove, is_valid):
-                    cnt_after[MEMBERS] += cnt_add - cnt_remove
+                    cnt_after[MEMBER] += cnt_add - cnt_remove
                     if dp != EPL_TEAM:
-                        cnt_after[PLAYERS] += cnt_add - cnt_remove
+                        cnt_after[PLAYER] += cnt_add - cnt_remove
                 else:
                     return (None, None)
 
-        for dp in [PLAYERS, MEMBERS]:
+        for dp in [PLAYER, MEMBER]:
             cnt_dp = cnt_after[dp]
             if cnt_dp < dp_stats[dp]["min"] or cnt_dp > dp_stats[dp]["max"]:
                 # In not valid after the changes.
@@ -719,29 +719,31 @@ class DraftTeamMembers(BaseMembers):
     def draft(self) -> bool:
         pass
 
-    def available_dp(self, auto_draft: bool) -> set[str]:
+    def available_dp(self, draft_lowest: bool) -> set[str]:
         dp_cnt = self.dp_cnt
-        free_dp = set()
-        if auto_draft:
-            # For auto draft try to fill the "auto", first
+        available = set()
+        if draft_lowest:
+            # Try to fill the "lowest", first
             for dp in DraftPositionConstants.LIMITS:
-                if dp_cnt[dp] < DraftPositionConstants.LIMITS[dp]["auto"]:
-                    free_dp.add(dp)
-        if len(free_dp) <= 0:
+                if dp_cnt[dp] < DraftPositionConstants.LIMITS[dp]["lowest"]:
+                    # If the count is less than the lowest limit, add it to available
+                    available.add(dp)
+        if len(available) <= 0:
+            # All lowest limits are satisfied, so check for must_add and can_add
             dp_stats = self.dp_stats
             cnt_must = 0
             can_add_dp = set()
             for dp in dp_stats:
-                if dp not in {PLAYERS, MEMBERS}:
+                if dp not in {PLAYER, MEMBER}:
                     if dp_stats[dp]["must_add"] > 0:
                         # The dp must add, so you can draft this dp
                         cnt_must += dp_stats[dp]["must_add"]
-                        free_dp.add(dp)
+                        available.add(dp)
                     elif dp_stats[dp]["can_add"] > 0:
                         # The dp can add, lets save it
                         can_add_dp.add(dp)
-            if dp_stats[MEMBERS]["cnt"] + cnt_must < dp_stats[MEMBERS]["max"]:
+            if dp_stats[MEMBER]["cnt"] + cnt_must < dp_stats[MEMBER]["max"]:
                 # Still some spots available after must_add allocations
                 for dp in can_add_dp:
-                    free_dp.add(dp)
-        return free_dp
+                    available.add(dp)
+        return available
