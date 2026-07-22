@@ -1,4 +1,3 @@
-from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.context import RequestContext

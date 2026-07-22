@@ -1,6 +1,4 @@
 """Application constants for lookups and configuration."""
-from datetime import datetime, timedelta
-
 
 class LookupConstants:
     """Lookup constants for validation against Lookups table."""

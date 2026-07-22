@@ -1,6 +1,5 @@
 from datetime import datetime
 from contextvars import ContextVar
-from sqlmodel import SQLModel
 
 # Context variable to store the request datetime across the request lifecycle
 _request_datetime: ContextVar[datetime | None] = ContextVar('request_datetime', default=None)

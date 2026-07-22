@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Form
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
@@ -10,7 +12,9 @@ from app.actions.draft.draft_exception import DraftException
 from app.actions.draft.draft_helper import DraftHelper
 from app.actions.draft.draft_values import DraftValues
 from app.context import RequestContext
+from app.models import Division
 from app.security import decode_token
+from app.services import pusher as pusher_service
 from app.utils import JsonApiSerializer
 
 
@@ -241,3 +245,54 @@ def rest_divisions_transactions_detail(divisionID: int | None = None, db: Sessio
         return JsonApiSerializer.add_timestamp(response)
     finally:
         RequestContext.reset()
+
+
+@router.post("/api/v1/divisions/pusher_webhook")
+async def rest_divisions_pusher_webhook(request: Request, db: Session = Depends(get_db)):
+    """Pusher webhook: update draftingUsers when members join/leave presence channels."""
+    body = await request.body()
+    key = request.headers.get("X-Pusher-Key", "")
+    signature = request.headers.get("X-Pusher-Signature", "")
+
+    webhook = pusher_service.get_client().validate_webhook(key, signature, body.decode("utf-8"))
+    if webhook is None:
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    sequence = webhook.get("time_ms", 0)
+
+    for event in webhook.get("events", []):
+        channel = event.get("channel", "")
+        name = event.get("name", "")
+        user_id = event.get("user_id")
+
+        if not channel.startswith("presence-draft-") or user_id is None:
+            continue
+        if name not in ("member_added", "member_removed"):
+            continue
+
+        try:
+            division_id = int(channel.removeprefix("presence-draft-"))
+        except ValueError:
+            continue
+
+        _update_drafting_users(db, division_id, int(user_id), name == "member_added", sequence)
+
+    return {"status": "ok"}
+
+
+def _update_drafting_users(db: Session, division_id: int, user_id: int, online: bool, sequence: int) -> None:
+    division = db.get(Division, division_id)
+    if division is None:
+        return
+    raw = division.draftingUsers
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    except (json.JSONDecodeError, TypeError):
+        data = {}
+    key = str(user_id)
+    if online:
+        data[key] = [1, sequence]
+    elif key in data:
+        del data[key]
+    division.draftingUsers = json.dumps(data)
+    db.commit()

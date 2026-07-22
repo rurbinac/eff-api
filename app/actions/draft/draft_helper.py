@@ -1,4 +1,3 @@
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.actions.draft.draft_base import DraftPause, DraftRestart, DraftStart
@@ -7,8 +6,6 @@ from app.actions.draft.draft_member import DraftMember
 from app.actions.draft.draft_notice import DraftNotice
 from app.actions.draft.draft_values import DraftValues
 from app.constants import DraftConstants
-from app.services import QueryService
-from app.utils.match_day_map_keys import lea_map_days_map_key, split_map_days_map_key
 from app.context import RequestContext
 
 class DraftHelper:
@@ -95,39 +92,6 @@ class DraftHelper:
             return False
         DraftMember(self, draft_unsigned=True).execute()
         return True
-
-    def _close(self) -> None:
-        # dc = DraftClose(self._draft_values.division["leagueID"]).execute()
-
-        d = self._draft_values.division
-        divisions = QueryService.get_divisions_by_league(self._db, d.get("leagueID"))
-        if any(
-            div["draftStatus"] != DraftConstants.DRAFT_STATUS_DRAFTED
-            for div in divisions
-        ):
-            return
-        total_teams = sum(div["numTeams"] for div in divisions)
-        for div in divisions:
-            lea_key = lea_map_days_map_key(self._db, div["matchDayMapKey"], total_teams)
-            _, last_md, _, _, _ = split_map_days_map_key(lea_key)
-            self._db.execute(
-                text("""
-                    UPDATE `Divisions`
-                       SET `matchDayMapKey` = :leaKey,
-                           `lastRealCompetitionMatchDay` = :lastMd
-                     WHERE `divisionID` = :divisionID
-                """),
-                {"leaKey": lea_key, "lastMd": last_md, "divisionID": div["divisionID"]},
-            )
-            self._db.execute(
-                text("""
-                    UPDATE `Teams`
-                       SET `matchDayMapKey` = :leaKey
-                     WHERE `divisionID` = :divisionID
-                """),
-                {"leaKey": lea_key, "divisionID": div["divisionID"]},
-            )
-        self._db.commit()
 
 
 def start_draft(db: Session, user_id: int, division_id: int) -> dict:

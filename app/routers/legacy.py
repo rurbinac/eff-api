@@ -4,7 +4,6 @@ from app.database import get_db
 from app.actions.sign import SignInAction, SignOutAction, SignInfoAction
 from app.actions.top_epl import TopEPLAction
 from app.context import RequestContext
-from app.security import decode_token
 
 router = APIRouter(tags=["legacy"])
 
