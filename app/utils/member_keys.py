@@ -58,6 +58,93 @@ class MKeys:
 
     DELIM: Final[str] = ":"
     SUFFIX: Final[str] = "."
+    PLAYER: Final[str] = "P"
+    TEAM: Final[str] = "T"
+
+    @staticmethod
+    def to_str(
+        keys: MKeys | PackedData | list | str | None, one_level: bool = False
+    ) -> str | None:
+        """Transforms different inputs to a packed str of keys or None on error
+
+        Args:
+            keys (MKeys | PackedData | list | str | None): a representation of keys
+            one_level (bool, optional): _description_. Defaults to False.
+
+        Returns:
+            str | None: _description_
+        """
+        if keys is None:
+            return ""
+        if one_level:
+            if isinstance(keys, list):
+                if not all(MKeys.valid_key(k) for k in keys):
+                    return None
+                return MKeys._join_keys(keys)
+            if isinstance(keys, str):
+                return MKeys._join_keys(MKeys.to_list(keys))
+            return None
+        if isinstance(keys, list):
+            return MKeys._join_groups(keys)
+        if isinstance(keys, str):
+            return MKeys._join_groups(keys.split(MKeys.DELIM)) if keys else ""
+        if isinstance(keys, MKeys) and keys.is_valid:
+            return str(keys)
+        return None
+
+    @staticmethod
+    def _join_keys(keys: list) -> str | None:
+        if keys is None:
+            return None
+        return MKeys.SUFFIX.join(keys) + MKeys.SUFFIX if keys else ""
+
+    @staticmethod
+    def _join_groups(keys) -> str | None:
+        groups = []
+        for g in keys:
+            txt = MKeys.to_str(g, True)
+            if txt is None:
+                return None
+            groups.append(txt)
+        return MKeys.DELIM.join(groups)
+
+    @staticmethod
+    def to_list(
+        keys: MKeys | list | str | None, one_level: bool = False
+    ) -> PackedData | GroupData | None:
+        if keys is None:
+            return []
+
+        if one_level:
+            if isinstance(keys, str):
+                if not keys:
+                    return []
+                if not keys.endswith(MKeys.SUFFIX):
+                    return None
+                return MKeys._validate_keys(keys[:-1].split(MKeys.SUFFIX))
+            if isinstance(keys, list):
+                return MKeys._validate_keys(keys)
+            return None
+
+        # Nested (multi-level) processing
+        if isinstance(keys, str):
+            return MKeys._build_nested_groups(keys.split(MKeys.DELIM))
+        if isinstance(keys, list):
+            return MKeys._build_nested_groups(keys)
+        if isinstance(keys, MKeys) and keys.is_valid:
+            return keys.get_groups()
+        return None
+
+    @staticmethod
+    def _validate_keys(keys: list) -> GroupData | None:
+        """Validate all keys and return them if valid."""
+        return keys if all(MKeys.valid_key(k) for k in keys) else None
+
+    @staticmethod
+    def _build_nested_groups(groups: list) -> PackedData | None:
+        """Build nested groups recursively, returning None if any group is invalid."""
+        result = [MKeys.to_list(g, True) for g in groups]
+        return result if all(g is not None for g in result) else None
 
     @staticmethod
     def split_key(key: Any) -> tuple[str, int] | tuple[None, None]:
@@ -79,6 +166,37 @@ class MKeys:
     def valid_key(key: Any) -> bool:
         """Returns True if the key is valid, False otherwise."""
         return MKeys.split_key(key)[0] is not None
+
+    @staticmethod
+    def valid_player_key(key: Any) -> bool:
+        """Returns True if the key is valid, False otherwise."""
+        return MKeys.split_key(key)[0] == MKeys.PLAYER
+
+    @staticmethod
+    def valid_team_key(key: Any) -> bool:
+        """Returns True if the key is valid, False otherwise."""
+        return MKeys.split_key(key)[0] == MKeys.TEAM
+
+    @staticmethod
+    def from_player_ids(ids: int | list[int] | None) -> str | None:
+        return MKeys._from_ids(MKeys.PLAYER, ids)
+
+    @staticmethod
+    def from_team_ids(ids: int | list[int] | None) -> str | None:
+        return MKeys._from_ids(MKeys.TEAM, ids)
+
+    @staticmethod
+    def _from_ids(prefix: str, ids: int | list[int] | None) -> str | None:
+        if ids is None:
+            return ""  # Empty list
+        if isinstance(ids, int):
+            ids = [ids]
+        txt = ""
+        for id in ids:
+            if id <= 0:
+                return None  # Error
+            txt += f"{prefix}{id}{MKeys.SUFFIX}"
+        return txt
 
     @classmethod
     def build(
@@ -200,7 +318,7 @@ class MKeys:
         Returns an empty list if invalid."""
         return [g.copy() for g in self._groups] if self.is_valid else []
 
-    def get_group(self, group: int = 0) -> list[str]:
+    def get_group(self, group: int = 0) -> GroupData:
         """Returns a copy of the list of keys in the specified group,
         or an empty list if the group does not exist."""
         return self._groups[group].copy() if self.has_group(group) else []
@@ -575,10 +693,9 @@ class BaseMembers:
         dp_stats = {}
         deficit = False
         surplus = False
-        #
-        for dp in self.dp_cnt:
-            # Get the values to use
-            cnt_dp = self.dp_cnt[dp]
+        dp_cnt = self.dp_cnt
+        for dp in dp_cnt:
+            cnt_dp = dp_cnt[dp]
             min_dp = DraftPositionConstants.LIMITS[dp]["min"]
             max_dp = DraftPositionConstants.LIMITS[dp]["max"]
             # Create the record for dp
@@ -707,7 +824,7 @@ class TeamMembers(BaseMembers):
             return None
         if add:
             if any(self._mkeys.has_key(k) for dp in by_dp for k in by_dp[dp]):
-                # key(s) to add already 
+                # key(s) to add already
                 return None
         else:
             if any(not self._mkeys.has_key(k) for dp in by_dp for k in by_dp[dp]):

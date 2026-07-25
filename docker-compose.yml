@@ -1,0 +1,43 @@
+services:
+  db:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: eff
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: changeme
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./create_eff.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+      - "5678:5678"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      APP_ENV: development
+      DB_HOST: db
+      DB_NAME: eff
+      DB_USER: appuser
+      DB_PASSWORD: changeme
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
