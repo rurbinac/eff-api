@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Query, Form, Depends
+from fastapi import APIRouter, Depends, Form, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
 from app.context import RequestContext
-from app.actions.match_teams import MatchTeamsReadListAction
+from app.actions.match_teams import GetLineupByMatchTeamIDAction, MatchTeamsReadListAction
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["match-teams"])
@@ -19,6 +19,7 @@ async def legacy_match_teams(
     format: str | None = Query("json", alias="_format"),
     type: str | None = Query(None, alias="_type"),
     matchID: int | None = Form(None),
+    matchTeamID: int | None = Form(None),
     db: Session = Depends(get_db),
 ):
     """Legacy PHP-compatible MatchTeams endpoint."""
@@ -31,8 +32,15 @@ async def legacy_match_teams(
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
                 "items": [{"values": item} for item in items]
             }
+        elif f == "GetLineupByMatchTeamID":
+            if matchTeamID is None:
+                raise HTTPException(status_code=400, detail="matchTeamID is required")
+            result = GetLineupByMatchTeamIDAction.execute(db, match_team_id=matchTeamID)
+            if result is None:
+                raise HTTPException(status_code=404, detail="Not found")
+            return result
         else:
-            return {"error": f"Unknown function: {f}"}, 400
+            raise HTTPException(status_code=400, detail=f"Unknown function: {f}")
     finally:
         RequestContext.reset()
 

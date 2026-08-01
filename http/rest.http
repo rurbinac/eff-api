@@ -1,8 +1,8 @@
 #
 # VARIABLES
 #
-@base-url = https://eff-api-dev-338220807664.us-central1.run.app/api/v1
-# @base-url = https://eff-api-338220807664.us-central1.run.app/api/v1
+@base-url = https://eff-api-qy3ehr6uya-uc.a.run.app/api/v1
+# @base-url = https://eff-api-338220807664.us-central1.run.app/api/v1  # retired
 @user-agent = Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
 @format = json
 @user-name = nigel@bowmantx.com

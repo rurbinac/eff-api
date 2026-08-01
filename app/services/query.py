@@ -1,18 +1,22 @@
 from datetime import datetime
+from typing import Any
+
 from sqlalchemy.orm import Session
+from sqlmodel import SQLModel
+
+from app.constants import MatchDayStatusConstants, RealCompetitionConstants
+from app.context import RequestContext
 from app.models import (
+    Division,
+    DivisionNotes,
+    League,
+    Lookup,
+    MatchDaysStatus,
     RealCompetition,
     RealStanding,
-    MatchDaysStatus,
-    League,
-    Division,
     Team,
     User,
-    DivisionNotes,
-    Lookup,
 )
-from app.context import RequestContext
-from app.constants import RealCompetitionConstants
 
 
 class QueryService:
@@ -60,10 +64,15 @@ class QueryService:
 
     @staticmethod
     def get_current_match_day_status(
-        db: Session, base_real_competition_id: int = None, match_day_map_key: str = None
+        db: Session,
+        base_real_competition_id: int | None = None,
+        match_day_map_key: str | None = None,
+        current_datetime: datetime | None = None,
+        include_boundaries: bool = False,
     ) -> dict | None:
         """Get current MatchDayStatus for the base competition, determining which phase we're in."""
-        current_datetime = RequestContext.get_datetime()
+        if not isinstance(current_datetime, datetime):
+            current_datetime = RequestContext.get_datetime()
 
         if match_day_map_key is None:
             if base_real_competition_id is None:
@@ -87,46 +96,100 @@ class QueryService:
         if not mds:
             return None
 
-        # Determine which phase of the match day we're in
-        mds_dict = {
-            "realCompetitionID": mds.realCompetitionID,
-            "realCompetitionMatchDay": mds.realCompetitionMatchDay,
-            "baseRealCompetitionMatchDay": mds.realCompetitionMatchDay,
+        return QueryService._mds_to_dict(mds, current_datetime, include_boundaries)
+
+    @staticmethod
+    def get_match_day_status(
+        db: Session,
+        real_competition_id: int,
+        real_competition_match_day: int,
+        match_day_map_key: str,
+    ) -> dict | None:
+        mds = (
+            db.query(MatchDaysStatus)
+            .filter(
+                MatchDaysStatus.realCompetitionID == real_competition_id,
+                MatchDaysStatus.realCompetitionMatchDay == real_competition_match_day,
+                MatchDaysStatus.matchDayMapKey == match_day_map_key,
+            )
+            .first()
+        )
+        if not mds:
+            return None
+        return QueryService._mds_to_dict(mds, include_boundaries=True)
+
+    @staticmethod
+    def _mds_to_dict(
+        mds: MatchDaysStatus,
+        current_datetime: datetime | None = None,
+        include_boundaries: bool = False,
+    ) -> dict:
+        if not isinstance(current_datetime, datetime):
+            current_datetime = RequestContext.get_datetime()
+        head = {"baseRealCompetitionMatchDay": mds.realCompetitionMatchDay}
+        include = [
+            "realCompetitionID",
+            "realCompetitionMatchDay",
+            "realCompetitionMatchDaySort",
+            "prevActiveRealCompetitionID",
+            "prevActiveRealCompetitionMatchDay",
+            "nextActiveRealCompetitionID",
+            "nextActiveRealCompetitionMatchDay",
+            "finishBaseMatchDay",
+        ]
+        tail = {
             "matchDayStatus": None,
             "matchDayStatusStart": None,
             "matchDayStatusFinish": None,
-            "realCompetitionMatchDaySort": mds.realCompetitionMatchDaySort,
-            "prevActiveRealCompetitionID": mds.prevActiveRealCompetitionID,
-            "prevActiveRealCompetitionMatchDay": mds.prevActiveRealCompetitionMatchDay,
-            "nextActiveRealCompetitionID": mds.nextActiveRealCompetitionID,
-            "nextActiveRealCompetitionMatchDay": mds.nextActiveRealCompetitionMatchDay,
         }
+        for phase, (start, finish) in MatchDayStatusConstants.boundaries():
+            if not tail["matchDayStatus"]:
+                finish_field = getattr(mds, finish, None)
+                if finish_field and current_datetime < finish_field:
+                    tail["matchDayStatus"] = phase
+                    start_field = getattr(mds, start, None)
+                    tail["matchDayStatusStart"] = (
+                        start_field.isoformat() if start_field else None
+                    )
+                    tail["matchDayStatusFinish"] = finish_field.isoformat()
+            if include_boundaries:
+                include.append(start)
+                include.append(finish)
+        if not include_boundaries:
+            include.append("startPreMatch")
+            include.append("startPostMatch")
+        return QueryService._to_dict(mds, include=include, head=head, tail=tail)
 
-        # Check each phase in order to find the current one
-        phases = [
-            "Waivers",
-            "WaiversSettle",
-            "OpenWaivers",
-            "OpenWaiversSettle",
-            "PreMatch",
-            "Match",
-            "PostMatch",
-        ]
-        for phase in phases:
-            finish_field = getattr(mds, f"finish{phase}", None)
-            if finish_field and current_datetime < finish_field:
-                mds_dict["matchDayStatus"] = phase
-                mds_dict["matchDayStatusStart"] = (
-                    getattr(mds, f"start{phase}").isoformat()
-                    if getattr(mds, f"start{phase}")
-                    else None
-                )
-                mds_dict["matchDayStatusFinish"] = (
-                    finish_field.isoformat() if finish_field else None
-                )
-                break
+    @staticmethod
+    def _to_dict(
+        obj: SQLModel,
+        exclude: list[str] | None = None,
+        include: list[str] | None = None,
+        head: dict[str, Any] | None = None,
+        tail: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Convert SQLAlchemy model instance to dictionary."""
+        if head is None:
+            head = {}
+        if tail is None:
+            tail = {}
+        if include is None:
+            include = []
+        if exclude is None:
+            exclude = []
 
-        return mds_dict
+        result = head.copy()
+
+        if isinstance(obj, SQLModel):
+            all_columns = obj.__table__.columns.keys()
+            columns_to_use = include if include else all_columns
+
+            for column in columns_to_use:
+                # Check if column exists and is not excluded
+                if column in all_columns and column not in exclude:
+                    result[column] = getattr(obj, column)
+
+        return result | tail.copy()
 
     @staticmethod
     def get_show_data(db: Session) -> dict | None:
@@ -157,13 +220,17 @@ class QueryService:
             db.query(RealStanding.realTeamShortName)
             .join(
                 RealCompetition,
-                (RealCompetition.realCompetitionID == RealStanding.realCompetitionID) &
-                (RealCompetition.realCompetitionLastMatchDay == RealStanding.realCompetitionMatchDay)
+                (RealCompetition.realCompetitionID == RealStanding.realCompetitionID)
+                & (
+                    RealCompetition.realCompetitionLastMatchDay
+                    == RealStanding.realCompetitionMatchDay
+                ),
             )
             .filter(
                 RealStanding.isTeam == 1,
-                RealCompetition.realCompetitionSYMID == RealCompetitionConstants.BASE_SYMID,
-                RealCompetition.realCompetitionSeasonId == str(season_id)
+                RealCompetition.realCompetitionSYMID
+                == RealCompetitionConstants.BASE_SYMID,
+                RealCompetition.realCompetitionSeasonId == str(season_id),
             )
             .order_by(RealStanding.place.asc())
             .limit(limit)
@@ -660,3 +727,29 @@ class QueryService:
             }
             for lookup in results
         ]
+
+    @staticmethod
+    def get_real_standings_by_match_day(
+        db: Session, real_competition_id: int, real_competition_match_day: int, real_team_member_key: str
+    ) -> dict | None:
+        """
+        Get real standings for a given competition and match day, filtered by team member key.
+
+        Args:
+            db: Database session
+            real_competition_id: The ID of the real competition
+            real_competition_match_day: The match day number
+            real_team_member_key: The team member key to filter by
+        """
+        result = (
+            db.query(RealStanding)
+            .filter(
+                RealStanding.realCompetitionID == real_competition_id,
+                RealStanding.realCompetitionMatchDay == real_competition_match_day,
+                RealStanding.realTeamMemberKey == real_team_member_key,
+            )
+            .first()
+        )
+        if result is None:
+            return None
+        return QueryService._to_dict(result)

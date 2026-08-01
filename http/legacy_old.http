@@ -2,6 +2,7 @@
 # VARIABLES
 #
 @base-url = https://effootball.com/eff/eff_api
+#@base-url = http://localhost:8080/eff/eff_api
 @gaming-url = https://effootball.com/gaming/api
 @user-agent = Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
 @format = json

@@ -44,6 +44,7 @@ DP_UNKNOWN = DraftPositionConstants.DP_UNKNOWN
 
 GroupData: TypeAlias = list[str]
 PackedData: TypeAlias = list[GroupData]
+GetKeyData: TypeAlias = Callable[[str], dict[str, Any]]
 
 
 class MKeys:
@@ -82,7 +83,7 @@ class MKeys:
                     return None
                 return MKeys._join_keys(keys)
             if isinstance(keys, str):
-                return MKeys._join_keys(MKeys.to_list(keys))
+                return MKeys._join_keys(MKeys.to_list(keys, True))
             return None
         if isinstance(keys, list):
             return MKeys._join_groups(keys)
@@ -379,6 +380,9 @@ class MKeys:
     def count(self, group: int = 0) -> int | None:
         """Returns the number of keys in the specified group, or None if the group does not exist."""
         return len(self._groups[group]) if self.has_group(group) else None
+
+    def count_all(self) -> int:
+        return 0 if self.size == 0 else sum(len(g) for g in self._groups)
 
     def find_group(self, key: str) -> int:
         """Returns the index of the group containing the key, or -1 if not found or invalid."""
