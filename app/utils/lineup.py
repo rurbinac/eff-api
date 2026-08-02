@@ -1,4 +1,5 @@
 import re
+from collections.abc import Iterator
 from typing import Any, ClassVar, Final
 
 from sqlalchemy import text
@@ -657,6 +658,22 @@ class Lineup(MKeys):
             # Add the flag to the keys in self._substitutes
             txt = txt.replace(s + MKeys.SUFFIX, s + self.FLAG + MKeys.SUFFIX)
         return txt
+
+    def get_members(self) -> Iterator[dict[str, Any]]:
+        for g, keys in enumerate(self._groups):
+            for key in keys:
+                data = dict(self.get_key_data(key))
+                data["realTeamMemberKey"] = key
+                data["matchTeamID"] = self.match_team_id
+                data["teamID"] = self.team_id
+                data["matchStatus"] = self.match_status
+                data["matchTeamMemberRole"] = g + 1
+                if key in self._substitutes:
+                    data["matchTeamMemberPlayed"] = 1 if g == 1 else 0
+                else:
+                    data["matchTeamMemberPlayed"] = 1 if g == 0 else 0
+
+                yield data
 
     def _set_values(
         self,

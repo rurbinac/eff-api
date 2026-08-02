@@ -157,7 +157,7 @@ class GetLineupByMatchTeamIDAction:
             cache[key] = standing if standing is not None else {}
             return cache[key]
 
-        def get_match_status(match_team: RowMapping, now: datetime) -> str:
+        def get_match_status(match_team: RowMapping, now: datetime) -> int:
             mds = QueryService.get_current_match_day_status(
                 db,
                 match_day_map_key=match_team["matchDayMapKey"],
@@ -198,16 +198,5 @@ class GetLineupByMatchTeamIDAction:
         return {
             "table": "MatchTeams",
             "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-            "values": {
-                "matchTeamID": lineup.match_team_id,
-                "matchID": lineup.match_id,
-                "teamID": lineup.team_id,
-                "userID": lineup.user_id,
-                "matchStatus": lineup.match_status,
-                "competitionType": lineup.competition_type,
-                "competitionMatchDay": lineup.competition_match_day,
-                "matchDayMapKey": lineup.match_day_map_key,
-                "lineup": lineup.pack(),
-                "substitutes": lineup.substitutes,
-            },
+            "values": list(lineup.get_members()),
         }
