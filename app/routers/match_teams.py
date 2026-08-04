@@ -1,9 +1,15 @@
 from fastapi import APIRouter, Depends, Form, HTTPException, Query
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from app.database import get_db
+from sqlalchemy.orm import Session
+
+from app.actions.match_teams import (
+    GetLineupByCompetitionTypeAction,
+    GetLineupByMatchTeamIDAction,
+    GetScoresByMatchIDsAction,
+    MatchTeamsReadListAction,
+)
 from app.context import RequestContext
-from app.actions.match_teams import GetLineupByMatchTeamIDAction, MatchTeamsReadListAction
+from app.database import get_db
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["match-teams"])
@@ -20,6 +26,10 @@ async def legacy_match_teams(
     type: str | None = Query(None, alias="_type"),
     matchID: int | None = Form(None),
     matchTeamID: int | None = Form(None),
+    teamID: int | None = Form(None),
+    competitionType: int | None = Form(None),
+    competitionMatchDay: int | None = Form(None),
+    matchIDs: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     """Legacy PHP-compatible MatchTeams endpoint."""
@@ -39,6 +49,25 @@ async def legacy_match_teams(
             if result is None:
                 raise HTTPException(status_code=404, detail="Not found")
             return result
+        elif f == "GetLineupByCompetitionType":
+            if teamID is None or competitionType is None or competitionMatchDay is None:
+                raise HTTPException(status_code=400, detail="teamID, competitionType, and competitionMatchDay are required")
+            result = GetLineupByCompetitionTypeAction.execute(
+                db,
+                team_id=teamID,
+                competition_type=competitionType,
+                competition_match_day=competitionMatchDay,
+            )
+            if result is None:
+                raise HTTPException(status_code=404, detail="Not found")
+            return result
+        elif f == "GetScoresByMatchIDs":
+            if not matchIDs:
+                raise HTTPException(status_code=400, detail="matchIDs is required")
+            ids = [int(i) for i in matchIDs.split(",") if i.strip().isdigit()]
+            if not ids:
+                raise HTTPException(status_code=400, detail="matchIDs must be a comma-separated list of integers")
+            return GetScoresByMatchIDsAction.execute(db, match_ids=ids)
         else:
             raise HTTPException(status_code=400, detail=f"Unknown function: {f}")
     finally:

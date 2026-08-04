@@ -420,6 +420,7 @@ class Lineup(MKeys):
                      `mt`.`matchTeamNum`,
                      `mt`.`realCompetitionID`,
                      `mt`.`realCompetitionMatchDay`,
+                     `m`.`realCompetitionMatchDaySort`,
                      `m`.`matchStatus`,
                      `m`.`competitionType`,
                      `m`.`competitionMatchDay`,
@@ -1041,3 +1042,167 @@ class Lineup(MKeys):
                 # Players go to group 1, Teams to group 2
                 g = 1 if k.startswith(MKeys.PLAYER) else 2
                 self._groups[g].append(k)
+
+
+class Scores:
+    def __init__(self, db: Session, get_key_data: GetKeyData):
+        self._db: Session = db
+        self._get_key_data = get_key_data
+        self._matches: list[dict[str, Any]] = []
+
+    def read_by_match_ids(self, match_ids: list[int]) -> list[RowMapping]:
+        params = {f"id{i}": v for i, v in enumerate(match_ids)}
+        placeholders = ",".join(f":id{i}" for i in range(len(match_ids)))
+        condition = f"`m`.`matchID` IN ({placeholders})"
+        return self._read(condition, params)
+
+    def read_by_match_day(
+        self,
+        competition_type: int,
+        real_competition_id: int,
+        real_competition_match_day: int,
+        league_id: int,
+        division_id: int | None = None,
+    ) -> list[RowMapping]:
+        condition = "`m`.`competitionType` = :competitionType"
+        condition += " AND `m`.`realCompetitionID` = :realCompetitionID"
+        condition += " AND `m`.`realCompetitionMatchDay` = :realCompetitionMatchDay"
+        condition += " AND `m`.`leagueID` = :leagueID"
+        params = {
+            "competitionType": competition_type,
+            "realCompetitionID": real_competition_id,
+            "realCompetitionMatchDay": real_competition_match_day,
+            "leagueID": league_id,
+        }
+        if competition_type != CompetitionTypeConstants.LEAGUE_KNOCK_OUT:
+            condition += " AND `m`.`divisionID` = :divisionID"
+            params["divisionID"] = division_id
+        return self._read(condition, params)
+
+    def load_by_match_ids(
+        self,
+        match_ids: list[int],
+        match_status: int | None = None,
+    ) -> bool:
+        return self.load(self.read_by_match_ids(match_ids), match_status)
+
+    def load_by_match_day(
+        self,
+        competition_type: int,
+        real_competition_id: int,
+        real_competition_match_day: int,
+        league_id: int,
+        division_id: int | None = None,
+        match_status: int | None = None,
+    ) -> bool:
+        return self.load(
+            self.read_by_match_day(
+                competition_type,
+                real_competition_id,
+                real_competition_match_day,
+                league_id,
+                division_id,
+            ),
+            match_status,
+        )
+
+    def load(
+        self,
+        match_teams: list[RowMapping] | None,
+        match_status: int | None = None,
+        add_detail: bool = True,
+    ) -> bool:
+        """
+        Load and process all match teams, building the scored match list.
+
+        Returns:
+            True if any match teams were loaded, False if the list was empty or None
+        """
+        self._matches = []
+        if not match_teams:
+            return False
+        for match_team in match_teams:
+            match = self._get_match(match_team, match_status, add_detail)
+            self._matches.append(match)
+        return True
+
+    def _read(self, condition: str, params: dict[str, Any]) -> list[RowMapping]:
+        sql = f"""
+               SELECT `mt`.`matchTeamID`,
+                      `mt`.`matchID`,
+                      `mt`.`userID`,
+                      `mt`.`teamID`,
+                      `mt`.`matchTeamNum`,
+                      `m`.`realCompetitionID`,
+                      `m`.`realCompetitionMatchDay`,
+                      `m`.`realCompetitionMatchDaySort`,
+                      `m`.`matchStatus`,
+                      `m`.`competitionType`,
+                      `m`.`competitionMatchDay`,
+                      `mt`.`matchDayMapKey`,
+                      `t`.`teamName`,
+                      `mt`.`teamScore`,
+                      `mt`.`lineup`,
+                      `t`.`teamMembers`
+                  FROM `MatchTeams` `mt`
+                  INNER JOIN `Matches` `m` ON `m`.`matchID` = `mt`.`matchID`
+                  LEFT OUTER JOIN `Teams` `t` ON `t`.`teamID` = `mt`.`teamID`
+                  WHERE {condition}
+                 ORDER BY `m`.`matchID`,
+                          `mt`.`matchTeamID`
+        """
+        return list(self._db.execute(text(sql), params).mappings().all())
+
+    def get_members(self) -> Iterator[dict[str, Any]]:
+        yield from self._matches
+
+    def _get_match(
+        self, match_team: RowMapping, match_status: int, add_detail: bool
+    ) -> dict[str, Any]:
+        """
+        Add lineup details to a row.
+
+        Args:
+            row: The row to add lineup details to
+            add_detail: Whether to add detailed lineup information
+
+        Returns:
+            The updated row with lineup details and calculated team score
+        """
+        lineup = Lineup(self._db, self._get_key_data)
+        lineup.load(match_team, match_status, match_team["teamMembers"])
+        match: dict[str, Any] = {
+            "matchTeamID": match_team["matchTeamID"],
+            "matchID": match_team["matchID"],
+            "userID": match_team["userID"],
+            "teamID": match_team["teamID"],
+            "matchTeamNum": match_team["matchTeamNum"],
+            "realCompetitionID": match_team["realCompetitionID"],
+            "realCompetitionMatchDay": match_team["realCompetitionMatchDay"],
+            "matchStatus": match_team["matchStatus"],
+            "teamName": match_team["teamName"],
+            "teamScore": match_team["teamScore"],
+            "teamScoreCalc": 0,
+        }
+        for member in lineup.get_members():
+            if add_detail:
+                if "lineupDetail" not in match:
+                    match["lineupDetail"] = []
+                match["lineupDetail"].append(
+                    {
+                        "realTeamMemberKey": member["realTeamMemberKey"],
+                        "name": member["name"],
+                        "draftPosition": member["draftPosition"],
+                        "realTeamShortName": member["realTeamShortName"],
+                        "matchPointsL1": member["matchPointsL1"],
+                        "matchDayPlayed": member["matchDayPlayed"],
+                        "realMatchStatus": member["realMatchStatus"],
+                        "realMatchDateEnd": None,
+                        "matchTeamMemberRole": member["matchTeamMemberRole"],
+                        "matchTeamMemberPlayed": member["matchTeamMemberPlayed"],
+                    }
+                )
+            if member["matchTeamMemberPlayed"] == 1:
+                match["teamScoreCalc"] += member.get("matchPointsL1") or 0
+        match["teamScore"] = match["teamScoreCalc"]
+        return match

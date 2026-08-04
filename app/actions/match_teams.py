@@ -11,12 +11,11 @@ from app.services.query import QueryService
 from app.utils.lineup import Lineup
 
 
-
 class MatchTeamsReadListAction:
     """Handle MatchTeams ReadList requests."""
 
     @staticmethod
-    def execute(db: Session, team_id: int | None = None) -> list[dict]:
+    def execute(db: Session, team_id: int | None = None) -> dict:
         """
         Get match teams filtered by team ID.
         Joins with Matches to get match metadata, self-joins to get opposite team data.
@@ -133,11 +132,17 @@ class MatchTeamsReadListAction:
         }
 
 
-class GetLineupByMatchTeamIDAction:
-    """Handle MatchTeams GetLineupByMatchTeamID requests."""
+class GetLineupAction:
+    """Handle MatchTeams GetLineup requests."""
 
     @staticmethod
-    def execute(db: Session, match_team_id: int) -> dict | None:
+    def _execute(
+        db: Session,
+        match_team_id: int | None = None,
+        team_id: int | None = None,
+        competition_type: int | None = None,
+        competition_match_day: int | None = None,
+    ) -> dict | None:
         # filled after reading the row, before load() calls get_key_data
         real_competition_id: int | None = None
         real_match_day: int | None = None
@@ -167,9 +172,15 @@ class GetLineupByMatchTeamIDAction:
             if mds is None:
                 return MatchStatusConstants.NOT_STARTED
 
-            if mds["realCompetitionMatchDaySort"] < match_team["realCompetitionMatchDaySort"]:
+            if (
+                mds["realCompetitionMatchDaySort"]
+                < match_team["realCompetitionMatchDaySort"]
+            ):
                 return MatchStatusConstants.NOT_STARTED
-            elif mds["realCompetitionMatchDaySort"] > match_team["realCompetitionMatchDaySort"]:
+            elif (
+                mds["realCompetitionMatchDaySort"]
+                > match_team["realCompetitionMatchDaySort"]
+            ):
                 return MatchStatusConstants.FINISHED
             else:
                 start_pre = mds["startPreMatch"]
@@ -182,7 +193,20 @@ class GetLineupByMatchTeamIDAction:
                     return MatchStatusConstants.PLAYING
 
         lineup = Lineup(db, get_key_data)
-        match_team = lineup.read_by_match_team(match_team_id)
+        if match_team_id is not None:
+            match_team = lineup.read_by_match_team(match_team_id)
+        elif (
+            team_id is not None
+            and competition_type is not None
+            and competition_match_day is not None
+        ):
+            match_team = lineup.read_by_team_id(
+                team_id, competition_type, competition_match_day
+            )
+        else:
+            raise ValueError(
+                "Either match_team_id or (team_id, competition_type, competition_match_day) must be provided"
+            )
         if match_team is None:
             return None
 
@@ -200,3 +224,37 @@ class GetLineupByMatchTeamIDAction:
             "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
             "values": list(lineup.get_members()),
         }
+
+
+class GetLineupByMatchTeamIDAction(GetLineupAction):
+    """Handle MatchTeams GetLineupByMatchTeamID requests."""
+
+    @staticmethod
+    def execute(db: Session, match_team_id: int) -> dict | None:
+        return GetLineupAction._execute(db, match_team_id=match_team_id)
+
+
+class GetLineupByCompetitionTypeAction:
+    """Handle MatchTeams GetLineupByCompetitionType requests."""
+
+    @staticmethod
+    def execute(
+        db: Session,
+        team_id: int,
+        competition_type: int,
+        competition_match_day: int,
+    ) -> dict | None:
+        return GetLineupAction._execute(
+            db,
+            team_id=team_id,
+            competition_type=competition_type,
+            competition_match_day=competition_match_day,
+        )
+
+
+class GetScoresByMatchIDsAction:
+    """Handle MatchTeams GetScoresByMatchIDs requests."""
+
+    @staticmethod
+    def execute(db: Session, match_ids: list[int]) -> dict:
+        pass
