@@ -2,7 +2,6 @@
 # VARIABLES
 #
 
-#@base-url = https://eff-api-qy3ehr6uya-uc.a.run.app/eff/eff_api
 @base-url = https://eff-api-338220807664.us-central1.run.app/eff/eff_api
 @user-agent = Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
 @format = json
@@ -15,6 +14,10 @@
 @division-id = 130
 @team-id = 1187
 @match-team-id = 16971
+@competition-type = 1
+@competition-match-day = 38
+@match-id = 8486
+@match-ids = 8486,8487
 
 
 #
@@ -340,7 +343,18 @@ _format={{format}}
 #   08    => Matches
 #
 
-### 08.01 -> MatchTeams - GetLineupByMatchTeamID - {{match-team-id}}
+### 08.01 -> MatchTeams - ReadList - byTeamID - {{team-id}}
+
+POST {{base-url}}/MatchTeams.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+
+
+### 08.02 -> MatchTeams - GetLineupByMatchTeamID - {{match-team-id}}
 
 POST {{base-url}}/MatchTeams.php?f=GetLineupByMatchTeamID
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
@@ -349,6 +363,45 @@ Authorization: Bearer {{access-token}}
 
 _format={{format}}
 &matchTeamID={{match-team-id}}
+
+
+### 08.03 -> MatchTeams - GetLineupByCompetitionType - {{team-id}},{{competition-type}},{{competition-match-day}}
+
+POST {{base-url}}/MatchTeams.php?f=GetLineupByCompetitionType
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+&competitionType={{competition-type}}
+&competitionMatchDay={{competition-match-day}}
+
+
+### 08.04 -> MatchTeams - GetScoresByMatchIDs - {{match-ids}}
+
+POST {{base-url}}/MatchTeams.php?f=GetScoresByMatchIDs
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&matchIDs={{match-ids}}
+
+
+### 08.05 -> MatchTeams - GetScoresByMatchDay - {{competition-type}},{{real-competition-id}},{{real-competition-match-day}},{{league-id}}
+
+POST {{base-url}}/MatchTeams.php?f=GetScoresByMatchDay
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&competitionType={{competition-type}}
+&realCompetitionID={{real-competition-id}}
+&realCompetitionMatchDay={{real-competition-match-day}}
+&leagueID={{league-id}}
+&divisionID={{division-id}}
 
 
 #

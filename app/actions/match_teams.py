@@ -8,7 +8,7 @@ from app.constants import MatchStatusConstants
 from app.context import RequestContext
 from app.models import Match, MatchTeam
 from app.services.query import QueryService
-from app.utils.lineup import Lineup
+from app.utils.lineup import Lineup, Scores
 
 
 class MatchTeamsReadListAction:
@@ -162,36 +162,6 @@ class GetLineupAction:
             cache[key] = standing if standing is not None else {}
             return cache[key]
 
-        def get_match_status(match_team: RowMapping, now: datetime) -> int:
-            mds = QueryService.get_current_match_day_status(
-                db,
-                match_day_map_key=match_team["matchDayMapKey"],
-                current_datetime=now,
-                include_boundaries=True,
-            )
-            if mds is None:
-                return MatchStatusConstants.NOT_STARTED
-
-            if (
-                mds["realCompetitionMatchDaySort"]
-                < match_team["realCompetitionMatchDaySort"]
-            ):
-                return MatchStatusConstants.NOT_STARTED
-            elif (
-                mds["realCompetitionMatchDaySort"]
-                > match_team["realCompetitionMatchDaySort"]
-            ):
-                return MatchStatusConstants.FINISHED
-            else:
-                start_pre = mds["startPreMatch"]
-                start_post = mds["startPostMatch"]
-                if start_pre is None or start_pre > now:
-                    return MatchStatusConstants.NOT_STARTED
-                elif start_post is not None and start_post < now:
-                    return MatchStatusConstants.FINISHED
-                else:
-                    return MatchStatusConstants.PLAYING
-
         lineup = Lineup(db, get_key_data)
         if match_team_id is not None:
             match_team = lineup.read_by_match_team(match_team_id)
@@ -214,7 +184,7 @@ class GetLineupAction:
         real_match_day = match_team["realCompetitionMatchDay"]
 
         now = RequestContext.get_datetime()
-        match_status = get_match_status(match_team, now)
+        match_status = _get_match_status(db, match_team, now)
 
         if not lineup.load(match_team, match_status):
             return None
@@ -252,9 +222,120 @@ class GetLineupByCompetitionTypeAction:
         )
 
 
+class GetScores:
+    @staticmethod
+    def _execute(
+        db: Session,
+        match_ids: list[int] | None = None,
+        competition_type: int | None = None,
+        real_competition_id: int | None = None,
+        real_competition_match_day: int | None = None,
+        league_id: int | None = None,
+        division_id: int | None = None,
+    ) -> dict | None:
+        real_competition_id_ref: list[int | None] = [real_competition_id]
+        real_competition_match_day_ref: list[int | None] = [real_competition_match_day]
+        cache: dict[str, dict[str, Any]] = {}
+
+        def get_key_data(key: str) -> dict[str, Any]:
+            if key in cache:
+                return cache[key]
+            if real_competition_id_ref[0] is None or real_competition_match_day_ref[0] is None:
+                return {}
+            standing = QueryService.get_real_standings_by_match_day(
+                db,
+                real_competition_id=real_competition_id_ref[0],
+                real_competition_match_day=real_competition_match_day_ref[0],
+                real_team_member_key=key,
+            )
+            cache[key] = standing if standing is not None else {}
+            return cache[key]
+
+        scores = Scores(db, get_key_data)
+        if match_ids is not None:
+            match_teams = scores.read_by_match_ids(match_ids)
+        elif (
+            competition_type is not None
+            and real_competition_id is not None
+            and real_competition_match_day is not None
+            and league_id is not None
+        ):
+            match_teams = scores.read_by_match_day(
+                competition_type, real_competition_id, real_competition_match_day, league_id, division_id
+            )
+        else:
+            raise ValueError(
+                "Either match_ids or (competition_type, real_competition_id, real_competition_match_day, league_id) must be provided"
+            )
+        if not match_teams:
+            return None
+
+        real_competition_id_ref[0] = match_teams[0]["realCompetitionID"]
+        real_competition_match_day_ref[0] = match_teams[0]["realCompetitionMatchDay"]
+
+        now = RequestContext.get_datetime()
+        match_status = _get_match_status(db, match_teams[0], now)
+
+        if not scores.load(match_teams, match_status):
+            return None
+
+        return {
+            "table": "MatchTeams",
+            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "values": list(scores.get_members()),
+        }
+
+
 class GetScoresByMatchIDsAction:
     """Handle MatchTeams GetScoresByMatchIDs requests."""
 
     @staticmethod
-    def execute(db: Session, match_ids: list[int]) -> dict:
-        pass
+    def execute(db: Session, match_ids: list[int]) -> dict | None:
+        return GetScores._execute(db, match_ids=match_ids)
+
+
+class GetScoresByMatchDayAction:
+    """Handle MatchTeams GetScoresByMatchDay requests."""
+
+    @staticmethod
+    def execute(
+        db: Session,
+        competition_type: int,
+        real_competition_id: int,
+        real_competition_match_day: int,
+        league_id: int,
+        division_id: int | None = None,
+    ) -> dict | None:
+        return GetScores._execute(
+            db,
+            competition_type=competition_type,
+            real_competition_id=real_competition_id,
+            real_competition_match_day=real_competition_match_day,
+            league_id=league_id,
+            division_id=division_id,
+        )
+
+
+def _get_match_status(db: Session, match_team: RowMapping, now: datetime) -> int:
+    mds = QueryService.get_current_match_day_status(
+        db,
+        match_day_map_key=match_team["matchDayMapKey"],
+        current_datetime=now,
+        include_boundaries=True,
+    )
+    if mds is None:
+        return MatchStatusConstants.NOT_STARTED
+
+    if mds["realCompetitionMatchDaySort"] < match_team["realCompetitionMatchDaySort"]:
+        return MatchStatusConstants.NOT_STARTED
+    elif mds["realCompetitionMatchDaySort"] > match_team["realCompetitionMatchDaySort"]:
+        return MatchStatusConstants.FINISHED
+    else:
+        start_pre = mds["startPreMatch"]
+        start_post = mds["startPostMatch"]
+        if start_pre is None or start_pre > now:
+            return MatchStatusConstants.NOT_STARTED
+        elif start_post is not None and start_post < now:
+            return MatchStatusConstants.FINISHED
+        else:
+            return MatchStatusConstants.PLAYING
