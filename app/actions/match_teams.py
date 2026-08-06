@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
@@ -142,27 +143,14 @@ class GetLineupAction:
         team_id: int | None = None,
         competition_type: int | None = None,
         competition_match_day: int | None = None,
+        new_lineup: str | None = None,
+        save: bool = False,
     ) -> dict | None:
         # filled after reading the row, before load() calls get_key_data
-        real_competition_id: int | None = None
-        real_match_day: int | None = None
-        cache: dict[str, dict[str, Any]] = {}
 
-        def get_key_data(key: str) -> dict[str, Any]:
-            if key in cache:
-                return cache[key]
-            if real_competition_id is None or real_match_day is None:
-                return {}
-            standing = QueryService.get_real_standings_by_match_day(
-                db,
-                real_competition_id=real_competition_id,
-                real_competition_match_day=real_match_day,
-                real_team_member_key=key,
-            )
-            cache[key] = standing if standing is not None else {}
-            return cache[key]
+        get_data_cache = KeyDataCache(db)
+        lineup = Lineup(db, get_data_cache.get)
 
-        lineup = Lineup(db, get_key_data)
         if match_team_id is not None:
             match_team = lineup.read_by_match_team(match_team_id)
         elif (
@@ -180,14 +168,17 @@ class GetLineupAction:
         if match_team is None:
             return None
 
-        real_competition_id = match_team["realCompetitionID"]
-        real_match_day = match_team["realCompetitionMatchDay"]
+        get_data_cache.init(match_team)
 
         now = RequestContext.get_datetime()
         match_status = _get_match_status(db, match_team, now)
 
-        if not lineup.load(match_team, match_status):
+        if not lineup.load(match_team, match_status, new_lineup=new_lineup):
             return None
+
+        if save:
+            lineup.save_lineup()
+            db.commit()
 
         return {
             "table": "MatchTeams",
@@ -222,56 +213,92 @@ class GetLineupByCompetitionTypeAction:
         )
 
 
+class SetLineupByCompetitionTypeAction(GetLineupAction):
+    """Handle MatchTeams SetLineupByCompetitionType requests."""
+
+    @staticmethod
+    def execute(
+        db: Session,
+        team_id: int,
+        competition_type: int,
+        competition_match_day: int,
+        real_team_id: int,
+        real_player_ids: list[int],
+        substitute_real_player_ids: list[int],
+    ) -> dict | None:
+        new_lineup = Lineup.from_ids(
+            real_team_id, real_player_ids, substitute_real_player_ids
+        )
+        return GetLineupAction._execute(
+            db,
+            team_id=team_id,
+            competition_type=competition_type,
+            competition_match_day=competition_match_day,
+            new_lineup=new_lineup,
+            save=True,
+        )
+
+
+class ClearLineupByMatchTeamIDAction:
+    """Handle MatchTeams ClearLineupByMatchTeamID requests."""
+
+    @staticmethod
+    def execute(db: Session, match_team_id: int, user_id: int) -> dict | None:
+        match_team = (
+            db.query(MatchTeam).filter(MatchTeam.matchTeamID == match_team_id).first()
+        )
+        if match_team is None:
+            return None
+        if match_team.userID != user_id:
+            raise PermissionError
+        db.execute(
+            text(
+                "UPDATE `MatchTeams` SET `lineup` = '' WHERE `matchTeamID` = :matchTeamID"
+            ),
+            {"matchTeamID": match_team_id},
+        )
+        db.commit()
+        return {
+            "table": "MatchTeams",
+            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "values": {"matchTeamID": match_team_id},
+        }
+
+
 class GetScores:
     @staticmethod
     def _execute(
         db: Session,
         match_ids: list[int] | None = None,
         competition_type: int | None = None,
-        real_competition_id: int | None = None,
-        real_competition_match_day: int | None = None,
+        competition_match_day: int | None = None,
         league_id: int | None = None,
         division_id: int | None = None,
     ) -> dict | None:
-        real_competition_id_ref: list[int | None] = [real_competition_id]
-        real_competition_match_day_ref: list[int | None] = [real_competition_match_day]
-        cache: dict[str, dict[str, Any]] = {}
 
-        def get_key_data(key: str) -> dict[str, Any]:
-            if key in cache:
-                return cache[key]
-            if real_competition_id_ref[0] is None or real_competition_match_day_ref[0] is None:
-                return {}
-            standing = QueryService.get_real_standings_by_match_day(
-                db,
-                real_competition_id=real_competition_id_ref[0],
-                real_competition_match_day=real_competition_match_day_ref[0],
-                real_team_member_key=key,
-            )
-            cache[key] = standing if standing is not None else {}
-            return cache[key]
+        get_data_cache = KeyDataCache(db)
+        scores = Scores(db, get_data_cache.get)
 
-        scores = Scores(db, get_key_data)
         if match_ids is not None:
             match_teams = scores.read_by_match_ids(match_ids)
         elif (
             competition_type is not None
-            and real_competition_id is not None
-            and real_competition_match_day is not None
+            and competition_match_day is not None
             and league_id is not None
         ):
             match_teams = scores.read_by_match_day(
-                competition_type, real_competition_id, real_competition_match_day, league_id, division_id
+                competition_type, competition_match_day, league_id, division_id
             )
         else:
             raise ValueError(
-                "Either match_ids or (competition_type, real_competition_id, real_competition_match_day, league_id) must be provided"
+                "Either match_ids or (competition_type, competition_match_day, league_id) must be provided"
             )
         if not match_teams:
             return None
 
-        real_competition_id_ref[0] = match_teams[0]["realCompetitionID"]
-        real_competition_match_day_ref[0] = match_teams[0]["realCompetitionMatchDay"]
+        get_data_cache.init(
+            match_teams[0]
+        )  # Initialize cache with the first match team
 
         now = RequestContext.get_datetime()
         match_status = _get_match_status(db, match_teams[0], now)
@@ -301,16 +328,14 @@ class GetScoresByMatchDayAction:
     def execute(
         db: Session,
         competition_type: int,
-        real_competition_id: int,
-        real_competition_match_day: int,
+        competition_match_day: int,
         league_id: int,
         division_id: int | None = None,
     ) -> dict | None:
         return GetScores._execute(
             db,
             competition_type=competition_type,
-            real_competition_id=real_competition_id,
-            real_competition_match_day=real_competition_match_day,
+            competition_match_day=competition_match_day,
             league_id=league_id,
             division_id=division_id,
         )
@@ -339,3 +364,54 @@ def _get_match_status(db: Session, match_team: RowMapping, now: datetime) -> int
             return MatchStatusConstants.FINISHED
         else:
             return MatchStatusConstants.PLAYING
+
+
+class KeyDataCache:
+    """Cache for key data used in lineup and scores actions."""
+
+    def __init__(self, db: Session):
+        self._cache: dict[str, dict[str, Any]] = {}
+        self._db = db
+        self._real_competition_id: int | None = None
+        self._real_competition_match_day: int | None = None
+
+    @property
+    def real_competition_id(self) -> int | None:
+        return self._real_competition_id
+
+    @real_competition_id.setter
+    def real_competition_id(self, value: int | None):
+        self._real_competition_id = value
+        self._cache.clear()  # Clear cache when competition ID changes
+
+    @property
+    def real_competition_match_day(self) -> int | None:
+        return self._real_competition_match_day
+
+    @real_competition_match_day.setter
+    def real_competition_match_day(self, value: int | None):
+        self._real_competition_match_day = value
+        self._cache.clear()  # Clear cache when competition match day changes
+
+    def init(self, match_team: RowMapping):
+        """Initialize the cache with match team data."""
+        self._real_competition_id = match_team["realCompetitionID"]
+        self._real_competition_match_day = match_team["realCompetitionMatchDay"]
+        self._cache.clear()  # Clear cache when initializing with new match team
+
+    def get(self, key: str) -> dict[str, Any]:
+        if key in self._cache:
+            return self._cache[key]
+        if (
+            self._real_competition_id is None
+            or self._real_competition_match_day is None
+        ):
+            return {}
+        standing = QueryService.get_real_standings_by_match_day(
+            self._db,
+            real_competition_id=self._real_competition_id,
+            real_competition_match_day=self._real_competition_match_day,
+            real_team_member_key=key,
+        )
+        self._cache[key] = standing if standing is not None else {}
+        return self._cache[key]

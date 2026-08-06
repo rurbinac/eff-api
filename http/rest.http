@@ -305,14 +305,6 @@ User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
 
-### 08.02 -> GET match_teams/lineup?matchTeamID={{match-team-id}}
-
-GET {{base-url}}/match_teams/lineup?matchTeamID={{match-team-id}}
-Content-Type: application/json
-User-Agent: {{user-agent}}
-Authorization: Bearer {{access-token}}
-
-
 #
 #   09    => TeamStandings
 #

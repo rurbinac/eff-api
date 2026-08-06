@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, Form, Depends
+from fastapi import APIRouter, HTTPException, Query, Form, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -20,21 +20,21 @@ async def legacy_lookups(
     f: str = Query(...),
     format: str | None = Query("json", alias="_format"),
     type: str | None = Query(None, alias="_type"),
-    lookupType: int | None = Form(None),
+    lookupNum: int | None = Form(None),
     db: Session = Depends(get_db),
 ):
     """Legacy PHP-compatible Lookups endpoint."""
     RequestContext.set_datetime()
     try:
         if f == "ReadList":
-            items = LookupsReadListAction.execute(db, lookup_num=lookupType)
+            items = LookupsReadListAction.execute(db, lookup_num=lookupNum)
             return {
                 "table": "Lookups",
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
                 "items": [{"values": item} for item in items]
             }
         else:
-            return {"error": f"Unknown function: {f}"}, 400
+            raise HTTPException(status_code=400, detail=f"Unknown function: {f}")
     finally:
         RequestContext.reset()
 

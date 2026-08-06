@@ -1059,19 +1059,16 @@ class Scores:
     def read_by_match_day(
         self,
         competition_type: int,
-        real_competition_id: int,
-        real_competition_match_day: int,
+        competition_match_day: int,
         league_id: int,
         division_id: int | None = None,
     ) -> list[RowMapping]:
         condition = "`m`.`competitionType` = :competitionType"
-        condition += " AND `m`.`realCompetitionID` = :realCompetitionID"
-        condition += " AND `m`.`realCompetitionMatchDay` = :realCompetitionMatchDay"
+        condition += " AND `m`.`competitionMatchDay` = :competitionMatchDay"
         condition += " AND `m`.`leagueID` = :leagueID"
         params = {
             "competitionType": competition_type,
-            "realCompetitionID": real_competition_id,
-            "realCompetitionMatchDay": real_competition_match_day,
+            "competitionMatchDay": competition_match_day,
             "leagueID": league_id,
         }
         if competition_type != CompetitionTypeConstants.LEAGUE_KNOCK_OUT:
@@ -1089,8 +1086,7 @@ class Scores:
     def load_by_match_day(
         self,
         competition_type: int,
-        real_competition_id: int,
-        real_competition_match_day: int,
+        competition_match_day: int,
         league_id: int,
         division_id: int | None = None,
         match_status: int | None = None,
@@ -1098,8 +1094,7 @@ class Scores:
         return self.load(
             self.read_by_match_day(
                 competition_type,
-                real_competition_id,
-                real_competition_match_day,
+                competition_match_day,
                 league_id,
                 division_id,
             ),
@@ -1130,6 +1125,8 @@ class Scores:
         sql = f"""
                SELECT `mt`.`matchTeamID`,
                       `mt`.`matchID`,
+                      `m`.`leagueID`,
+                      `m`.`divisionID`,
                       `mt`.`userID`,
                       `mt`.`teamID`,
                       `mt`.`matchTeamNum`,
@@ -1170,7 +1167,7 @@ class Scores:
             The updated row with lineup details and calculated team score
         """
         lineup = Lineup(self._db, self._get_key_data)
-        lineup.load(match_team, match_status, match_team["teamMembers"])
+        lineup.load(match_team, match_status)
         match: dict[str, Any] = {
             "matchTeamID": match_team["matchTeamID"],
             "matchID": match_team["matchID"],

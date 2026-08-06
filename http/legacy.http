@@ -18,6 +18,9 @@
 @competition-match-day = 38
 @match-id = 8486
 @match-ids = 8486,8487
+@real-team-id = 23
+@real-player-ids = 234,4234,234234,23
+@substitute-real-player-ids = 234,2347
 
 
 #
@@ -340,7 +343,7 @@ _format={{format}}
 
 
 #
-#   08    => Matches
+#   08    => MatchTeams
 #
 
 ### 08.01 -> MatchTeams - ReadList - byTeamID - {{team-id}}
@@ -378,7 +381,34 @@ _format={{format}}
 &competitionMatchDay={{competition-match-day}}
 
 
-### 08.04 -> MatchTeams - GetScoresByMatchIDs - {{match-ids}}
+### 08.04 -> MatchTeams - SetLineupByCompetitionType - {{team-id}},{{competition-type}},{{competition-match-day}}
+
+POST {{base-url}}/MatchTeams.php?f=SetLineupByCompetitionType
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+&competitionType={{competition-type}}
+&competitionMatchDay={{competition-match-day}}
+&realTeamID={{real-team-id}}
+&realPlayerIDs={{real-player-ids}}
+&substituteRealPlayerIDs={{substitute-real-player-ids}}
+
+
+### 08.05 -> MatchTeams - ClearLineupByMatchTeamID - {{match-team-id}}
+
+POST {{base-url}}/MatchTeams.php?f=ClearLineupByMatchTeamID
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&matchTeamID={{match-team-id}}
+
+
+### 08.06 -> MatchTeams - GetScoresByMatchIDs - {{match-ids}}
 
 POST {{base-url}}/MatchTeams.php?f=GetScoresByMatchIDs
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
@@ -389,7 +419,7 @@ _format={{format}}
 &matchIDs={{match-ids}}
 
 
-### 08.05 -> MatchTeams - GetScoresByMatchDay - {{competition-type}},{{real-competition-id}},{{real-competition-match-day}},{{league-id}}
+### 08.07 -> MatchTeams - GetScoresByMatchDay - {{competition-type}},{{competition-match-day}},{{league-id}}
 
 POST {{base-url}}/MatchTeams.php?f=GetScoresByMatchDay
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
@@ -398,8 +428,7 @@ Authorization: Bearer {{access-token}}
 
 _format={{format}}
 &competitionType={{competition-type}}
-&realCompetitionID={{real-competition-id}}
-&realCompetitionMatchDay={{real-competition-match-day}}
+&competitionMatchDay={{competition-match-day}}
 &leagueID={{league-id}}
 &divisionID={{division-id}}
 
