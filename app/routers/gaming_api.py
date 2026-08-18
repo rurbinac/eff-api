@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Form
+from fastapi import APIRouter, Form, HTTPException
 
 from app.actions.leagues import LeaguesBuildAction, LeaguesJoinAction
 from app.actions.sign import (
@@ -18,6 +18,7 @@ from app.actions.teams import (
 )
 from app.context import RequestContext
 from app.database import CurrentToken, CurrentUser, DbSession
+from app.models import User
 
 router = APIRouter()
 
@@ -38,6 +39,10 @@ async def gaming_api_sign_info(db: DbSession, token: CurrentToken):
             "values": session_data
         }
 
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": str(e)}
     finally:
         RequestContext.reset()
 
@@ -57,6 +62,10 @@ async def gaming_api_sign_out(db: DbSession, current_user: CurrentUser):
             "values": result
         }
 
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": str(e)}
     finally:
         RequestContext.reset()
 
@@ -115,6 +124,8 @@ async def gaming_api_users(
             "values": session_data
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         return {"error": str(e)}
 
@@ -170,6 +181,8 @@ async def gaming_api_sign_up(
             "values": session_data
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         return {"error": str(e)}
 
@@ -202,7 +215,6 @@ async def gaming_api_leagues(
         if current_user is None:
             return {"error": "Missing authentication token"}
 
-        from app.models import User
         user = db.query(User).filter(User.userID == current_user).first()
         if not user:
             return {"error": "User not found"}
@@ -241,6 +253,8 @@ async def gaming_api_leagues(
                 "values": team_data
             }
 
+    except HTTPException:
+        raise
     except Exception as e:
         return {"error": str(e)}
 
@@ -264,90 +278,58 @@ async def gaming_api_teams(
         if f == "GetCurrentMembers":
             if not teamID:
                 return {"error": "teamID is required"}
-
             items = TeamsGetCurrentMembersAction.execute(db, teamID)
-
             return {
                 "table": "RealTeamMembers",
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
                 "items": [{"values": item} for item in items]
             }
 
-        elif f == "SetRealMembersRanking":
-            if not teamID or not memberKeys:
-                return {"error": "teamID and memberKeys are required"}
-
-            if current_user is None:
-                return {"error": "Missing authentication token"}
-
-            result = TeamsSetRealMembersRankingAction.execute(
-                db=db,
-                team_id=teamID,
-                user_id=current_user,
-                member_keys_str=memberKeys,
-            )
-
-            return {
-                "table": "success",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "values": result
-            }
-
-        elif f == "WishListSet":
-            if not teamID or not wishListKeys:
-                return {"error": "teamID and wishListKeys are required"}
-
-            if current_user is None:
-                return {"error": "Missing authentication token"}
-
-            result = TeamsWishListSetAction.execute(
-                db=db,
-                team_id=teamID,
-                user_id=current_user,
-                wish_list_keys_str=wishListKeys,
-            )
-
-            return {
-                "table": "success",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "values": result
-            }
-
-        elif f == "SetFranchiseWishList":
-            if not teamID or not franchiseWishListKeys:
-                return {"error": "teamID and franchiseWishListKeys are required"}
-
-            if current_user is None:
-                return {"error": "Missing authentication token"}
-
-            result = TeamsSetFranchiseWishListAction.execute(
-                db=db,
-                team_id=teamID,
-                user_id=current_user,
-                franchise_wish_list_keys_str=franchiseWishListKeys,
-            )
-
-            return {
-                "table": "success",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "values": result
-            }
-
         elif f == "WaiverMembersDetail":
             if not teamID:
                 return {"error": "teamID is required"}
-
             items = TeamsWaiverMembersDetailAction.execute(db, teamID)
-
             return {
                 "table": "WaiverMembers",
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
                 "items": [{"values": item} for item in items]
             }
 
+        elif f in ("SetRealMembersRanking", "WishListSet", "SetFranchiseWishList"):
+            if current_user is None:
+                return {"error": "Missing authentication token"}
+
+            if f == "SetRealMembersRanking":
+                if not teamID or not memberKeys:
+                    return {"error": "teamID and memberKeys are required"}
+                result = TeamsSetRealMembersRankingAction.execute(
+                    db=db, team_id=teamID, user_id=current_user, member_keys_str=memberKeys,
+                )
+            elif f == "WishListSet":
+                if not teamID or not wishListKeys:
+                    return {"error": "teamID and wishListKeys are required"}
+                result = TeamsWishListSetAction.execute(
+                    db=db, team_id=teamID, user_id=current_user, wish_list_keys_str=wishListKeys,
+                )
+            else:  # SetFranchiseWishList
+                if not teamID or not franchiseWishListKeys:
+                    return {"error": "teamID and franchiseWishListKeys are required"}
+                result = TeamsSetFranchiseWishListAction.execute(
+                    db=db, team_id=teamID, user_id=current_user,
+                    franchise_wish_list_keys_str=franchiseWishListKeys,
+                )
+
+            return {
+                "table": "success",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "values": result
+            }
+
         else:
             return {"error": f"Unknown function: {f}"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         return {"error": str(e)}
 

@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import ClassVar
 
 from app.constants import DraftEvents as Events
 from app.services import pusher as pusher_service
@@ -8,7 +9,7 @@ from app.services import pusher as pusher_service
 class DraftNotice:
     """Batches and sends draft events to clients via Pusher."""
 
-    VALID_EVENTS = {
+    VALID_EVENTS: ClassVar[set[str]] = {
         Events.DRAFT_START_EVENT,
         Events.DRAFT_PAUSE_EVENT,
         Events.MEMBER_DRAFTED_EVENT,

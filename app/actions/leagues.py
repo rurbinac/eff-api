@@ -1,20 +1,28 @@
 from datetime import timedelta
 from random import shuffle
-from sqlalchemy.orm import Session
-from sqlalchemy import text
+from typing import ClassVar
 
-from app.models import League, Division, Team
-from app.services import QueryService
-from app.context import RequestContext, extract_match_day_status
-from app.constants import LookupConstants, DraftConstants, MatchCreationConstants, WaiversConstants, DraftPositionConstants
-from app.security import verify_password
 from fastapi import HTTPException, status
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.constants import (
+    DraftConstants,
+    DraftPositionConstants,
+    LookupConstants,
+    MatchCreationConstants,
+    WaiversConstants,
+)
+from app.context import RequestContext, extract_match_day_status
+from app.models import Division, League, Team
+from app.security import verify_password
+from app.services import QueryService
 
 
 class LeaguesReadListAction:
     """Get all leagues where user has a team."""
 
-    FIELDS_TO_REMOVE = {
+    FIELDS_TO_REMOVE: ClassVar[set[str]] = {
         'startWaivers', 'finishWaivers', 'startWaiversSettle', 'finishWaiversSettle',
         'startOpenWaivers', 'finishOpenWaivers', 'startOpenWaiversSettle', 'finishOpenWaiversSettle',
         'startPreMatch', 'finishPreMatch', 'startMatch', 'finishMatch',

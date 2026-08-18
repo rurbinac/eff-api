@@ -8,6 +8,7 @@ from app.actions.draft.draft_values import DraftValues
 from app.constants import DraftConstants
 from app.context import RequestContext
 
+
 class DraftHelper:
     def __init__(self, db: Session, user_id: int, division_id: int) -> None:
         self._db: Session = db
