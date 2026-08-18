@@ -4,7 +4,6 @@ from app.exceptions import EFFException
 class DraftException(EFFException):
     """Base class for draft-related exceptions."""
 
-    pass
 
 
 class MemberNotAvailableException(DraftException):

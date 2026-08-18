@@ -1,12 +1,18 @@
-from datetime import datetime
+from datetime import datetime, timezone
+
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models import User
-from app.security import verify_password, create_access_token, hash_password, decode_token
-from app.services import QueryService
-from app.context import RequestContext
 from app.constants import LookupConstants
-from fastapi import HTTPException, status
+from app.context import RequestContext
+from app.models import User
+from app.security import (
+    create_access_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
+from app.services import QueryService
 
 
 class SignInAction:
@@ -30,7 +36,9 @@ class SignInAction:
             "timeZone": user.timeZone,
             "userAvatar": user.userAvatar,
             "favoriteTeam": user.favoriteTeam,
-            "lastSignInDate": user.lastSignInDate.isoformat() if user.lastSignInDate else None,
+            "lastSignInDate": user.lastSignInDate.isoformat()
+            if user.lastSignInDate
+            else None,
             "lastSignInIP": user.lastSignInIP,
             "createdIn": user.createdIn.isoformat() if user.createdIn else None,
             "updatedIn": user.updatedIn.isoformat() if user.updatedIn else None,
@@ -50,7 +58,9 @@ class SignInAction:
 
         # Add MatchDayStatus context
         if "baseRealCompetitionID" in session_data:
-            mds_data = QueryService.get_current_match_day_status(db, session_data["baseRealCompetitionID"])
+            mds_data = QueryService.get_current_match_day_status(
+                db, session_data["baseRealCompetitionID"]
+            )
             if mds_data:
                 session_data.update(mds_data)
 
@@ -60,14 +70,16 @@ class SignInAction:
             session_data.update(sd_data)
 
     @staticmethod
-    def execute(db: Session, user_email: str, user_password: str, client_ip: str) -> dict:
+    def execute(
+        db: Session, user_email: str, user_password: str, client_ip: str
+    ) -> dict:
         """Authenticate user and return user data with context (no response wrapper)."""
         user = db.query(User).filter(User.userEmail == user_email).first()
 
         if not user or not verify_password(user_password, user.userPassword):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password"
+                detail="Invalid email or password",
             )
 
         # Update last sign in
@@ -113,8 +125,7 @@ class SignInfoAction:
 
         if not user:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
 
         # Build session data (no token for SignInfo)
@@ -140,7 +151,7 @@ class SignInfoAction:
         if not payload:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token"
+                detail="Invalid or expired token",
             )
 
         # Get user ID from token
@@ -150,8 +161,7 @@ class SignInfoAction:
 
         if not user:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
 
         # Build session data (no token in response for token-based SignInfo)
@@ -163,7 +173,13 @@ class SignInfoAction:
         # Add request tracking
         # firstRequest comes from token creation time (iat claim)
         first_request_timestamp = payload.get("iat")
-        first_request = datetime.fromtimestamp(first_request_timestamp).isoformat() if first_request_timestamp else None
+        first_request = (
+            datetime.fromtimestamp(first_request_timestamp, tz=timezone.utc)
+            .replace(tzinfo=None)
+            .isoformat()
+            if first_request_timestamp
+            else None
+        )
 
         session_data["firstRequest"] = first_request
         session_data["lastRequest"] = RequestContext.get_datetime().isoformat()
@@ -196,24 +212,31 @@ class UpdateUserAction:
 
         if not user:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
 
         # Validate country and state if provided
-        if country is not None and country:
-            if not QueryService.validate_lookup(db, LookupConstants.COUNTRY_CODE, country):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid country: {country}"
-                )
+        if (
+            country is not None
+            and country
+            and not QueryService.validate_lookup(
+                db, LookupConstants.COUNTRY_CODE, country
+            )
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid country: {country}",
+            )
 
-        if state is not None and state:
-            if not QueryService.validate_lookup(db, LookupConstants.STATE_CODE, state):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid state: {state}"
-                )
+        if (
+            state is not None
+            and state
+            and not QueryService.validate_lookup(db, LookupConstants.STATE_CODE, state)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid state: {state}",
+            )
 
         # Update only the provided fields
         if first_name is not None:
@@ -276,20 +299,24 @@ class SignUpAction:
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Email already registered",
             )
 
         # Validate country and state if provided
-        if country and not QueryService.validate_lookup(db, LookupConstants.COUNTRY_CODE, country):
+        if country and not QueryService.validate_lookup(
+            db, LookupConstants.COUNTRY_CODE, country
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid country: {country}"
+                detail=f"Invalid country: {country}",
             )
 
-        if state and not QueryService.validate_lookup(db, LookupConstants.STATE_CODE, state):
+        if state and not QueryService.validate_lookup(
+            db, LookupConstants.STATE_CODE, state
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid state: {state}"
+                detail=f"Invalid state: {state}",
             )
 
         # Create new user
@@ -315,7 +342,9 @@ class SignUpAction:
         db.refresh(new_user)
 
         # Generate JWT token
-        token = create_access_token({"sub": str(new_user.userID), "email": new_user.userEmail})
+        token = create_access_token(
+            {"sub": str(new_user.userID), "email": new_user.userEmail}
+        )
 
         # Build session data
         session_data = SignInAction._build_session_data(new_user, token)

@@ -1,6 +1,8 @@
 """JSON:API (https://jsonapi.org) serialization utilities for REST API responses."""
 
 from datetime import datetime
+
+from app.utils.dt import utc_now
 from typing import Any, Dict, List, Optional
 
 
@@ -130,7 +132,7 @@ class JsonApiSerializer:
         if 'meta' not in response:
             response['meta'] = {}
 
-        response['meta']['timestamp'] = datetime.utcnow().isoformat() + 'Z'
+        response['meta']['timestamp'] = utc_now().isoformat() + 'Z'
         return response
 
     @staticmethod

@@ -1,17 +1,9 @@
-from fastapi import APIRouter, Depends, Request, Query, Form
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Form, Query
 
-from app.database import get_db
 from app.actions.teams import TeamsReadListAction, TeamsGetRealMembersRankingAction, TeamsWaiverMembersDetailAction, TeamsGetCurrentMembersAction
 from app.context import RequestContext
+from app.database import DbSession
 from app.utils import JsonApiSerializer
-
-
-class TeamsRequest(BaseModel):
-    leagueID: int | None = None
-    divisionID: int | None = None
-    teamID: int | None = None
 
 
 router = APIRouter(tags=["teams"])
@@ -19,14 +11,12 @@ router = APIRouter(tags=["teams"])
 
 @router.post("/eff/eff_api/Teams.php")
 async def legacy_teams(
+    db: DbSession,
     f: str = Query(..., description="Action name"),
-    format: str | None = Query("json", alias="_format"),
-    type: str | None = Form(None, alias="_type"),
     leagueID: int | None = Form(None),
     divisionID: int | None = Form(None),
     teamID: int | None = Form(None),
-    request: Request = None,
-    db: Session = Depends(get_db),
+    type: str | None = Form(None, alias="_type"),
 ):
     """Legacy PHP-compatible endpoint for Teams actions."""
     RequestContext.set_datetime()
@@ -68,9 +58,9 @@ async def legacy_teams(
 
 @router.get("/api/v1/teams")
 def rest_teams(
+    db: DbSession,
     leagueID: int | None = None,
     divisionID: int | None = None,
-    db: Session = Depends(get_db)
 ):
     """REST endpoint: Get teams for league or division (JSON:API format)."""
     RequestContext.set_datetime()
@@ -88,8 +78,8 @@ def rest_teams(
 
 @router.get("/api/v1/teams/waiver_members_detail")
 def rest_teams_waiver_members_detail(
+    db: DbSession,
     teamID: int | None = None,
-    db: Session = Depends(get_db)
 ):
     """REST endpoint: Get waiver members detail for team (JSON:API format)."""
     RequestContext.set_datetime()
@@ -109,8 +99,8 @@ def rest_teams_waiver_members_detail(
 
 @router.get("/api/v1/teams/wish_list_detail")
 def rest_teams_wish_list_detail(
+    db: DbSession,
     teamID: int | None = None,
-    db: Session = Depends(get_db)
 ):
     """REST endpoint: Get wish list detail for team (JSON:API format)."""
     RequestContext.set_datetime()
@@ -131,8 +121,8 @@ def rest_teams_wish_list_detail(
 
 @router.get("/api/v1/teams/current_members")
 def rest_teams_current_members(
+    db: DbSession,
     teamID: int | None = None,
-    db: Session = Depends(get_db)
 ):
     """REST endpoint: Get current members for team (JSON:API format)."""
     RequestContext.set_datetime()
@@ -152,8 +142,8 @@ def rest_teams_current_members(
 
 @router.get("/api/v1/teams/real_members_ranking")
 def rest_teams_real_members_ranking(
+    db: DbSession,
     teamID: int | None = None,
-    db: Session = Depends(get_db)
 ):
     """REST endpoint: Get real members ranking for team (JSON:API format)."""
     RequestContext.set_datetime()

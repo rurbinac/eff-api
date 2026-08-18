@@ -1,9 +1,15 @@
-import pytest
 from datetime import datetime
-from app.models import User
+
+import pytest
+
+from app.actions.sign import (
+    SignInAction,
+    SignInfoAction,
+    SignOutAction,
+    SignUpAction,
+    UpdateUserAction,
+)
 from app.context import RequestContext
-from app.actions.sign import SignInAction, SignOutAction, SignInfoAction, SignUpAction, UpdateUserAction
-from app.security import hash_password
 
 
 class TestSignInAction:

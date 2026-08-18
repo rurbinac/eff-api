@@ -1,38 +1,26 @@
-from fastapi import APIRouter, Depends, Request, Query, Form
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from fastapi import APIRouter, Form, Query
 
-from app.database import get_db
 from app.actions.leagues import LeaguesReadListAction
 from app.context import RequestContext
+from app.database import DbSession
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["leagues"])
 
 
-class LeaguesRequest(BaseModel):
-    userID: int
-    season: int | None = None
-
-
 @router.post("/eff/eff_api/Leagues.php")
 async def legacy_leagues(
+    db: DbSession,
     f: str = Query(..., description="Action name"),
-    format: str | None = Query("json", alias="_format"),
-    type: str | None = Query(None, alias="_type"),
     userID: int = Form(...),
     season: int | None = Form(None),
-    request: Request = None,
-    db: Session = Depends(get_db),
 ):
     """Legacy PHP-compatible endpoint for Leagues actions."""
     RequestContext.set_datetime()
 
     try:
         if f == "ReadList":
-            # Get data from action
             items = LeaguesReadListAction.execute(db, userID, season)
-            # Format as legacy PHP response
             return {
                 "table": "Leagues",
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
@@ -45,12 +33,11 @@ async def legacy_leagues(
 
 
 @router.get("/api/v1/leagues")
-def rest_leagues(userID: int, season: int | None = None, db: Session = Depends(get_db)):
+def rest_leagues(db: DbSession, userID: int | None= None, season: int | None = None):
     """REST endpoint: Get leagues for user (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         items = LeaguesReadListAction.execute(db, userID, season)
-        # Format as JSON:API response
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='leagues',

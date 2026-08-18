@@ -1,7 +1,8 @@
-from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.models import RealStanding
+from sqlalchemy.orm import Session
+
 from app.context import RequestContext
+from app.models import RealStanding
 
 
 class RealStandingsReadListAction:

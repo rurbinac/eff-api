@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter
 
-from app.database import get_db
+from app.database import DbSession
 from app.schemas import SignUpRequest, UpdateUserRequest
 from app.actions.sign import SignUpAction, UpdateUserAction
 from app.context import RequestContext
@@ -10,7 +9,7 @@ router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
 
 @router.post("")
-def rest_signup(payload: SignUpRequest, db: Session = Depends(get_db)) -> dict:
+def rest_signup(payload: SignUpRequest, db: DbSession) -> dict:
     """REST endpoint: Create new user account."""
     RequestContext.set_datetime()
     try:
@@ -40,7 +39,7 @@ def rest_signup(payload: SignUpRequest, db: Session = Depends(get_db)) -> dict:
 def rest_update_user(
     user_id: int,
     payload: UpdateUserRequest,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> dict:
     """REST endpoint: Update user profile."""
     RequestContext.set_datetime()

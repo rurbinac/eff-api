@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Query, Form, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Form, Query
 from pydantic import BaseModel
-from app.database import get_db
-from app.context import RequestContext
+
 from app.actions.matches import MatchesReadListAction
+from app.context import RequestContext
+from app.database import CurrentUser, DbSession
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["matches"])
@@ -17,13 +17,11 @@ class MatchesRequest(BaseModel):
 
 @router.post("/eff/eff_api/Matches.php")
 async def legacy_matches(
+    db: DbSession,
+    current_user: CurrentUser,
     f: str = Query(...),
-    format: str | None = Query("json", alias="_format"),
-    type: str | None = Query(None, alias="_type"),
     leagueID: int | None = Form(None),
     divisionID: int | None = Form(None),
-    teamID: int | None = Form(None),
-    db: Session = Depends(get_db),
 ):
     """Legacy PHP-compatible Matches endpoint."""
     RequestContext.set_datetime()
@@ -31,14 +29,14 @@ async def legacy_matches(
         if f == "ReadList":
             items = MatchesReadListAction.execute(
                 db,
+                user_id=current_user,
                 league_id=leagueID,
                 division_id=divisionID,
-                team_id=teamID
             )
             return {
                 "table": "Matches",
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
+                "items": items,
             }
         else:
             return {"error": f"Unknown function: {f}"}, 400
@@ -48,17 +46,18 @@ async def legacy_matches(
 
 @router.get("/api/v1/matches")
 async def rest_matches(
+    db: DbSession,
+    current_user: CurrentUser,
     payload: MatchesRequest,
-    db: Session = Depends(get_db),
 ):
     """REST endpoint for Matches ReadList (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         items = MatchesReadListAction.execute(
             db,
+            user_id=current_user,
             league_id=payload.leagueID,
-            division_id=divisionID,
-            team_id=payload.teamID
+            division_id=payload.divisionID,
         )
         response = JsonApiSerializer.serialize_collection(
             items,

@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, Query, Form
+from fastapi import APIRouter, Form, Query
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
-from app.database import get_db
 from app.actions.team_member_transfers import TeamMemberTransfersGetPendingByTeamIDAction
 from app.context import RequestContext
+from app.database import DbSession
 from app.utils import JsonApiSerializer
 
 
@@ -17,10 +16,9 @@ router = APIRouter(tags=["team-member-transfers"])
 
 @router.post("/eff/eff_api/TeamMemberTransfers.php")
 async def legacy_team_member_transfers(
+    db: DbSession,
     f: str = Query(..., description="Action name"),
-    format: str | None = Query("json", alias="_format"),
     teamID: int | None = Form(None),
-    db: Session = Depends(get_db),
 ):
     """Legacy PHP-compatible endpoint for TeamMemberTransfers actions."""
     RequestContext.set_datetime()
@@ -44,14 +42,14 @@ async def legacy_team_member_transfers(
 @router.get("/api/v1/team-member-transfers/pending")
 def rest_team_member_transfers_pending(
     payload: TeamMemberTransfersRequest,
-    db: Session = Depends(get_db)
+    db: DbSession,
 ):
     """REST endpoint: Get pending member transfers for team (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        if teamID is None:
+        if payload.teamID is None:
             return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
-        items = TeamMemberTransfersGetPendingByTeamIDAction.execute(db, teamID)
+        items = TeamMemberTransfersGetPendingByTeamIDAction.execute(db, payload.teamID)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='team-member-transfers',

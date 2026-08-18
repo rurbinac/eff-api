@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
 from app.actions.match_teams import (
     ClearLineupByMatchTeamIDAction,
@@ -12,8 +11,7 @@ from app.actions.match_teams import (
     SetLineupByCompetitionTypeAction,
 )
 from app.context import RequestContext
-from app.database import get_db
-from app.security import decode_token
+from app.database import CurrentUser, DbSession
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["match-teams"])
@@ -25,9 +23,9 @@ class MatchTeamsRequest(BaseModel):
 
 @router.post("/eff/eff_api/MatchTeams.php")
 async def legacy_match_teams(
+    db: DbSession,
+    current_user: CurrentUser,
     f: str = Query(...),
-    format: str | None = Query("json", alias="_format"),
-    type: str | None = Query(None, alias="_type"),
     matchID: int | None = Form(None),
     matchTeamID: int | None = Form(None),
     teamID: int | None = Form(None),
@@ -39,19 +37,12 @@ async def legacy_match_teams(
     realTeamID: int | None = Form(None),
     realPlayerIDs: str | None = Form(None),
     substituteRealPlayerIDs: str | None = Form(None),
-    db: Session = Depends(get_db),
-    request: Request = None,
 ):
     """Legacy PHP-compatible MatchTeams endpoint."""
     RequestContext.set_datetime()
     try:
         if f == "ReadList":
-            items = MatchTeamsReadListAction.execute(db, match_id=matchID)
-            return {
-                "table": "MatchTeams",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
-            }
+            return MatchTeamsReadListAction.execute(db, team_id=teamID)
         elif f == "GetLineupByMatchTeamID":
             if matchTeamID is None:
                 raise HTTPException(status_code=400, detail="matchTeamID is required")
@@ -91,14 +82,10 @@ async def legacy_match_teams(
         elif f == "ClearLineupByMatchTeamID":
             if matchTeamID is None:
                 raise HTTPException(status_code=400, detail="matchTeamID is required")
-            auth_header = request.headers.get("Authorization", "") if request else ""
-            token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-            payload = decode_token(token) if token else None
-            if payload is None:
+            if current_user is None:
                 raise HTTPException(status_code=401, detail="Unauthorized")
-            user_id = int(payload.get("sub", 0))
             try:
-                result = ClearLineupByMatchTeamIDAction.execute(db, match_team_id=matchTeamID, user_id=user_id)
+                result = ClearLineupByMatchTeamIDAction.execute(db, match_team_id=matchTeamID, user_id=current_user)
             except PermissionError:
                 raise HTTPException(status_code=401, detail="Unauthorized")
             if result is None:
@@ -133,7 +120,7 @@ async def legacy_match_teams(
 @router.get("/api/v1/match_teams")
 async def rest_match_teams(
     payload: MatchTeamsRequest,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ):
     """REST endpoint for MatchTeams ReadList (JSON:API format)."""
     RequestContext.set_datetime()

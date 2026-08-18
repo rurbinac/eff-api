@@ -1,11 +1,14 @@
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.guards import require_league_member
 
 
 class DraftResultAction:
 
     @staticmethod
-    def execute(db: Session, division_id: int) -> list[dict]:
+    def execute(db: Session, division_id: int, user_id: int | None = None) -> list[dict]:
+        require_league_member(db, user_id, division_id=division_id)
         stmt = text("""
             SELECT teamID, baseRealCompetitionID, leagueID, divisionID, commissionerID,
                    userID, seasonNum, draftOrder, randomOrder, teamName, isCommissioner,

@@ -1,27 +1,19 @@
-from fastapi import APIRouter, HTTPException, Query, Form, Depends
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-from app.database import get_db
-from app.context import RequestContext
+from fastapi import APIRouter, Form, HTTPException, Query
+
 from app.actions.lookups import LookupsReadListAction
 from app.actions.top_epl import TopEPLAction
+from app.context import RequestContext
+from app.database import DbSession
 from app.utils import JsonApiSerializer
-
-
-class LookupsRequest(BaseModel):
-    lookupType: int
-
 
 router = APIRouter(tags=["lookups"])
 
 
 @router.post("/eff/eff_api/Lookups.php")
 async def legacy_lookups(
+    db: DbSession,
     f: str = Query(...),
-    format: str | None = Query("json", alias="_format"),
-    type: str | None = Query(None, alias="_type"),
     lookupNum: int | None = Form(None),
-    db: Session = Depends(get_db),
 ):
     """Legacy PHP-compatible Lookups endpoint."""
     RequestContext.set_datetime()
@@ -41,8 +33,8 @@ async def legacy_lookups(
 
 @router.get("/api/v1/lookups")
 async def rest_lookups(
+    db: DbSession,
     lookupType: int | None = None,
-    db: Session = Depends(get_db),
 ):
     """REST endpoint for Lookups ReadList (JSON:API format)."""
     RequestContext.set_datetime()
@@ -60,8 +52,8 @@ async def rest_lookups(
 
 @router.get("/api/v1/top_epl")
 async def rest_top_epl(
+    db: DbSession,
     limit: int | None = 4,
-    db: Session = Depends(get_db),
 ):
     """REST endpoint: Get top EPL teams by standings (JSON:API format)."""
     RequestContext.set_datetime()

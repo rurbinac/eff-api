@@ -1,4 +1,3 @@
-import pytest
 
 
 class TestDivisionNotesEndpoints:
@@ -6,9 +5,10 @@ class TestDivisionNotesEndpoints:
 
     def test_legacy_division_notes_readlist(self, test_client, test_db, test_user):
         """Test Legacy DivisionNotes ReadList endpoint."""
+        from sqlalchemy import select
+
         from app.actions.leagues import LeaguesBuildAction
         from app.context import RequestContext
-        from sqlalchemy import select
         from app.models import Division
 
         RequestContext.set_datetime()

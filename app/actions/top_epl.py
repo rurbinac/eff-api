@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
-from app.services.query import QueryService
+
 from app.context import RequestContext
+from app.services.query import QueryService
 
 
 class TopEPLAction:

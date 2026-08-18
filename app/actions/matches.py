@@ -1,4 +1,6 @@
 from sqlalchemy.orm import Session
+
+from app.guards import require_league_member
 from app.models import Match, MatchTeam
 
 
@@ -8,6 +10,7 @@ class MatchesReadListAction:
     @staticmethod
     def execute(
         db: Session,
+        user_id: int | None = None,
         league_id: int | None = None,
         division_id: int | None = None,
     ) -> list[dict]:
@@ -26,8 +29,10 @@ class MatchesReadListAction:
         query = db.query(Match)
 
         if league_id is not None:
+            require_league_member(db, user_id, league_id=league_id)
             query = query.filter(Match.leagueID == league_id)
         elif division_id is not None:
+            require_league_member(db, user_id, division_id=division_id)
             query = query.filter(Match.divisionID == division_id)
         else:
             query = query.filter(False)

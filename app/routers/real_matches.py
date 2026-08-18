@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Query, Form, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Form, Query
 from pydantic import BaseModel
-from app.database import get_db
-from app.context import RequestContext
+
 from app.actions.real_matches import RealMatchesReadListAction
+from app.context import RequestContext
+from app.database import DbSession
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["real-matches"])
@@ -16,12 +16,10 @@ class RealMatchesRequest(BaseModel):
 
 @router.post("/eff/eff_api/RealMatches.php")
 async def legacy_real_matches(
+    db: DbSession,
     f: str = Query(...),
-    format: str | None = Query("json", alias="_format"),
-    type: str | None = Query(None, alias="_type"),
     realCompetitionID: int | None = Form(None),
-    realCompetitionSeasonID: int | None = Form(None),
-    db: Session = Depends(get_db),
+    realCompetitionMatchDay: int | None = Form(None),
 ):
     """Legacy PHP-compatible RealMatches endpoint."""
     RequestContext.set_datetime()
@@ -30,7 +28,7 @@ async def legacy_real_matches(
             items = RealMatchesReadListAction.execute(
                 db,
                 real_competition_id=realCompetitionID,
-                real_competition_season_id=realCompetitionSeasonID
+                real_competition_match_day=realCompetitionMatchDay,
             )
             return {
                 "table": "RealMatches",
@@ -46,15 +44,15 @@ async def legacy_real_matches(
 @router.get("/api/v1/real_matches")
 async def rest_real_matches(
     payload: RealMatchesRequest,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ):
     """REST endpoint for RealMatches ReadList (JSON:API format)."""
     RequestContext.set_datetime()
     try:
         items = RealMatchesReadListAction.execute(
             db,
-            real_competition_id=realCompetitionID,
-            real_competition_season_id=realCompetitionSeasonID
+            real_competition_id=payload.realCompetitionID,
+            real_competition_season_id=payload.realCompetitionSeasonID,
         )
         response = JsonApiSerializer.serialize_collection(
             items,

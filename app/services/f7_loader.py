@@ -1,6 +1,6 @@
 """F7 OPTA feed loader - loads single match detailed results."""
 
-from datetime import datetime, timezone
+from app.utils.dt import utc_now
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.services.f7_parser import F7Parser
@@ -500,7 +500,7 @@ class F7Loader:
         Returns:
             Dict with update status and count
         """
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = utc_now()
 
         # Extract and normalize period data
         period = RealMatchPeriod.normalize(match_data.get('period'))
@@ -594,7 +594,7 @@ class F7Loader:
         Returns:
             Dict with update status
         """
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = utc_now()
 
         # Get scores
         home_score_str = match_data.get('home_score')
@@ -682,7 +682,7 @@ class F7Loader:
         Returns:
             Dict with update status
         """
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = utc_now()
 
         # Get scores
         home_score = None
@@ -798,7 +798,7 @@ class F7Loader:
         Returns:
             Dict with update status
         """
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = utc_now()
 
         # Get match data
         match_date = match_data.get('date')

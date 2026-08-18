@@ -10,11 +10,14 @@ from app.actions.draft.draft_exception import (
     NotAvailableMembersException,
     NotYourTurnException,
 )
-
-from app.constants import DraftConstants, DraftEvents, DraftPositionConstants, MatchCreationConstants
-
-from app.utils.member_keys import DraftTeamMembers, MKeys
+from app.constants import (
+    DraftConstants,
+    DraftEvents,
+    DraftPositionConstants,
+    MatchCreationConstants,
+)
 from app.utils.match_day_map_keys import div_map_days_map_key, split_map_days_map_key
+from app.utils.member_keys import DraftTeamMembers, MKeys
 
 
 class DraftMember(DraftBase):

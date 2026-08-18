@@ -7,7 +7,11 @@
       "Bash(gcloud iam *)",
       "Bash(gcloud projects *)",
       "Bash(gcloud run *)",
-      "Bash(curl -s https://my-api-150703383580.us-central1.run.app/health)"
+      "Bash(curl -s https://my-api-150703383580.us-central1.run.app/health)",
+      "Bash(gcloud compute *)",
+      "PowerShell(gcloud sql databases create eff_db --instance=eff-db --project=sublime-scion-499902-m5 --charset=utf8mb4 --collation=utf8mb4_unicode_520_ci 2>&1)",
+      "PowerShell(gcloud sql import sql eff-db gs://sublime-scion-499902-m5_cloudbuild/eff_db_init.sql --database=eff_db --project=sublime-scion-499902-m5 --quiet 2>&1)",
+      "PowerShell(gcloud logging read \"resource.type=cloud_run_revision AND resource.labels.service_name=eff-api AND severity>=ERROR\" --project=sublime-scion-499902-m5 --limit=3 --format=\"table\\(textPayload\\)\" 2>&1)"
     ]
   }
 }

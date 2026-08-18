@@ -1,8 +1,12 @@
+from typing import Annotated
+
+from fastapi import Depends
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlmodel import SQLModel
 
 from app.config import settings
+from app.security import get_current_token, get_current_user
 
 if settings.db_host:
     # Local dev: direct MySQL connection, no Cloud SQL Connector needed
@@ -41,3 +45,8 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+DbSession = Annotated[Session, Depends(get_db)]
+CurrentToken = Annotated[str | None, Depends(get_current_token)]
+CurrentUser = Annotated[int | None, Depends(get_current_user)]

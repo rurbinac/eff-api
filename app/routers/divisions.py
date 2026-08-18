@@ -1,39 +1,29 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, Form
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.database import get_db
-from app.actions.divisions import DivisionsReadListAction, DivisionsTransactionsDetailAction
+from app.actions.divisions import (
+    DivisionsReadListAction,
+    DivisionsTransactionsDetailAction,
+)
 from app.actions.draft import DraftResultAction, DraftSituationAction
 from app.actions.draft.draft_exception import DraftException
 from app.actions.draft.draft_helper import DraftHelper
 from app.actions.draft.draft_values import DraftValues
 from app.context import RequestContext
+from app.database import CurrentUser, DbSession
 from app.models import Division
-from app.security import decode_token
 from app.services import pusher as pusher_service
 from app.utils import JsonApiSerializer
-
-
-class DivisionsRequest(BaseModel):
-    leagueID: int | None = None
-    divisionID: int | None = None
-
 
 router = APIRouter(tags=["divisions"])
 
 
-def _auth_helper(request: Request, db: Session, division_id: int) -> tuple[DraftHelper, HTTPException | None]:
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
+def _auth_helper(db: Session, user_id: int | None, division_id: int) -> tuple[DraftHelper, HTTPException | None]:
+    if user_id is None:
         return None, HTTPException(status_code=401, detail="Missing or invalid token")
-    payload = decode_token(auth_header[7:])
-    if payload is None:
-        return None, HTTPException(status_code=401, detail="Invalid or expired token")
-    user_id = int(payload.get("sub"))
     dh = DraftHelper(db, user_id, division_id)
     dh.draft_values.load_division()
     if dh.draft_values.division is None:
@@ -59,13 +49,11 @@ def _draft_response(division_id: int, dv: DraftValues) -> dict:
 
 @router.post("/eff/eff_api/Divisions.php")
 async def legacy_divisions(
+    db: DbSession,
+    current_user: CurrentUser,
     f: str = Query(..., description="Action name"),
-    format: str | None = Query("json", alias="_format"),
-    type: str | None = Query(None, alias="_type"),
     leagueID: int | None = Form(None),
     divisionID: int | None = Form(None),
-    request: Request = None,
-    db: Session = Depends(get_db),
 ):
     """Legacy PHP-compatible endpoint for Divisions actions."""
     RequestContext.set_datetime()
@@ -92,7 +80,7 @@ async def legacy_divisions(
         elif f == "DraftResult":
             if divisionID is None:
                 return {"error": "divisionID is required for DraftResult"}, 400
-            items = DraftResultAction.execute(db, divisionID)
+            items = DraftResultAction.execute(db, divisionID, user_id=current_user)
             return {
                 "table": "DraftResult",
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
@@ -112,7 +100,7 @@ async def legacy_divisions(
         elif f in ("StartDraft", "PauseDraft", "RestartDraft"):
             if divisionID is None:
                 return {"error": f"divisionID is required for {f}"}
-            dh, auth_err = _auth_helper(request, db, divisionID)
+            dh, auth_err = _auth_helper(db, current_user, divisionID)
             if auth_err:
                 return {"error": auth_err.detail}
             try:
@@ -138,7 +126,7 @@ async def legacy_divisions(
 
 
 @router.get("/api/v1/divisions")
-def rest_divisions(leagueID: int | None = None, db: Session = Depends(get_db)):
+def rest_divisions(db: DbSession, leagueID: int | None = None):
     """REST endpoint: Get divisions for league (JSON:API format)."""
     RequestContext.set_datetime()
     try:
@@ -156,11 +144,11 @@ def rest_divisions(leagueID: int | None = None, db: Session = Depends(get_db)):
 
 
 @router.get("/api/v1/divisions/draft_result")
-def rest_divisions_draft_result(divisionID: int, db: Session = Depends(get_db)):
+def rest_divisions_draft_result(db: DbSession, current_user: CurrentUser, divisionID: int):
     """REST endpoint: Get draft result for a division."""
     RequestContext.set_datetime()
     try:
-        items = DraftResultAction.execute(db, divisionID)
+        items = DraftResultAction.execute(db, divisionID, user_id=current_user)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='draft_result',
@@ -172,7 +160,7 @@ def rest_divisions_draft_result(divisionID: int, db: Session = Depends(get_db)):
 
 
 @router.get("/api/v1/divisions/draft_situation")
-def rest_divisions_draft_situation(divisionID: int, db: Session = Depends(get_db)):
+def rest_divisions_draft_situation(divisionID: int, db: DbSession):
     """REST endpoint: Get draft situation for a division."""
     RequestContext.set_datetime()
     try:
@@ -188,11 +176,11 @@ def rest_divisions_draft_situation(divisionID: int, db: Session = Depends(get_db
 
 
 @router.post("/api/v1/divisions/start_draft")
-async def rest_divisions_start_draft(request: Request, divisionID: int, db: Session = Depends(get_db)):
+async def rest_divisions_start_draft(db: DbSession, current_user: CurrentUser, divisionID: int):
     """REST endpoint: Start the draft for a division (commissioner only)."""
     RequestContext.set_datetime()
     try:
-        dh, auth_err = _auth_helper(request, db, divisionID)
+        dh, auth_err = _auth_helper(db, current_user, divisionID)
         if auth_err:
             raise auth_err
         dh.start()
@@ -202,11 +190,11 @@ async def rest_divisions_start_draft(request: Request, divisionID: int, db: Sess
 
 
 @router.post("/api/v1/divisions/pause_draft")
-async def rest_divisions_pause_draft(request: Request, divisionID: int, db: Session = Depends(get_db)):
+async def rest_divisions_pause_draft(db: DbSession, current_user: CurrentUser, divisionID: int):
     """REST endpoint: Pause the draft for a division (commissioner only)."""
     RequestContext.set_datetime()
     try:
-        dh, auth_err = _auth_helper(request, db, divisionID)
+        dh, auth_err = _auth_helper(db, current_user, divisionID)
         if auth_err:
             raise auth_err
         dh.pause()
@@ -216,11 +204,11 @@ async def rest_divisions_pause_draft(request: Request, divisionID: int, db: Sess
 
 
 @router.post("/api/v1/divisions/restart_draft")
-async def rest_divisions_restart_draft(request: Request, divisionID: int, db: Session = Depends(get_db)):
+async def rest_divisions_restart_draft(db: DbSession, current_user: CurrentUser, divisionID: int):
     """REST endpoint: Restart the draft for a division (commissioner only)."""
     RequestContext.set_datetime()
     try:
-        dh, auth_err = _auth_helper(request, db, divisionID)
+        dh, auth_err = _auth_helper(db, current_user, divisionID)
         if auth_err:
             raise auth_err
         dh.restart()
@@ -230,7 +218,7 @@ async def rest_divisions_restart_draft(request: Request, divisionID: int, db: Se
 
 
 @router.get("/api/v1/divisions/transactions-detail")
-def rest_divisions_transactions_detail(divisionID: int | None = None, db: Session = Depends(get_db)):
+def rest_divisions_transactions_detail(db: DbSession, divisionID: int | None = None):
     """REST endpoint: Get transaction details for division (JSON:API format)."""
     RequestContext.set_datetime()
     try:
@@ -248,7 +236,7 @@ def rest_divisions_transactions_detail(divisionID: int | None = None, db: Sessio
 
 
 @router.post("/api/v1/divisions/pusher_webhook")
-async def rest_divisions_pusher_webhook(request: Request, db: Session = Depends(get_db)):
+async def rest_divisions_pusher_webhook(request: Request, db: DbSession):
     """Pusher webhook: update draftingUsers when members join/leave presence channels."""
     body = await request.body()
     key = request.headers.get("X-Pusher-Key", "")

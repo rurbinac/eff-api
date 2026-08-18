@@ -1,7 +1,9 @@
-from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.models import Team
+from sqlalchemy.orm import Session
+
 from app.context import RequestContext
+from app.guards import require_team
+from app.models import Team
 from app.utils import MKeys
 
 
@@ -82,12 +84,7 @@ class TeamsSetFranchiseWishListAction:
         team_result = db.execute(team_stmt, {"teamID": team_id})
         team_row = team_result.mappings().first()
 
-        if not team_row:
-            raise Exception(f"Team {team_id} not found")
-
-        team_user_id = team_row["userID"]
-        if team_user_id != user_id:
-            raise Exception("Unauthorized: You do not own this team")
+        require_team(db, user_id, team=team_row)
 
         # Parse franchise wish list keys - handle both dot and comma separated formats
         if "." in franchise_wish_list_keys_str and "," not in franchise_wish_list_keys_str:
@@ -133,12 +130,7 @@ class TeamsWishListSetAction:
         team_result = db.execute(team_stmt, {"teamID": team_id})
         team_row = team_result.mappings().first()
 
-        if not team_row:
-            raise Exception(f"Team {team_id} not found")
-
-        team_user_id = team_row["userID"]
-        if team_user_id != user_id:
-            raise Exception("Unauthorized: You do not own this team")
+        require_team(db, user_id, team=team_row)
 
         # Parse wish list keys - handle both dot and comma separated formats
         if "." in wish_list_keys_str and "," not in wish_list_keys_str:
@@ -184,12 +176,7 @@ class TeamsSetRealMembersRankingAction:
         team_result = db.execute(team_stmt, {"teamID": team_id})
         team_row = team_result.mappings().first()
 
-        if not team_row:
-            raise Exception(f"Team {team_id} not found")
-
-        team_user_id = team_row["userID"]
-        if team_user_id != user_id:
-            raise Exception("Unauthorized: You do not own this team")
+        require_team(db, user_id, team=team_row)
 
         # Parse member keys from comma-separated string
         member_keys = [k.strip() for k in member_keys_str.split(",") if k.strip()]

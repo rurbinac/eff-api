@@ -1,6 +1,8 @@
 """F42 OPTA feed loader - loads data into the database."""
 
 from datetime import datetime
+
+from app.utils.dt import utc_now
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.services.f42_parser import F42Parser
@@ -140,7 +142,7 @@ class F42Loader:
             'season_id': real_competition_season_id,
         }).first()
 
-        now = datetime.utcnow()
+        now = utc_now()
 
         if result:
             # Update existing
@@ -200,7 +202,7 @@ class F42Loader:
         """
         inserted = 0
         updated = 0
-        now = datetime.utcnow()
+        now = utc_now()
         team_uid_mapping = {}  # Map team uID to realTeamID for later use
 
         # Get competition details for defaults
@@ -322,7 +324,7 @@ class F42Loader:
         """Load or update players in RealPlayers."""
         inserted = 0
         updated = 0
-        now = datetime.utcnow()
+        now = utc_now()
 
         # Get competition details
         comp_query = text("""
@@ -546,7 +548,7 @@ class F42Loader:
         """Load or update matches and match teams."""
         inserted = 0
         updated = 0
-        now = datetime.utcnow()
+        now = utc_now()
 
         # Get competition details
         comp_query = text("""

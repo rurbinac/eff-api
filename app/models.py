@@ -1,39 +1,41 @@
 from datetime import datetime
-from typing import Optional
-from sqlmodel import SQLModel, Field
+
 from sqlalchemy.dialects.mysql import TINYINT
+from sqlmodel import Field, SQLModel
+
+from app.utils.dt import UTCDateTime
 
 
 class User(SQLModel, table=True):
     __tablename__ = "Users"
 
-    userID: Optional[int] = Field(default=None, primary_key=True)
+    userID: int | None = Field(default=None, primary_key=True)
     userEmail: str = Field(max_length=128, unique=True, index=True)
     userPassword: str = Field(max_length=255)
     userName: str = Field(max_length=128)
     userLevel: int = Field(sa_type=TINYINT)
     firstName: str = Field(max_length=50)
     lastName: str = Field(max_length=50)
-    birthday: datetime
-    country: Optional[str] = Field(default=None, max_length=50)
-    state: Optional[str] = Field(default=None, max_length=50)
-    city: Optional[str] = Field(default=None, max_length=50)
-    phoneNumber: Optional[str] = Field(default=None, max_length=15)
-    timeZone: Optional[str] = Field(default=None, max_length=20)
-    userAvatar: Optional[str] = Field(default=None, max_length=128)
-    favoriteTeam: Optional[str] = Field(default=None, max_length=50)
-    lastSignInDate: Optional[datetime] = Field(default=None)
-    lastSignInIP: Optional[str] = Field(default=None, max_length=15)
-    createdIn: datetime
-    updatedIn: Optional[datetime] = Field(default=None)
+    birthday: datetime = Field(sa_type=UTCDateTime())
+    country: str | None = Field(default=None, max_length=50)
+    state: str | None = Field(default=None, max_length=50)
+    city: str | None = Field(default=None, max_length=50)
+    phoneNumber: str | None = Field(default=None, max_length=15)
+    timeZone: str | None = Field(default=None, max_length=20)
+    userAvatar: str | None = Field(default=None, max_length=128)
+    favoriteTeam: str | None = Field(default=None, max_length=50)
+    lastSignInDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    lastSignInIP: str | None = Field(default=None, max_length=15)
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class RealCompetition(SQLModel, table=True):
     __tablename__ = "RealCompetitions"
 
-    realCompetitionID: Optional[int] = Field(default=None, primary_key=True)
-    prevRealCompetitionID: Optional[int] = None
-    nextRealCompetitionID: Optional[int] = None
+    realCompetitionID: int | None = Field(default=None, primary_key=True)
+    prevRealCompetitionID: int | None = None
+    nextRealCompetitionID: int | None = None
     realCompetitionUID: str = Field(max_length=20)
     realCompetitionSYMID: str = Field(max_length=20)
     realCompetitionName: str = Field(max_length=100)
@@ -42,22 +44,22 @@ class RealCompetition(SQLModel, table=True):
     realCompetitionSeasonName: str = Field(max_length=100)
     realCompetitionFirstMatchDay: int
     realCompetitionLastMatchDay: int
-    realCompetitionExtraMatchDay: Optional[int] = None
+    realCompetitionExtraMatchDay: int | None = None
     useExtraRealCompetition: int = Field(default=1, sa_type=TINYINT)
-    baseRealCompetitionID: Optional[int] = None
-    extraRealCompetitionID: Optional[int] = None
+    baseRealCompetitionID: int | None = None
+    extraRealCompetitionID: int | None = None
     calcStandings: int = Field(sa_type=TINYINT)
-    lastF7Date: datetime = Field(default_factory=lambda: datetime(2000, 1, 1))
-    lastF42Date: datetime = Field(default_factory=lambda: datetime(2000, 1, 1))
-    lastFDate: datetime = Field(default_factory=lambda: datetime(2000, 1, 1))
-    createdIn: datetime
-    updatedIn: Optional[datetime] = None
+    lastF7Date: datetime = Field(default_factory=lambda: datetime(2000, 1, 1), sa_type=UTCDateTime())
+    lastF42Date: datetime = Field(default_factory=lambda: datetime(2000, 1, 1), sa_type=UTCDateTime())
+    lastFDate: datetime = Field(default_factory=lambda: datetime(2000, 1, 1), sa_type=UTCDateTime())
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class Lookup(SQLModel, table=True):
     __tablename__ = "Lookups"
 
-    lookupID: Optional[int] = Field(default=None, primary_key=True)
+    lookupID: int | None = Field(default=None, primary_key=True)
     lookupNum: int
     position: int
     lookupKey: str = Field(max_length=20)
@@ -68,21 +70,21 @@ class Lookup(SQLModel, table=True):
 class League(SQLModel, table=True):
     __tablename__ = "Leagues"
 
-    leagueID: Optional[int] = Field(default=None, primary_key=True)
+    leagueID: int | None = Field(default=None, primary_key=True)
     baseRealCompetitionID: int
-    extraRealCompetitionID: Optional[int] = None
+    extraRealCompetitionID: int | None = None
     leagueName: str = Field(max_length=128)
     leaguePassword: str = Field(max_length=255)
     commissionerID: int
-    prevLeagueID: Optional[int] = None
-    nextLeagueID: Optional[int] = None
+    prevLeagueID: int | None = None
+    nextLeagueID: int | None = None
     season: int
     seasonNum: int
     numDivisions: int
     leagueType: int = Field(sa_type=TINYINT)
     gameType: int = Field(sa_type=TINYINT)
     scoringSystem: int = Field(sa_type=TINYINT)
-    tradeDeadline: datetime
+    tradeDeadline: datetime = Field(sa_type=UTCDateTime())
     publishLeague: int = Field(sa_type=TINYINT)
     seasonStatus: int
     totalTeams: int
@@ -108,76 +110,76 @@ class League(SQLModel, table=True):
     lowestMidfielder: int
     lowestStriker: int
     createdBy: int
-    createdIn: datetime
-    updatedBy: Optional[int] = None
-    updatedIn: Optional[datetime] = None
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedBy: int | None = None
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class Division(SQLModel, table=True):
     __tablename__ = "Divisions"
 
-    divisionID: Optional[int] = Field(default=None, primary_key=True)
+    divisionID: int | None = Field(default=None, primary_key=True)
     baseRealCompetitionID: int
-    extraRealCompetitionID: Optional[int] = None
-    matchDayMapKey: Optional[str] = Field(default=None, max_length=20)
+    extraRealCompetitionID: int | None = None
+    matchDayMapKey: str | None = Field(default=None, max_length=20)
     leagueID: int
     commissionerID: int
-    prevLeagueID: Optional[int] = None
-    nextLeagueID: Optional[int] = None
-    prevDivisionID: Optional[int] = None
-    nextDivisionID: Optional[int] = None
+    prevLeagueID: int | None = None
+    nextLeagueID: int | None = None
+    prevDivisionID: int | None = None
+    nextDivisionID: int | None = None
     season: int
     seasonNum: int
     leagueMatches: int = Field(default=0, sa_type=TINYINT)
     divisionMatches: int = Field(default=0, sa_type=TINYINT)
     draftType: str = Field(max_length=1)
-    draftDate: datetime
-    draftCompleteDate: Optional[datetime] = None
+    draftDate: datetime = Field(sa_type=UTCDateTime())
+    draftCompleteDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
     draftStatus: int
     draftTime: int
-    draftingStart: Optional[datetime] = None
-    draftingFinish: Optional[datetime] = None
-    draftingLimit: Optional[datetime] = None
-    draftingRound: Optional[int] = None
-    draftingMemberOrder: Optional[int] = None
-    draftingTeamOrder: Optional[int] = None
-    draftingNextTeamOrder: Optional[int] = None
+    draftingStart: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    draftingFinish: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    draftingLimit: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    draftingRound: int | None = None
+    draftingMemberOrder: int | None = None
+    draftingTeamOrder: int | None = None
+    draftingNextTeamOrder: int | None = None
     draftingUsers: str
     draftingHooks: int = Field(default=0)
     franchiseMembers: str
-    firstRealCompetitionMatchDay: Optional[int] = None
-    lastRealCompetitionMatchDay: Optional[int] = None
+    firstRealCompetitionMatchDay: int | None = None
+    lastRealCompetitionMatchDay: int | None = None
     waiverStatus: int
-    matchDay: Optional[int] = None
-    isCupMatchDay: Optional[int] = Field(default=None, sa_type=TINYINT)
-    isDivisionCupMatchDay: Optional[int] = Field(default=None, sa_type=TINYINT)
+    matchDay: int | None = None
+    isCupMatchDay: int | None = Field(default=None, sa_type=TINYINT)
+    isDivisionCupMatchDay: int | None = Field(default=None, sa_type=TINYINT)
     totalTeams: int
     numTeams: int
     availableTeams: int
     divisionType: str = Field(max_length=1)
     createdBy: int
-    createdIn: datetime
-    updatedBy: Optional[int] = None
-    updatedIn: Optional[datetime] = None
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedBy: int | None = None
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class Team(SQLModel, table=True):
     __tablename__ = "Teams"
 
-    teamID: Optional[int] = Field(default=None, primary_key=True)
+    teamID: int | None = Field(default=None, primary_key=True)
     baseRealCompetitionID: int
-    extraRealCompetitionID: Optional[int] = None
-    matchDayMapKey: Optional[str] = Field(default=None, max_length=20)
+    extraRealCompetitionID: int | None = None
+    matchDayMapKey: str | None = Field(default=None, max_length=20)
     leagueID: int
     divisionID: int
     commissionerID: int
-    userID: Optional[int] = None
-    prevLeagueID: Optional[int] = None
-    nextLeagueID: Optional[int] = None
-    prevDivisionID: Optional[int] = None
-    nextDivisionID: Optional[int] = None
-    prevTeamID: Optional[int] = None
-    nextTeamID: Optional[int] = None
+    userID: int | None = None
+    prevLeagueID: int | None = None
+    nextLeagueID: int | None = None
+    prevDivisionID: int | None = None
+    nextDivisionID: int | None = None
+    prevTeamID: int | None = None
+    nextTeamID: int | None = None
     season: int
     seasonNum: int
     leagueMatches: int = Field(default=0, sa_type=TINYINT)
@@ -186,7 +188,7 @@ class Team(SQLModel, table=True):
     randomOrder: int
     waiversOrder: int
     teamName: str = Field(max_length=128)
-    teamAvatar: Optional[str] = Field(default=None, max_length=128)
+    teamAvatar: str | None = Field(default=None, max_length=128)
     teamMembers: str
     draftMembers: str
     membersRanking: str
@@ -206,9 +208,9 @@ class Team(SQLModel, table=True):
     cntAdd: int
     cntDrop: int
     cntWaiver: int
-    notes: Optional[str] = None
-    place: Optional[int] = None
-    points: Optional[int] = None
+    notes: str | None = None
+    place: int | None = None
+    points: int | None = None
     statusC1: int = Field(default=0, sa_type=TINYINT)
     statusC2: int = Field(default=0, sa_type=TINYINT)
     statusC3: int = Field(default=0, sa_type=TINYINT)
@@ -216,323 +218,305 @@ class Team(SQLModel, table=True):
     seedingC2: int = Field(default=0, sa_type=TINYINT)
     seedingC3: int = Field(default=0, sa_type=TINYINT)
     createdBy: int
-    createdIn: datetime
-    updatedBy: Optional[int] = None
-    updatedIn: Optional[datetime] = None
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedBy: int | None = None
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class MatchDaysMap(SQLModel, table=True):
     __tablename__ = "MatchDaysMap"
 
-    matchDayMapID: Optional[int] = Field(default=None, primary_key=True)
-    baseRealCompetitionID: Optional[int] = None
-    extraRealCompetitionID: Optional[int] = None
+    matchDayMapID: int | None = Field(default=None, primary_key=True)
+    baseRealCompetitionID: int | None = None
+    extraRealCompetitionID: int | None = None
     competitionType: int = Field(sa_type=TINYINT)
     minNumTeams: int
     maxNumTeams: int
     totalMatchDays: int
     rounds: int
     firstRealCompetitionMatchDay: int
-    firstRealCompetitionMatchDaySort: Optional[int] = None
+    firstRealCompetitionMatchDaySort: int | None = None
     matchDay: int
-    realCompetitionID: Optional[int] = None
+    realCompetitionID: int | None = None
     realCompetitionSYMID: str = Field(max_length=20)
     realCompetitionSeasonId: str = Field(max_length=20)
     realCompetitionMatchDay: int
-    realCompetitionMatchDaySort: Optional[int] = None
+    realCompetitionMatchDaySort: int | None = None
     createdBy: int
-    createdIn: datetime
-    updatedBy: Optional[int] = None
-    updatedIn: Optional[datetime] = None
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedBy: int | None = None
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class DivisionNotes(SQLModel, table=True):
     __tablename__ = "DivisionNotes"
 
-    divisionNoteID: Optional[int] = Field(default=None, primary_key=True)
+    divisionNoteID: int | None = Field(default=None, primary_key=True)
     leagueID: int
     divisionID: int
     teamID: int
     userID: int
     commissionerID: int
-    parentDivisionNoteID: Optional[int] = None
+    parentDivisionNoteID: int | None = None
     userName: str
     title: str
-    notes: Optional[str] = None
+    notes: str | None = None
     divisionNoteType: str
     createdBy: int
-    createdIn: datetime
-    updatedBy: Optional[int] = None
-    updatedIn: Optional[datetime] = None
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedBy: int | None = None
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class MatchDaysStatus(SQLModel, table=True):
     __tablename__ = "MatchDaysStatus"
 
-    matchDayStatusID: Optional[int] = Field(default=None, primary_key=True)
-    baseRealCompetitionID: Optional[int] = None
-    extraRealCompetitionID: Optional[int] = None
-    matchDayMapKey: Optional[str] = Field(default=None, max_length=20)
-    realCompetitionID: Optional[int] = None
+    matchDayStatusID: int | None = Field(default=None, primary_key=True)
+    baseRealCompetitionID: int | None = None
+    extraRealCompetitionID: int | None = None
+    matchDayMapKey: str | None = Field(default=None, max_length=20)
+    realCompetitionID: int | None = None
     realCompetitionSYMID: str = Field(max_length=20)
     realCompetitionSeasonId: str = Field(max_length=20)
     realCompetitionMatchDay: int
     realCompetitionMatchDaySort: int
-    prevActiveMatchDayStatusID: Optional[int] = None
-    prevActiveRealCompetitionID: Optional[int] = None
-    prevActiveRealCompetitionSYMID: Optional[str] = Field(default=None, max_length=20)
-    prevActiveRealCompetitionSeasonId: Optional[str] = Field(default=None, max_length=20)
-    prevActiveRealCompetitionMatchDay: Optional[int] = None
-    nextActiveMatchDayStatusID: Optional[int] = None
-    nextActiveRealCompetitionID: Optional[int] = None
-    nextActiveRealCompetitionSYMID: Optional[str] = Field(default=None, max_length=20)
-    nextActiveRealCompetitionSeasonId: Optional[str] = Field(default=None, max_length=20)
-    nextActiveRealCompetitionMatchDay: Optional[int] = None
-    scriptsStatus: Optional[str] = Field(default=None, max_length=20)
+    prevActiveMatchDayStatusID: int | None = None
+    prevActiveRealCompetitionID: int | None = None
+    prevActiveRealCompetitionSYMID: str | None = Field(default=None, max_length=20)
+    prevActiveRealCompetitionSeasonId: str | None = Field(default=None, max_length=20)
+    prevActiveRealCompetitionMatchDay: int | None = None
+    nextActiveMatchDayStatusID: int | None = None
+    nextActiveRealCompetitionID: int | None = None
+    nextActiveRealCompetitionSYMID: str | None = Field(default=None, max_length=20)
+    nextActiveRealCompetitionSeasonId: str | None = Field(default=None, max_length=20)
+    nextActiveRealCompetitionMatchDay: int | None = None
+    scriptsStatus: str | None = Field(default=None, max_length=20)
     active: int = Field(sa_type=TINYINT)
     locked: int = Field(default=0, sa_type=TINYINT)
     overlapped: int = Field(default=0, sa_type=TINYINT)
-    minAllowedRealMatchDate: Optional[datetime] = None
-    maxAllowedRealMatchDate: Optional[datetime] = None
-    minRealMatchDate: Optional[datetime] = None
-    maxRealMatchDate: Optional[datetime] = None
-    startWaivers: Optional[datetime] = None
-    finishWaivers: Optional[datetime] = None
-    startWaiversSettle: Optional[datetime] = None
-    finishWaiversSettle: Optional[datetime] = None
-    startOpenWaivers: Optional[datetime] = None
-    finishOpenWaivers: Optional[datetime] = None
-    startOpenWaiversSettle: Optional[datetime] = None
-    finishOpenWaiversSettle: Optional[datetime] = None
-    startPreMatch: Optional[datetime] = None
-    finishPreMatch: Optional[datetime] = None
-    startMatch: Optional[datetime] = None
-    finishMatch: Optional[datetime] = None
-    startPostMatch: Optional[datetime] = None
-    finishPostMatch: Optional[datetime] = None
-    startMatchDay: Optional[datetime] = None
-    finishMatchDay: Optional[datetime] = None
-    finishBaseMatchDay: Optional[datetime] = None
+    minAllowedRealMatchDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    maxAllowedRealMatchDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    minRealMatchDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    maxRealMatchDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    startWaivers: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    finishWaivers: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    startWaiversSettle: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    finishWaiversSettle: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    startOpenWaivers: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    finishOpenWaivers: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    startOpenWaiversSettle: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    finishOpenWaiversSettle: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    startPreMatch: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    finishPreMatch: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    startMatch: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    finishMatch: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    startPostMatch: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    finishPostMatch: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    startMatchDay: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    finishMatchDay: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    finishBaseMatchDay: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class RealStanding(SQLModel, table=True):
     __tablename__ = "RealStandings"
 
-    realStandingID: Optional[int] = Field(default=None, primary_key=True)
+    realStandingID: int | None = Field(default=None, primary_key=True)
     realTeamMemberID: int
     realTeamMemberKey: str = Field(max_length=10)
-    prevRealTeamMemberKey: Optional[str] = Field(default=None, max_length=10)
-    nextRealTeamMemberKey: Optional[str] = Field(default=None, max_length=10)
+    prevRealTeamMemberKey: str | None = Field(default=None, max_length=10)
+    nextRealTeamMemberKey: str | None = Field(default=None, max_length=10)
     realCompetitionID: int
     realCompetitionUID: str = Field(max_length=20)
     realCompetitionSYMID: str = Field(max_length=20)
     realCompetitionSeasonId: str = Field(max_length=20)
     realCompetitionMatchDay: int
-    realCompetitionLastMatchDay: Optional[int] = None
-    baseRealCompetitionID: Optional[int] = None
-    extraRealCompetitionID: Optional[int] = None
+    realCompetitionLastMatchDay: int | None = None
+    baseRealCompetitionID: int | None = None
+    extraRealCompetitionID: int | None = None
     isTeam: int = Field(sa_type=TINYINT)
     isPlayer: int = Field(sa_type=TINYINT)
-    baseMatchDay: Optional[int] = None
-    realMatchID: Optional[int] = None
-    realMatchTeamID: Optional[int] = None
-    realMatchDate: Optional[datetime] = None
-    realMatchTime: Optional[int] = None
-    realMatchStatus: Optional[int] = Field(default=None, sa_type=TINYINT)
-    realTeamID: Optional[int] = None
-    realTeamUID: Optional[str] = Field(default=None, max_length=20)
-    realTeamName: Optional[str] = Field(default=None, max_length=128)
-    realTeamShortName: Optional[str] = Field(default=None, max_length=10)
-    realTeamScore: Optional[int] = None
-    realTeamSide: Optional[str] = Field(default=None, max_length=20)
-    oppositeRealTeamID: Optional[int] = None
-    oppositeRealTeamUID: Optional[str] = Field(default=None, max_length=20)
-    oppositeRealTeamName: Optional[str] = Field(default=None, max_length=128)
-    oppositeRealTeamShortName: Optional[str] = Field(default=None, max_length=10)
-    oppositeRealTeamScore: Optional[int] = None
-    realPlayerID: Optional[int] = None
-    realPlayerUID: Optional[str] = Field(default=None, max_length=20)
-    firstName: Optional[str] = Field(default=None, max_length=100)
-    lastName: Optional[str] = Field(default=None, max_length=100)
-    knownName: Optional[str] = Field(default=None, max_length=100)
-    name: Optional[str] = Field(default=None, max_length=100)
-    sortName: Optional[str] = Field(default=None, max_length=100)
-    position: Optional[str] = Field(default=None, max_length=20)
-    draftPosition: Optional[str] = Field(default=None, max_length=20)
-    draftPositionOrder: Optional[int] = Field(default=None, sa_type=TINYINT)
-    timePlayed: Optional[int] = None
-    gamePlayed: Optional[int] = None
-    goals: Optional[int] = None
-    assists: Optional[int] = None
-    yellowCards: Optional[int] = None
-    redCards: Optional[int] = None
-    goalsConceded: Optional[int] = None
-    cleanSheet: Optional[int] = None
-    matchTimePlayed: Optional[int] = None
-    matchGamePlayed: Optional[int] = None
-    matchGoals: Optional[int] = None
-    matchAssists: Optional[int] = None
-    matchYellowCards: Optional[int] = None
-    matchRedCards: Optional[int] = None
-    matchGoalsConceded: Optional[int] = None
-    matchCleanSheet: Optional[int] = None
-    matchDayPlayed: Optional[int] = None
-    matchWon: Optional[int] = None
-    matchDraw: Optional[int] = None
-    matchLost: Optional[int] = None
-    played: Optional[int] = None
-    won: Optional[int] = None
-    draw: Optional[int] = None
-    lost: Optional[int] = None
-    goalsFor: Optional[int] = None
-    goalsAgainst: Optional[int] = None
-    place: Optional[int] = None
-    playedHome: Optional[int] = None
-    wonHome: Optional[int] = None
-    drawHome: Optional[int] = None
-    lostHome: Optional[int] = None
-    goalsForHome: Optional[int] = None
-    goalsAgainstHome: Optional[int] = None
-    placeHome: Optional[int] = None
-    playedAway: Optional[int] = None
-    wonAway: Optional[int] = None
-    drawAway: Optional[int] = None
-    lostAway: Optional[int] = None
-    goalsForAway: Optional[int] = None
-    goalsAgainstAway: Optional[int] = None
-    placeAway: Optional[int] = None
-    matchPointsL1Played: Optional[float] = None
-    matchPointsL1GoalsAllowed: Optional[float] = None
-    matchPointsL1CleanSheet: Optional[float] = None
-    matchPointsL1Cards: Optional[float] = None
-    matchPointsL1Goals: Optional[float] = None
-    matchPointsL1Assists: Optional[float] = None
-    matchPointsL1OwnGoals: Optional[float] = None
-    matchPointsL1: Optional[float] = None
-    pointsL1Played: Optional[float] = None
-    pointsL1GoalsAllowed: Optional[float] = None
-    pointsL1CleanSheet: Optional[float] = None
-    pointsL1Cards: Optional[float] = None
-    pointsL1Goals: Optional[float] = None
-    pointsL1Assists: Optional[float] = None
-    pointsL1OwnGoals: Optional[float] = None
-    pointsL1: Optional[float] = None
-    livePointsL1: Optional[float] = None
-    ranking: Optional[int] = None
+    baseMatchDay: int | None = None
+    realMatchID: int | None = None
+    realMatchTeamID: int | None = None
+    realMatchDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    realMatchTime: int | None = None
+    realMatchStatus: int | None = Field(default=None, sa_type=TINYINT)
+    realTeamID: int | None = None
+    realTeamUID: str | None = Field(default=None, max_length=20)
+    realTeamName: str | None = Field(default=None, max_length=128)
+    realTeamShortName: str | None = Field(default=None, max_length=10)
+    realTeamScore: int | None = None
+    realTeamSide: str | None = Field(default=None, max_length=20)
+    oppositeRealTeamID: int | None = None
+    oppositeRealTeamUID: str | None = Field(default=None, max_length=20)
+    oppositeRealTeamName: str | None = Field(default=None, max_length=128)
+    oppositeRealTeamShortName: str | None = Field(default=None, max_length=10)
+    oppositeRealTeamScore: int | None = None
+    realPlayerID: int | None = None
+    realPlayerUID: str | None = Field(default=None, max_length=20)
+    firstName: str | None = Field(default=None, max_length=100)
+    lastName: str | None = Field(default=None, max_length=100)
+    knownName: str | None = Field(default=None, max_length=100)
+    name: str | None = Field(default=None, max_length=100)
+    sortName: str | None = Field(default=None, max_length=100)
+    position: str | None = Field(default=None, max_length=20)
+    draftPosition: str | None = Field(default=None, max_length=20)
+    draftPositionOrder: int | None = Field(default=None, sa_type=TINYINT)
+    timePlayed: int | None = None
+    gamePlayed: int | None = None
+    goals: int | None = None
+    assists: int | None = None
+    yellowCards: int | None = None
+    redCards: int | None = None
+    goalsConceded: int | None = None
+    cleanSheet: int | None = None
+    matchTimePlayed: int | None = None
+    matchGamePlayed: int | None = None
+    matchGoals: int | None = None
+    matchAssists: int | None = None
+    matchYellowCards: int | None = None
+    matchRedCards: int | None = None
+    matchGoalsConceded: int | None = None
+    matchCleanSheet: int | None = None
+    matchDayPlayed: int | None = None
+    matchWon: int | None = None
+    matchDraw: int | None = None
+    matchLost: int | None = None
+    played: int | None = None
+    won: int | None = None
+    draw: int | None = None
+    lost: int | None = None
+    goalsFor: int | None = None
+    goalsAgainst: int | None = None
+    place: int | None = None
+    playedHome: int | None = None
+    wonHome: int | None = None
+    drawHome: int | None = None
+    lostHome: int | None = None
+    goalsForHome: int | None = None
+    goalsAgainstHome: int | None = None
+    placeHome: int | None = None
+    playedAway: int | None = None
+    wonAway: int | None = None
+    drawAway: int | None = None
+    lostAway: int | None = None
+    goalsForAway: int | None = None
+    goalsAgainstAway: int | None = None
+    placeAway: int | None = None
+    matchPointsL1Played: float | None = None
+    matchPointsL1GoalsAllowed: float | None = None
+    matchPointsL1CleanSheet: float | None = None
+    matchPointsL1Cards: float | None = None
+    matchPointsL1Goals: float | None = None
+    matchPointsL1Assists: float | None = None
+    matchPointsL1OwnGoals: float | None = None
+    matchPointsL1: float | None = None
+    pointsL1Played: float | None = None
+    pointsL1GoalsAllowed: float | None = None
+    pointsL1CleanSheet: float | None = None
+    pointsL1Cards: float | None = None
+    pointsL1Goals: float | None = None
+    pointsL1Assists: float | None = None
+    pointsL1OwnGoals: float | None = None
+    pointsL1: float | None = None
+    livePointsL1: float | None = None
+    ranking: int | None = None
     processed: int = Field(sa_type=TINYINT)
-    createdIn: datetime
-    updatedIn: Optional[datetime] = None
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class MatchTeam(SQLModel, table=True):
     __tablename__ = "MatchTeams"
 
-    matchTeamID: Optional[int] = Field(default=None, primary_key=True)
+    matchTeamID: int | None = Field(default=None, primary_key=True)
     matchID: int
     matchTeamNum: int = Field(sa_type=TINYINT)
-    matchStatus: int = Field(sa_type=TINYINT)
-    leagueID: int
-    divisionID: int
-    season: int
-    seasonNum: int
-    realCompetitionID: Optional[int] = None
-    realCompetitionMatchDay: Optional[int] = None
-    realCompetitionMatchDaySort: Optional[int] = None
-    competitionType: int = Field(sa_type=TINYINT)
-    competitionMatchDay: Optional[int] = None
-    competitionLastMatchDay: Optional[int] = None
-    competitionMatchNumber: Optional[int] = None
-    competitionMatchGroup: Optional[int] = None
-    competitionMatchNextGroup: Optional[int] = None
-    competitionMatchRound: Optional[int] = None
-    competitionMatchLastRound: Optional[int] = None
-    matchGroupWinnerTeamID: Optional[int] = None
-    userID: Optional[int] = None
-    teamID: Optional[int] = None
-    teamName: Optional[str] = Field(default=None, max_length=128)
-    teamScore: Optional[float] = None
-    teamPoints: Optional[int] = None
-    teamSeeding: Optional[int] = Field(default=None, sa_type=TINYINT)
-    matchDayMapKey: Optional[str] = Field(default=None, max_length=20)
-    oppositeUserID: Optional[int] = None
-    oppositeTeamID: Optional[int] = None
-    oppositeTeamName: Optional[str] = Field(default=None, max_length=128)
-    oppositeTeamScore: Optional[float] = None
-    oppositeTeamPoints: Optional[int] = None
-    oppositeTeamSeeding: Optional[int] = Field(default=None, sa_type=TINYINT)
-    oppositeMatchDayMapKey: Optional[str] = Field(default=None, max_length=20)
-    lineup: Optional[str] = Field(default=None, max_length=240)
-    cntEPLTeam: Optional[int] = Field(default=None, sa_type=TINYINT)
-    cntGoalkeeper: Optional[int] = Field(default=None, sa_type=TINYINT)
-    cntDefender: Optional[int] = Field(default=None, sa_type=TINYINT)
-    cntMidfielder: Optional[int] = Field(default=None, sa_type=TINYINT)
-    cntStriker: Optional[int] = Field(default=None, sa_type=TINYINT)
-    cntSubstitute: Optional[int] = Field(default=None, sa_type=TINYINT)
-    cntInactive: Optional[int] = Field(default=None, sa_type=TINYINT)
-    createdBy: Optional[int] = None
-    createdIn: datetime
-    updatedBy: Optional[int] = None
-    updatedIn: Optional[datetime] = None
+    userID: int | None = None
+    teamID: int | None = None
+    teamName: str | None = Field(default=None, max_length=128)
+    teamScore: float | None = None
+    teamPoints: int | None = None
+    teamSeeding: int | None = Field(default=None, sa_type=TINYINT)
+    matchDayMapKey: str | None = Field(default=None, max_length=20)
+    lineup: str | None = Field(default=None, max_length=240)
+    cntEPLTeam: int | None = Field(default=None, sa_type=TINYINT)
+    cntGoalkeeper: int | None = Field(default=None, sa_type=TINYINT)
+    cntDefender: int | None = Field(default=None, sa_type=TINYINT)
+    cntMidfielder: int | None = Field(default=None, sa_type=TINYINT)
+    cntStriker: int | None = Field(default=None, sa_type=TINYINT)
+    cntSubstitute: int | None = Field(default=None, sa_type=TINYINT)
+    cntInactive: int | None = Field(default=None, sa_type=TINYINT)
+    place: int | None = None
+    won: int | None = None
+    draw: int | None = None
+    lost: int | None = None
+    scoreFor: float | None = None
+    scoreAgainst: float | None = None
+    points: int | None = None
+    wonHome: int | None = None
+    drawHome: int | None = None
+    lostHome: int | None = None
+    scoreForHome: float | None = None
+    scoreAgainstHome: float | None = None
+    pointsHome: int | None = None
+    wonAway: int | None = None
+    drawAway: int | None = None
+    lostAway: int | None = None
+    scoreForAway: float | None = None
+    scoreAgainstAway: float | None = None
+    pointsAway: int | None = None
+    createdBy: int | None = None
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedBy: int | None = None
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class Match(SQLModel, table=True):
     __tablename__ = "Matches"
 
-    matchID: Optional[int] = Field(default=None, primary_key=True)
+    matchID: int | None = Field(default=None, primary_key=True)
     matchStatus: int = Field(sa_type=TINYINT)
     leagueID: int
     divisionID: int
     season: int
     seasonNum: int
-    realCompetitionID: Optional[int] = None
-    realCompetitionMatchDay: Optional[int] = None
-    realCompetitionMatchDaySort: Optional[int] = None
+    realCompetitionID: int | None = None
+    realCompetitionMatchDay: int | None = None
+    realCompetitionMatchDaySort: int | None = None
     competitionType: int = Field(sa_type=TINYINT)
-    competitionMatchDay: Optional[int] = None
-    competitionLastMatchDay: Optional[int] = None
-    competitionMatchNumber: Optional[int] = None
-    competitionMatchGroup: Optional[int] = None
-    competitionMatchNextGroup: Optional[int] = None
-    competitionMatchRound: Optional[int] = None
-    competitionMatchLastRound: Optional[int] = None
-    matchGroupWinnerTeamID: Optional[int] = None
-    firstUserID: Optional[int] = None
-    firstTeamID: Optional[int] = None
-    firstTeamName: Optional[str] = Field(default=None, max_length=128)
-    firstTeamScore: Optional[float] = None
-    firstTeamPoints: Optional[int] = None
-    firstTeamSeeding: Optional[int] = Field(default=None, sa_type=TINYINT)
-    firstMatchDayMapKey: Optional[str] = Field(default=None, max_length=20)
-    secondUserID: Optional[int] = None
-    secondTeamID: Optional[int] = None
-    secondTeamName: Optional[str] = Field(default=None, max_length=128)
-    secondTeamScore: Optional[float] = None
-    secondTeamPoints: Optional[int] = None
-    secondTeamSeeding: Optional[int] = Field(default=None, sa_type=TINYINT)
-    secondMatchDayMapKey: Optional[str] = Field(default=None, max_length=20)
-    createdBy: Optional[int] = None
-    createdIn: datetime
-    updatedBy: Optional[int] = None
-    updatedIn: Optional[datetime] = None
+    competitionMatchDay: int | None = None
+    competitionLastMatchDay: int | None = None
+    competitionMatchNumber: int | None = None
+    competitionMatchGroup: int | None = None
+    competitionMatchNextGroup: int | None = None
+    competitionMatchRound: int | None = None
+    competitionMatchLastRound: int | None = None
+    matchGroupWinnerTeamID: int | None = None
+    lastCompetitionMatchDay: int | None = None
+    createdBy: int | None = None
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedBy: int | None = None
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class RealMatch(SQLModel, table=True):
     __tablename__ = "RealMatches"
 
-    realMatchID: Optional[int] = Field(default=None, primary_key=True)
+    realMatchID: int | None = Field(default=None, primary_key=True)
     realMatchStatus: int = Field(sa_type=TINYINT)
     realMatchType: str = Field(max_length=20)
-    realMatchPeriod: Optional[str] = Field(default=None, max_length=20)
-    realMatchRealPeriod: Optional[str] = Field(default=None, max_length=20)
-    realMatchAttendance: Optional[int] = None
-    realMatchDate: datetime
-    realMatchDateOffset: Optional[int] = None
-    realMatchResultType: Optional[str] = Field(default=None, max_length=20)
-    realMatchTime: Optional[int] = None
-    realMatchFirstHalfTime: Optional[int] = None
-    realMatchSecondHalfTime: Optional[int] = None
-    realMatchFirstHalfExtraTime: Optional[int] = None
-    realMatchSecondHalfExtraTime: Optional[int] = None
+    realMatchPeriod: str | None = Field(default=None, max_length=20)
+    realMatchRealPeriod: str | None = Field(default=None, max_length=20)
+    realMatchAttendance: int | None = None
+    realMatchDate: datetime = Field(sa_type=UTCDateTime())
+    realMatchDateOffset: int | None = None
+    realMatchResultType: str | None = Field(default=None, max_length=20)
+    realMatchTime: int | None = None
+    realMatchFirstHalfTime: int | None = None
+    realMatchSecondHalfTime: int | None = None
+    realMatchFirstHalfExtraTime: int | None = None
+    realMatchSecondHalfExtraTime: int | None = None
     realMatchEnded: int = Field(sa_type=TINYINT)
     realMatchIgnore: int = Field(sa_type=TINYINT)
     realCompetitionID: int
@@ -540,89 +524,89 @@ class RealMatch(SQLModel, table=True):
     realCompetitionSYMID: str = Field(max_length=20)
     realCompetitionSeasonId: str = Field(max_length=20)
     realCompetitionMatchDay: int
-    realCompetitionFirstMatchDay: Optional[int] = None
-    realCompetitionLastMatchDay: Optional[int] = None
-    baseRealCompetitionID: Optional[int] = None
-    extraRealCompetitionID: Optional[int] = None
-    realVenueID: Optional[int] = None
-    realVenueUID: Optional[str] = Field(default=None, max_length=20)
-    firstRealTeamMemberID: Optional[int] = None
-    firstRealTeamMemberKey: Optional[str] = Field(default=None, max_length=10)
-    firstRealTeamID: Optional[int] = None
-    firstRealTeamUID: Optional[str] = Field(default=None, max_length=20)
-    firstRealTeamName: Optional[str] = Field(default=None, max_length=128)
-    firstRealTeamShortName: Optional[str] = Field(default=None, max_length=10)
-    firstRealTeamScore: Optional[int] = None
-    firstRealTeamRealScore: Optional[int] = None
-    firstRealTeamSide: Optional[str] = Field(default=None, max_length=20)
-    firstRealTeamCleanSheet: Optional[int] = Field(default=None, sa_type=TINYINT)
-    firstRealTeamResult: Optional[int] = Field(default=None, sa_type=TINYINT)
-    firstRealTeamPoints: Optional[int] = Field(default=None, sa_type=TINYINT)
-    firstRealTeamNumber: Optional[int] = Field(default=None, sa_type=TINYINT)
-    secondRealTeamMemberID: Optional[int] = None
-    secondRealTeamMemberKey: Optional[str] = Field(default=None, max_length=10)
-    secondRealTeamID: Optional[int] = None
-    secondRealTeamUID: Optional[str] = Field(default=None, max_length=20)
-    secondRealTeamName: Optional[str] = Field(default=None, max_length=128)
-    secondRealTeamShortName: Optional[str] = Field(default=None, max_length=10)
-    secondRealTeamScore: Optional[int] = None
-    secondRealTeamRealScore: Optional[int] = None
-    secondRealTeamSide: Optional[str] = Field(default=None, max_length=20)
-    secondRealTeamCleanSheet: Optional[int] = Field(default=None, sa_type=TINYINT)
-    secondRealTeamResult: Optional[int] = Field(default=None, sa_type=TINYINT)
-    secondRealTeamPoints: Optional[int] = Field(default=None, sa_type=TINYINT)
-    secondRealTeamNumber: Optional[int] = Field(default=None, sa_type=TINYINT)
+    realCompetitionFirstMatchDay: int | None = None
+    realCompetitionLastMatchDay: int | None = None
+    baseRealCompetitionID: int | None = None
+    extraRealCompetitionID: int | None = None
+    realVenueID: int | None = None
+    realVenueUID: str | None = Field(default=None, max_length=20)
+    firstRealTeamMemberID: int | None = None
+    firstRealTeamMemberKey: str | None = Field(default=None, max_length=10)
+    firstRealTeamID: int | None = None
+    firstRealTeamUID: str | None = Field(default=None, max_length=20)
+    firstRealTeamName: str | None = Field(default=None, max_length=128)
+    firstRealTeamShortName: str | None = Field(default=None, max_length=10)
+    firstRealTeamScore: int | None = None
+    firstRealTeamRealScore: int | None = None
+    firstRealTeamSide: str | None = Field(default=None, max_length=20)
+    firstRealTeamCleanSheet: int | None = Field(default=None, sa_type=TINYINT)
+    firstRealTeamResult: int | None = Field(default=None, sa_type=TINYINT)
+    firstRealTeamPoints: int | None = Field(default=None, sa_type=TINYINT)
+    firstRealTeamNumber: int | None = Field(default=None, sa_type=TINYINT)
+    secondRealTeamMemberID: int | None = None
+    secondRealTeamMemberKey: str | None = Field(default=None, max_length=10)
+    secondRealTeamID: int | None = None
+    secondRealTeamUID: str | None = Field(default=None, max_length=20)
+    secondRealTeamName: str | None = Field(default=None, max_length=128)
+    secondRealTeamShortName: str | None = Field(default=None, max_length=10)
+    secondRealTeamScore: int | None = None
+    secondRealTeamRealScore: int | None = None
+    secondRealTeamSide: str | None = Field(default=None, max_length=20)
+    secondRealTeamCleanSheet: int | None = Field(default=None, sa_type=TINYINT)
+    secondRealTeamResult: int | None = Field(default=None, sa_type=TINYINT)
+    secondRealTeamPoints: int | None = Field(default=None, sa_type=TINYINT)
+    secondRealTeamNumber: int | None = Field(default=None, sa_type=TINYINT)
     enabled: int = Field(sa_type=TINYINT)
-    lastF7Date: Optional[datetime] = None
-    lastF42Date: Optional[datetime] = None
-    lastFDate: Optional[datetime] = None
-    createdIn: datetime
-    updatedIn: Optional[datetime] = None
+    lastF7Date: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    lastF42Date: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    lastFDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class RealMatchTeam(SQLModel, table=True):
     __tablename__ = "RealMatchTeams"
 
-    realMatchTeamID: Optional[int] = Field(default=None, primary_key=True)
+    realMatchTeamID: int | None = Field(default=None, primary_key=True)
     realMatchID: int
-    realTeamMemberID: Optional[int] = None
-    realTeamMemberKey: Optional[str] = Field(default=None, max_length=10)
+    realTeamMemberID: int | None = None
+    realTeamMemberKey: str | None = Field(default=None, max_length=10)
     realTeamID: int
     realTeamUID: str = Field(max_length=20)
     realTeamName: str = Field(max_length=128)
-    realTeamShortName: Optional[str] = Field(default=None, max_length=10)
-    realTeamScore: Optional[int] = None
-    realTeamRealScore: Optional[int] = None
+    realTeamShortName: str | None = Field(default=None, max_length=10)
+    realTeamScore: int | None = None
+    realTeamRealScore: int | None = None
     realTeamSide: str = Field(max_length=20)
-    realTeamCleanSheet: Optional[int] = Field(default=None, sa_type=TINYINT)
-    realTeamResult: Optional[int] = Field(default=None, sa_type=TINYINT)
-    realTeamPoints: Optional[int] = Field(default=None, sa_type=TINYINT)
+    realTeamCleanSheet: int | None = Field(default=None, sa_type=TINYINT)
+    realTeamResult: int | None = Field(default=None, sa_type=TINYINT)
+    realTeamPoints: int | None = Field(default=None, sa_type=TINYINT)
     realTeamNumber: int = Field(sa_type=TINYINT)
-    pointsL1: Optional[float] = None
-    createdIn: datetime
-    updatedIn: Optional[datetime] = None
+    pointsL1: float | None = None
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class TeamMemberTransfers(SQLModel, table=True):
     __tablename__ = "TeamMemberTransfers"
 
-    teamMemberTransferID: Optional[int] = Field(default=None, primary_key=True)
-    createdIn: datetime
-    updatedIn: Optional[datetime] = None
+    teamMemberTransferID: int | None = Field(default=None, primary_key=True)
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class TeamMemberLog(SQLModel, table=True):
     __tablename__ = "TeamMemberLog"
 
-    teamMemberLogID: Optional[int] = Field(default=None, primary_key=True)
-    teamMemberTransferID: Optional[int] = None
+    teamMemberLogID: int | None = Field(default=None, primary_key=True)
+    teamMemberTransferID: int | None = None
     leagueID: int
     divisionID: int
     teamID: int
     userID: int
-    requester: Optional[int] = None
+    requester: int | None = None
     transactionType: int
-    membersBefore: Optional[str] = Field(default=None, max_length=500)
-    membersAfter: Optional[str] = Field(default=None, max_length=500)
-    createdIn: datetime
-    updatedIn: Optional[datetime] = None
+    membersBefore: str | None = Field(default=None, max_length=500)
+    membersAfter: str | None = Field(default=None, max_length=500)
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())

@@ -730,7 +730,10 @@ class QueryService:
 
     @staticmethod
     def get_real_standings_by_match_day(
-        db: Session, real_competition_id: int, real_competition_match_day: int, real_team_member_key: str
+        db: Session,
+        real_competition_id: int,
+        real_competition_match_day: int,
+        real_team_member_key: str,
     ) -> dict | None:
         """
         Get real standings for a given competition and match day, filtered by team member key.
@@ -752,4 +755,51 @@ class QueryService:
         )
         if result is None:
             return None
-        return QueryService._to_dict(result)
+        include = [
+            "realTeamMemberKey",
+            "realTeamMemberID",
+            "realMatchID",
+            "realMatchStatus",
+            "realTeamID",
+            "realTeamUID",
+            "realTeamName",
+            "realTeamShortName",
+            "realTeamSide",
+            "oppositeRealTeamID",
+            "oppositeRealTeamUID",
+            "oppositeRealTeamName",
+            "oppositeRealTeamShortName",
+            "realPlayerID",
+            "realPlayerUID",
+            "firstName",
+            "lastName",
+            "knownName",
+            "name",
+            "sortName",
+            "draftPosition",
+            "draftPositionOrder",
+            "timePlayed",
+            "gamePlayed",
+            "goals",
+            "assists",
+            "yellowCards",
+            "redCards",
+            "goalsConceded",
+            "cleanSheet",
+            "matchDayPlayed",
+            "played",
+            "won",
+            "draw",
+            "lost",
+            "goalsFor",
+            "goalsAgainst",
+            "matchPointsL1",
+            "pointsL1",
+            "livePointsL1",
+            "matchTeamMemberRole",
+            "matchTeamMemberPlayed",
+            "matchTeamID",
+            "teamID",
+            "matchStatus",
+        ]
+        return QueryService._to_dict(result, include=include)

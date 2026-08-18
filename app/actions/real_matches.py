@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
+
 from app.models import RealMatch, RealMatchTeam
-from app.context import RequestContext
 
 
 class RealMatchesReadListAction:
@@ -156,10 +156,6 @@ class RealMatchesReadListAction:
                 "updatedIn": match.updatedIn.isoformat() if match.updatedIn else None,
             })
 
-            items.append({"values": values})
+            items.append(values)
 
-        return {
-            "table": "RealMatches",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-            "items": items,
-        }
+        return items

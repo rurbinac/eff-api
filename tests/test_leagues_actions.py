@@ -1,5 +1,10 @@
 import pytest
-from app.actions.leagues import LeaguesReadListAction, LeaguesBuildAction, LeaguesJoinAction
+
+from app.actions.leagues import (
+    LeaguesBuildAction,
+    LeaguesJoinAction,
+    LeaguesReadListAction,
+)
 from app.context import RequestContext
 
 

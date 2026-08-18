@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2001-2026 Opta Sportsdata Ltd. All rights reserved. -->
+
+<!-- PRODUCTION HEADER
+     produced on:        inxopta-djobq04.nexus.opta.net
+     production time:    20260318T152710,951Z
+     production module:  Opta::Feed::XML::Soccer::F7
+-->
+<SoccerFeed TimeStamp="20260318T152709+0000">
+  <SoccerDocument Type="Result" detail_id="1" uID="f44422">
+    <Competition uID="c8">
+      <Country>England</Country>
+      <Name>English Premier League</Name>
+      <Stat Type="season_id">7</Stat>
+      <Stat Type="season_name">Season 2006/2007</Stat>
+      <Stat Type="symid">EN_PR</Stat>
+      <Stat Type="matchday">32</Stat>
+    </Competition>
+    <MatchData>
+      <MatchInfo MatchType="Regular" Period="FullTime" TimeFrameLengthId="1" TimeStamp="20070407T175301+0100">
+        <Attendance>25534</Attendance>
+        <Date>20070407T150000+0100</Date>
+        <DateLocal>20070407T150000+0100</DateLocal>
+        <DateUtc>20070407T140000+0000</DateUtc>
+        <Result Type="NormalResult" Winner="t25" />
+      </MatchInfo>
+      <MatchOfficial uID="o10514">
+        <OfficialData>
+          <OfficialRef Type="Main" />
+        </OfficialData>
+        <OfficialName>
+          <First>Chris</First>
+          <Last>Foy</Last>
+        </OfficialName>
+      </MatchOfficial>
+      <Stat Type="match_time">93</Stat>
+      <Stat Type="first_half_start">20070407T160235+0100</Stat>
+      <Stat Type="first_half_time">49</Stat>
+      <Stat Type="first_half_stop">20070407T165117+0100</Stat>
+      <Stat Type="second_half_start">20070407T170547+0100</Stat>
+      <Stat Type="second_half_time">48</Stat>
+      <Stat Type="second_half_stop">20070407T175300+0100</Stat>
+      <TeamData AverageAge="26.7" Formation="442" Score="4" Side="Home" TeamRef="t25">
+        <Goal EventID="682698141" EventNumber="151" Min="4" Period="FirstHalf" PlayerRef="p2183" Sec="35" Time="5" TimeStamp="20070407T160710+0100" TimeStampUTC="" Type="Goal" uID="g25-1">
+          <Assist PlayerRef="p12002">p12002</Assist>
+        </Goal>
+        <Goal EventID="1400718370" EventNumber="1252" Min="24" Period="FirstHalf" PlayerRef="p1600" Sec="51" Time="25" TimeStamp="20070407T162725+0100" TimeStampUTC="" Type="Goal" uID="g25-2">
+          <Assist PlayerRef="p19959">p19959</Assist>
+        </Goal>
+        <Goal EventID="301454944" EventNumber="2753" Min="74" Period="SecondHalf" PlayerRef="p2183" Sec="13" Time="75" TimeStamp="20070407T173501+0100" TimeStampUTC="20070407T163501+0000" Type="Goal" uID="g25-3" />
+        <Goal EventID="949722055" EventNumber="2794" Min="78" Period="SecondHalf" PlayerRef="p10114" Sec="40" Time="79" TimeStamp="20070407T173927+0100" TimeStampUTC="" Type="Goal" uID="g25-4">
+          <Assist PlayerRef="p12002">p12002</Assist>
+        </Goal>
+        <PlayerLineUp>
+          <MatchPlayer Formation_Place="1" PlayerRef="p1827" Position="Goalkeeper" ShirtNumber="1" Status="Start" />
+          <MatchPlayer Formation_Place="5" PlayerRef="p3672" Position="Defender" ShirtNumber="5" Status="Start" />
+          <MatchPlayer Formation_Place="6" PlayerRef="p12413" Position="Defender" ShirtNumber="14" Status="Start" />
+          <MatchPlayer Formation_Place="2" PlayerRef="p18145" Position="Defender" ShirtNumber="33" Status="Start" />
+          <MatchPlayer Formation_Place="3" PlayerRef="p1754" Position="Defender" ShirtNumber="17" Status="Start" />
+          <MatchPlayer Formation_Place="7" PlayerRef="p19959" Position="Midfielder" ShirtNumber="28" Status="Start" />
+          <MatchPlayer Formation_Place="11" PlayerRef="p12002" Position="Midfielder" ShirtNumber="19" Status="Start" />
+          <MatchPlayer Formation_Place="4" PlayerRef="p10114" Position="Midfielder" ShirtNumber="10" Status="Start" />
+          <MatchPlayer Formation_Place="8" PlayerRef="p1600" Position="Midfielder" ShirtNumber="7" Status="Start" />
+          <MatchPlayer Formation_Place="10" PlayerRef="p13239" Position="Striker" ShirtNumber="20" Status="Start" />
+          <MatchPlayer Formation_Place="9" PlayerRef="p2183" Position="Striker" ShirtNumber="9" Status="Start" />
+          <MatchPlayer Formation_Place="0" PlayerRef="p2053" Position="Substitute" ShirtNumber="16" Status="Sub" SubPosition="Forward" />
+          <MatchPlayer Formation_Place="0" PlayerRef="p9631" Position="Substitute" ShirtNumber="22" Status="Sub" SubPosition="Goalkeeper" />
+          <MatchPlayer Formation_Place="0" PlayerRef="p7907" Position="Substitute" ShirtNumber="2" Status="Sub" SubPosition="Defender" />
+          <MatchPlayer Formation_Place="0" PlayerRef="p25243" Position="Substitute" ShirtNumber="18" Status="Sub" SubPosition="Forward" />
+          <MatchPlayer Formation_Place="0" PlayerRef="p1684" Position="Substitute" ShirtNumber="11" Status="Sub" SubPosition="Forward" />
+        </PlayerLineUp>
+        <Substitution EventID="2013948863" EventNumber="2805" Min="79" Period="2" Reason="Tactical" Sec="40" SubOff="p13239" SubOn="p1684" SubstitutePosition="4" Time="80" TimeStamp="20070407T174027+0100" TimeStampUTC="" uID="s25-1" />
+        <Substitution EventID="849539619" EventNumber="2876" Min="86" Period="2" Reason="Tactical" Sec="54" SubOff="p18145" SubOn="p7907" SubstitutePosition="2" Time="87" TimeStamp="20070407T174741+0100" TimeStampUTC="" uID="s25-2" />
+        <Substitution EventID="1215684697" EventNumber="2897" Min="88" Period="2" Reason="Tactical" Sec="50" SubOff="p2183" SubOn="p25243" SubstitutePosition="4" Time="89" TimeStamp="20070407T174937+0100" TimeStampUTC="" uID="s25-3" />
+      </TeamData>
+      <TeamData AverageAge="26.7" Formation="532" Score="1" Side="Away" TeamRef="t57">
+        <Goal EventID="284701719" EventNumber="1238" Min="22" Period="FirstHalf" PlayerRef="p3720" Sec="7" Time="23" TimeStamp="20070407T162443+0100" TimeStampUTC="" Type="Goal" uID="g57-1">
+          <Assist PlayerRef="p7636">p7636</Assist>
+        </Goal>
+        <PlayerLineUp>
+          <MatchPlayer Formation_Place="1" PlayerRef="p9089" Position="Goalkeeper" ShirtNumber="26" Status="Start" />
+          <MatchPlayer Formation_Place="6" PlayerRef="p18889" Position="Defender" ShirtNumber="6" Status="Start" />
+          <MatchPlayer Formation_Place="2" PlayerRef="p1066" Position="Defender" ShirtNumber="2" Status="Start" />
+          <MatchPlayer Formation_Place="3" PlayerRef="p3740" Position="Defender" ShirtNumber="3" Status="Start" />
+          <MatchPlayer Formation_Place="4" PlayerRef="p40739" Position="Defender" ShirtNumber="31" Status="Start" />
+          <MatchPlayer Formation_Place="5" PlayerRef="p5539" Position="Defender" ShirtNumber="17" Status="Start" />
+          <MatchPlayer Formation_Place="7" PlayerRef="p3720" Position="Midfielder" ShirtNumber="7" Status="Start" />
+          <MatchPlayer Formation_Place="8" PlayerRef="p3088" Position="Midfielder" ShirtNumber="8" Status="Start" />
+          <MatchPlayer Formation_Place="11" PlayerRef="p2019" Position="Striker" ShirtNumber="29" Status="Start" />
+          <MatchPlayer Formation_Place="10" PlayerRef="p7636" Position="Striker" ShirtNumber="15" Status="Start" />
+          <MatchPlayer Formation_Place="9" PlayerRef="p5594" Position="Striker" ShirtNumber="10" Status="Start" />
+          <MatchPlayer Formation_Place="0" PlayerRef="p38680" Position="Substitute" ShirtNumber="24" Status="Sub" SubPosition="Forward" />
+          <MatchPlayer Formation_Place="0" PlayerRef="p11462" Position="Substitute" ShirtNumber="12" Status="Sub" SubPosition="Defender" />
+          <MatchPlayer Formation_Place="0" PlayerRef="p18887" Position="Substitute" ShirtNumber="18" Status="Sub" SubPosition="Forward" />
+          <MatchPlayer Formation_Place="0" PlayerRef="p20117" Position="Substitute" ShirtNumber="20" Status="Sub" SubPosition="Midfielder" />
+          <MatchPlayer Formation_Place="0" PlayerRef="p7640" Position="Substitute" ShirtNumber="25" Status="Sub" SubPosition="Midfielder" />
+        </PlayerLineUp>
+        <Substitution EventID="1983382655" EventNumber="1309" Min="29" Period="1" Reason="Tactical" Sec="54" SubOff="p5594" SubOn="p18887" SubstitutePosition="4" Time="30" TimeStamp="20070407T163230+0100" TimeStampUTC="" uID="s57-1" />
+        <Substitution EventID="1839883544" EventNumber="24510" Min="45" Period="2" Reason="Tactical" Sec="0" SubOff="p3088" SubOn="p38680" SubstitutePosition="4" Time="45" TimeStamp="20070407T170455+0100" TimeStampUTC="" uID="s57-2" />
+      </TeamData>
+    </MatchData>
+    <Team uID="t25">
+      <Country>England</Country>
+      <Name>Middlesbrough</Name>
+      <Official_name>Middlesbrough</Official_name>
+      <Player Position="Goalkeeper" uID="p1827">
+        <PersonName>
+          <First>Mark</First>
+          <Last>Schwarzer</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Defender" uID="p3672">
+        <PersonName>
+          <First>Chris</First>
+          <Last>Riggott</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Defender" uID="p12413">
+        <PersonName>
+          <First>Robert</First>
+          <Last>Huth</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Defender" uID="p18145">
+        <PersonName>
+          <First>Andrew</First>
+          <Last>Taylor</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Defender" uID="p1754">
+        <PersonName>
+          <First>Abel Luís</First>
+          <Known>Abel Xavier</Known>
+          <Last>da Silva Costa Xavier</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Midfielder" uID="p19959">
+        <PersonName>
+          <First>Adam</First>
+          <Last>Johnson</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Midfielder" uID="p12002">
+        <PersonName>
+          <First>Stewart</First>
+          <Last>Downing</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Midfielder" uID="p10114">
+        <PersonName>
+          <First>Fábio</First>
+          <Known>Fábio Rochemback</Known>
+          <Last>Rochemback</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Midfielder" uID="p1600">
+        <PersonName>
+          <First>George</First>
+          <Last>Boateng</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Striker" uID="p13239">
+        <PersonName>
+          <First>Yakubu</First>
+          <Known>Yakubu</Known>
+          <Last>Aiyegbeni</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Striker" uID="p2183">
+        <PersonName>
+          <First>Mark</First>
+          <Last>Viduka</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Substitute" uID="p2053">
+        <PersonName>
+          <First>Jason</First>
+          <Last>Euell</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Substitute" uID="p9631">
+        <PersonName>
+          <First>Bradley</First>
+          <Last>Jones</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Substitute" uID="p7907">
+        <PersonName>
+          <First>Stuart</First>
+          <Last>Parnaby</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Substitute" uID="p25243">
+        <PersonName>
+          <First>Dong-Gook</First>
+          <Known>Lee Dong-Gook</Known>
+          <Last>Lee</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Substitute" uID="p1684">
+        <PersonName>
+          <First>Malcolm</First>
+          <Last>Christie</Last>
+        </PersonName>
+      </Player>
+      <Short_name>Middlesbrough</Short_name>
+      <TeamOfficial Type="Manager" uID="man37254">
+        <PersonName>
+          <First>Gareth</First>
+          <Last>Southgate</Last>
+        </PersonName>
+      </TeamOfficial>
+    </Team>
+    <Team uID="t57">
+      <Country>England</Country>
+      <Name>Watford</Name>
+      <Official_name>Watford</Official_name>
+      <Player Position="Goalkeeper" uID="p9089">
+        <PersonName>
+          <First>Ben</First>
+          <Last>Foster</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Defender" uID="p18889">
+        <PersonName>
+          <First>Jay</First>
+          <Last>DeMerit</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Defender" uID="p1066">
+        <PersonName>
+          <First>James</First>
+          <Last>Chambers</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Defender" uID="p3740">
+        <PersonName>
+          <First>Jordan</First>
+          <Last>Stewart</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Defender" uID="p40739">
+        <PersonName>
+          <First>Douglas</First>
+          <Known>Douglas Rinaldi</Known>
+          <Last>Rinaldi</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Defender" uID="p5539">
+        <PersonName>
+          <First>Danny</First>
+          <Last>Shittu</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Midfielder" uID="p3720">
+        <PersonName>
+          <First>Damien</First>
+          <Last>Francis</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Midfielder" uID="p3088">
+        <PersonName>
+          <First>Gavin</First>
+          <Last>Mahon</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Striker" uID="p2019">
+        <PersonName>
+          <First>Tommy</First>
+          <Last>Smith</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Striker" uID="p7636">
+        <PersonName>
+          <First>Steve</First>
+          <Last>Kabba</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Striker" uID="p5594">
+        <PersonName>
+          <First>Darius</First>
+          <Last>Henderson</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Substitute" uID="p38680">
+        <PersonName>
+          <First>Tamás</First>
+          <Last>Priskin</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Substitute" uID="p11462">
+        <PersonName>
+          <First>Lloyd</First>
+          <Last>Doyley</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Substitute" uID="p18887">
+        <PersonName>
+          <First>Hameur</First>
+          <Last>Bouazza</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Substitute" uID="p20117">
+        <PersonName>
+          <First>Alhassan</First>
+          <Known>Al Bangura</Known>
+          <Last>Bangura</Last>
+        </PersonName>
+      </Player>
+      <Player Position="Substitute" uID="p7640">
+        <PersonName>
+          <First>Gareth</First>
+          <Last>Williams</Last>
+        </PersonName>
+      </Player>
+      <Short_name>Watford</Short_name>
+      <TeamOfficial Type="Manager" uID="man37326">
+        <PersonName>
+          <First>Aidy</First>
+          <Last>Boothroyd</Last>
+        </PersonName>
+      </TeamOfficial>
+    </Team>
+    <Venue uID="v46">
+      <Country>England</Country>
+      <Name>Riverside Stadium</Name>
+    </Venue>
+  </SoccerDocument>
+</SoccerFeed>

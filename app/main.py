@@ -1,7 +1,25 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, users, legacy, leagues, divisions, teams, division_notes, lookups, real_matches, team_standings, real_standings, matches, match_teams, real_team_standings, gaming_api, team_member_transfers
+from app.routers import (
+    auth,
+    division_notes,
+    divisions,
+    gaming_api,
+    leagues,
+    legacy,
+    lookups,
+    match_teams,
+    matches,
+    real_matches,
+    real_standings,
+    real_team_standings,
+    team_member_transfers,
+    team_standings,
+    teams,
+    users,
+    xml_feeds,
+)
 
 app = FastAPI(title="EFF API")
 
@@ -30,6 +48,7 @@ app.include_router(match_teams.router)
 app.include_router(real_team_standings.router)
 app.include_router(gaming_api.router)
 app.include_router(team_member_transfers.router)
+app.include_router(xml_feeds.router)
 
 
 @app.get("/health")
