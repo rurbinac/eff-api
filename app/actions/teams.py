@@ -68,6 +68,60 @@ class TeamsGetCurrentMembersAction:
         return result
 
 
+class TeamsWishListDetailAction:
+    """Get wish list members detail for a team."""
+
+    @staticmethod
+    def execute(db: Session, team_id: int) -> list[dict]:
+        """Get team's wish list members with their stats, in wish-list order."""
+        team_stmt = text("""
+            SELECT `membersWishList`, `baseRealCompetitionID`
+            FROM `Teams`
+            WHERE `teamID` = :teamID
+            LIMIT 1
+        """)
+        team_row = db.execute(team_stmt, {"teamID": team_id}).mappings().first()
+
+        if not team_row:
+            return []
+
+        wish_list_str = team_row.get("membersWishList") or ""
+        base_competition_id = team_row.get("baseRealCompetitionID")
+
+        if not wish_list_str or not base_competition_id:
+            return []
+
+        wish_mkeys = MKeys.build(wish_list_str, size=1)
+        if not wish_mkeys:
+            return []
+
+        keys = wish_mkeys.get_group(0)
+        if not keys:
+            return []
+
+        # Preserve wish-list order
+        my_dict = dict.fromkeys(keys, None)
+
+        members_stmt = text("""
+            SELECT *
+            FROM `RealTeamMembers`
+            WHERE `baseRealCompetitionID` = :baseRealCompetitionID
+              AND `realTeamMemberKey` IN (:keys)
+        """)
+        members_result = db.execute(
+            members_stmt,
+            {"baseRealCompetitionID": base_competition_id, "keys": keys},
+        )
+
+        for row in members_result.mappings():
+            member_dict = dict(row)
+            key = member_dict.get("realTeamMemberKey")
+            if key in my_dict:
+                my_dict[key] = member_dict
+
+        return [v for v in my_dict.values() if v is not None]
+
+
 class TeamsSetFranchiseWishListAction:
     """Set team's franchise wish list."""
 

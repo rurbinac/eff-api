@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Form, Query
 
-from app.actions.teams import TeamsReadListAction, TeamsGetRealMembersRankingAction, TeamsWaiverMembersDetailAction, TeamsGetCurrentMembersAction
+from app.actions.teams import (
+    TeamsGetCurrentMembersAction,
+    TeamsGetRealMembersRankingAction,
+    TeamsReadListAction,
+    TeamsWaiverMembersDetailAction,
+    TeamsWishListDetailAction,
+)
 from app.context import RequestContext
 from app.database import DbSession
 from app.utils import JsonApiSerializer
-
 
 router = APIRouter(tags=["teams"])
 
@@ -29,8 +34,10 @@ async def legacy_teams(
                 items = TeamsReadListAction.execute(db, league_id=leagueID)
             return {
                 "table": "Teams",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
+                "timestamp": RequestContext.get_datetime().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "items": [{"values": item} for item in items],
             }
         elif f == "GetRealMembersRanking":
             if teamID is None:
@@ -38,8 +45,10 @@ async def legacy_teams(
             items = TeamsGetRealMembersRankingAction.execute(db, teamID)
             return {
                 "table": "RealTeamMembers",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
+                "timestamp": RequestContext.get_datetime().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "items": [{"values": item} for item in items],
             }
         elif f == "WaiverMembersDetail":
             if teamID is None:
@@ -47,8 +56,21 @@ async def legacy_teams(
             items = TeamsWaiverMembersDetailAction.execute(db, teamID)
             return {
                 "table": "WaiverMembers",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
+                "timestamp": RequestContext.get_datetime().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "items": [{"values": item} for item in items],
+            }
+        elif f == "WishListDetail":
+            if teamID is None:
+                return {"error": "teamID is required for WishListDetail"}, 400
+            items = TeamsWishListDetailAction.execute(db, teamID)
+            return {
+                "table": "WishList",
+                "timestamp": RequestContext.get_datetime().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "items": [{"values": item} for item in items],
             }
         else:
             return {"error": f"Unknown action: {f}"}, 400
@@ -65,11 +87,13 @@ def rest_teams(
     """REST endpoint: Get teams for league or division (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        items = TeamsReadListAction.execute(db, league_id=leagueID, division_id=divisionID)
+        items = TeamsReadListAction.execute(
+            db, league_id=leagueID, division_id=divisionID
+        )
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='teams',
-            resource_id_key='teamID',
+            resource_type="teams",
+            resource_id_key="teamID",
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:
@@ -85,12 +109,14 @@ def rest_teams_waiver_members_detail(
     RequestContext.set_datetime()
     try:
         if teamID is None:
-            return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
+            return JsonApiSerializer.serialize_error(
+                400, "Bad Request", "teamID is required"
+            )
         items = TeamsWaiverMembersDetailAction.execute(db, teamID)
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='waiver-members',
-            resource_id_key='teamMemberID',
+            resource_type="waiver-members",
+            resource_id_key="teamMemberID",
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:
@@ -106,13 +132,14 @@ def rest_teams_wish_list_detail(
     RequestContext.set_datetime()
     try:
         if teamID is None:
-            return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
-        # TODO: Implement TeamsWishListDetailAction
-        items = []
+            return JsonApiSerializer.serialize_error(
+                400, "Bad Request", "teamID is required"
+            )
+        items = TeamsWishListDetailAction.execute(db, teamID)
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='wish-list',
-            resource_id_key='teamID',
+            resource_type="wish-list",
+            resource_id_key="realTeamMemberKey",
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:
@@ -128,12 +155,14 @@ def rest_teams_current_members(
     RequestContext.set_datetime()
     try:
         if teamID is None:
-            return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
+            return JsonApiSerializer.serialize_error(
+                400, "Bad Request", "teamID is required"
+            )
         items = TeamsGetCurrentMembersAction.execute(db, teamID)
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='team-members',
-            resource_id_key='realTeamMemberKey',
+            resource_type="team-members",
+            resource_id_key="realTeamMemberKey",
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:
@@ -149,12 +178,14 @@ def rest_teams_real_members_ranking(
     RequestContext.set_datetime()
     try:
         if teamID is None:
-            return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
+            return JsonApiSerializer.serialize_error(
+                400, "Bad Request", "teamID is required"
+            )
         items = TeamsGetRealMembersRankingAction.execute(db, teamID)
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='team-members',
-            resource_id_key='realTeamMemberID',
+            resource_type="team-members",
+            resource_id_key="realTeamMemberID",
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:
