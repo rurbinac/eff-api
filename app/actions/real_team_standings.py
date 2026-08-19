@@ -1,8 +1,6 @@
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.context import RequestContext
-
 
 class RealTeamStandingsReadListAction:
     """Handle RealTeamStandings ReadList requests."""
@@ -141,10 +139,6 @@ class RealTeamStandingsReadListAction:
                 "createdIn": to_iso(row[43]),
                 "updatedIn": to_iso(row[44]),
             }
-            items.append({"values": values})
+            items.append(values)
 
-        return {
-            "table": "RealTeamStandings",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-            "items": items,
-        }
+        return items
