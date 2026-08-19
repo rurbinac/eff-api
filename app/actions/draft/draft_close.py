@@ -2,8 +2,12 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from app.actions.draft.match_factory import (
+    DivisionKOFactory,
+    DivisionRRFactory,
+    LeagueKOFactory,
+)
 from app.constants import MatchCreationConstants
-from app.actions.draft.match_factory import DivisionRRFactory, DivisionKOFactory, LeagueKOFactory
 from app.services import QueryService
 
 

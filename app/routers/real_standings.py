@@ -11,7 +11,8 @@ router = APIRouter(tags=["real-standings"])
 
 class RealStandingsRequest(BaseModel):
     realCompetitionID: int
-    realCompetitionSeasonID: int
+    realCompetitionMatchDay: int
+    divisionID: int | None = None
 
 
 @router.post("/eff/eff_api/RealStandings.php")
@@ -19,7 +20,9 @@ async def legacy_real_standings(
     db: DbSession,
     f: str = Query(...),
     realCompetitionID: int | None = Form(None),
-    realCompetitionSeasonID: int | None = Form(None),
+    realCompetitionMatchDay: int | None = Form(None),
+    divisionID: int | None = Form(None),
+    type: str | None = Form(None, alias="_type"),
 ):
     """Legacy PHP-compatible RealStandings endpoint."""
     RequestContext.set_datetime()
@@ -28,12 +31,13 @@ async def legacy_real_standings(
             items = RealStandingsReadListAction.execute(
                 db,
                 real_competition_id=realCompetitionID,
-                real_competition_season_id=realCompetitionSeasonID
+                real_competition_match_day=realCompetitionMatchDay,
+                division_id=divisionID if type == "byDivisionID" else None,
             )
             return {
                 "table": "RealStandings",
                 "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
+                "items": [{"values": item} for item in items],
             }
         else:
             return {"error": f"Unknown function: {f}"}, 400
@@ -52,7 +56,8 @@ async def rest_real_standings(
         items = RealStandingsReadListAction.execute(
             db,
             real_competition_id=payload.realCompetitionID,
-            real_competition_season_id=payload.realCompetitionSeasonID,
+            real_competition_match_day=payload.realCompetitionMatchDay,
+            division_id=payload.divisionID,
         )
         response = JsonApiSerializer.serialize_collection(
             items,

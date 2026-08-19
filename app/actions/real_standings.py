@@ -1,7 +1,6 @@
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.context import RequestContext
 from app.models import RealStanding
 
 
@@ -155,13 +154,9 @@ class RealStandingsReadListAction:
                     row, standing.realTeamMemberKey, teams_map
                 )
 
-            items.append({"values": row})
+            items.append(row)
 
-        return {
-            "table": "RealStandings",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-            "items": items,
-        }
+        return items
 
     @staticmethod
     def _load_teams(db: Session, division_id: int) -> list[dict]:

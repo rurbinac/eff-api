@@ -1,9 +1,9 @@
 from fastapi import APIRouter
 
-from app.database import DbSession
-from app.schemas import SignUpRequest, UpdateUserRequest
 from app.actions.sign import SignUpAction, UpdateUserAction
 from app.context import RequestContext
+from app.database import DbSession
+from app.schemas import SignUpRequest, UpdateUserRequest
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 

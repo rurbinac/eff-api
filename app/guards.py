@@ -268,7 +268,7 @@ def user_is_commissioner(
 
 
 def require_team(
-    db: Session, user_id: int | None, team: RowMapping | None = None
+    db: Session, user_id: int | None = None, team: RowMapping | None = None
 ) -> None:
     """Raise 404 if the team doesn't exist, 403 if the user doesn't own it."""
     if not team:
