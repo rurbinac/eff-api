@@ -39,6 +39,17 @@ async def legacy_teams(
                 ),
                 "items": [{"values": item} for item in items],
             }
+        elif f == "GetCurrentMembers":
+            if teamID is None:
+                return {"error": "teamID is required for GetCurrentMembers"}, 400
+            items = TeamsGetCurrentMembersAction.execute(db, teamID)
+            return {
+                "table": "RealTeamMembers",
+                "timestamp": RequestContext.get_datetime().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "items": [{"values": item} for item in items],
+            }
         elif f == "GetRealMembersRanking":
             if teamID is None:
                 return {"error": "teamID is required for GetRealMembersRanking"}, 400
