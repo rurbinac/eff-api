@@ -11,6 +11,15 @@
 @real-competition-id = 21
 @real-competition-match-day = 38
 @league-id = 63
+@league-name = Test League
+@league-password = secret123
+@league-type = 1
+@game-type = 1
+@scoring-system = 1
+@trade-deadline = 2026-06-10 12:11:10
+@publish-league = 1
+@season-status = 1
+@teams-per-division = 8,10
 @division-id = 130
 @team-id = 1187
 @match-team-id = 16971
@@ -111,6 +120,37 @@ Authorization: Bearer {{access-token}}
 _format={{format}}
 &_type=byUserID
 &userID={{user-id}}
+
+
+### 02.02 -> Leagues - Build
+
+POST {{base-url}}/Leagues.php?f=Build
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&leagueName={{league-name}}
+&leaguePassword={{league-password}}
+&leagueType={{league-type}}
+&gameType={{game-type}}
+&scoringSystem={{scoring-system}}
+&tradeDeadline={{trade-deadline}}
+&publishLeague={{publish-league}}
+&seasonStatus={{season-status}}
+&teamsPerDivision={{teams-per-division}}
+
+
+### 02.03 -> Leagues - Join - {{league-id}}
+
+POST {{base-url}}/Leagues.php?f=Join
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&leagueID={{league-id}}
+&leaguePassword={{league-password}}
 
 
 #
