@@ -15,7 +15,6 @@ from app.constants import (
 )
 from app.context import RequestContext, extract_match_day_status
 from app.models import Division, League, Team
-from app.security import verify_password
 from app.services import QueryService
 
 
@@ -424,11 +423,23 @@ class LeaguesJoinAction:
                 detail="League not found"
             )
 
-        # Verify password
-        if not verify_password(league_password, league.leaguePassword):
+        # Verify password — league passwords are stored as plain text (not bcrypt),
+        # unlike user account passwords.
+        if league_password != league.leaguePassword:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid league password"
+            )
+
+        # Guard: user already has a team in this league
+        already_joined = db.query(Team).filter(
+            Team.leagueID == league_id,
+            Team.userID == user_id,
+        ).first()
+        if already_joined:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You already have a team in this league"
             )
 
         # Check for available teams with draft not started
