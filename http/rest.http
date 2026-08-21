@@ -223,6 +223,14 @@ User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
 
+### 03.07 -> GET divisions/transactions-detail?divisionID={{division-id}}
+
+GET {{base-url}}/divisions/transactions-detail?divisionID={{division-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+
 ### 03.06 -> POST divisions/restart_draft?divisionID={{division-id}}
 
 POST {{base-url}}/divisions/restart_draft?divisionID={{division-id}}

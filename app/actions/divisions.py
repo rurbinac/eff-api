@@ -118,7 +118,7 @@ class DivisionsTransactionsDetailAction:
             LEFT OUTER JOIN `TeamMemberLog` `tml2` ON `tml2`.`teamMemberTransferID` = `tmt`.`teamMemberTransferID`
             LEFT OUTER JOIN `Teams` `t2` ON `tml2`.`teamID` = `t2`.`teamID`
             WHERE `tml1`.`divisionID` = :divisionID
-              AND `tml1`.`createdIn` >= datetime('now', '-14 days')
+              AND `tml1`.`createdIn` >= NOW() - INTERVAL 14 DAY
             ORDER BY `tml1`.`createdIn` DESC
         """)
 
