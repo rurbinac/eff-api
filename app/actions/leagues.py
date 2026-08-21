@@ -81,12 +81,12 @@ class LeaguesBuildAction:
                 detail="teamsPerDivision must be comma-separated integers"
             )
 
-        # Validate each value is 8 or 10
+        # Validate each value is a positive integer
         for t in teams:
-            if t not in (8, 10):
+            if t < 1:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Each division must have 8 or 10 teams"
+                    detail="Each division must have at least 1 team"
                 )
 
         # Validate max 6 divisions
