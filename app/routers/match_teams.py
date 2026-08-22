@@ -59,8 +59,14 @@ async def legacy_match_teams(
                 competition_type=competitionType,
                 competition_match_day=competitionMatchDay,
             )
+            # None means no MatchTeam exists for these params — return empty items
+            # (unlike GetLineupByMatchTeamID where a missing specific ID is a 404)
             if result is None:
-                raise HTTPException(status_code=404, detail="Not found")
+                result = {
+                    "table": "MatchTeams",
+                    "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                    "items": [],
+                }
             return result
         elif f == "SetLineupByCompetitionType":
             if teamID is None or competitionType is None or competitionMatchDay is None or realTeamID is None or not realPlayerIDs:
