@@ -183,7 +183,7 @@ class GetLineupAction:
         return {
             "table": "MatchTeams",
             "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-            "values": list(lineup.get_members()),
+            "items": [{"values": m} for m in lineup.get_members()],
         }
 
 
