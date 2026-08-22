@@ -1,4 +1,4 @@
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from app.context import RequestContext
@@ -44,13 +44,14 @@ class TeamsGetCurrentMembersAction:
         # Create dict with keys in order, initialized to None
         my_dict = dict.fromkeys(keys, None)
 
-        # Query real team members
+        # Query real team members — use expanding bindparam so the list is
+        # unpacked into individual placeholders: IN (:keys_0, :keys_1, ...)
         members_stmt = text("""
             SELECT *
             FROM `RealTeamMembers`
             WHERE `baseRealCompetitionID` = :baseRealCompetitionID
-              AND `realTeamMemberKey` IN (:keys)
-        """)
+              AND `realTeamMemberKey` IN :keys
+        """).bindparams(bindparam("keys", expanding=True))
         members_result = db.execute(
             members_stmt,
             {"baseRealCompetitionID": base_competition_id, "keys": keys}
@@ -106,8 +107,8 @@ class TeamsWishListDetailAction:
             SELECT *
             FROM `RealTeamMembers`
             WHERE `baseRealCompetitionID` = :baseRealCompetitionID
-              AND `realTeamMemberKey` IN (:keys)
-        """)
+              AND `realTeamMemberKey` IN :keys
+        """).bindparams(bindparam("keys", expanding=True))
         members_result = db.execute(
             members_stmt,
             {"baseRealCompetitionID": base_competition_id, "keys": keys},
