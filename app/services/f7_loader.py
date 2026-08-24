@@ -116,6 +116,7 @@ class F7Loader:
         return {
             'status': 'ready',
             'parsed_data': parsed_data,
+            'competition': parsed_data['competition'],
             'real_competition_id': real_competition_id,
             'match_ids': match_ids,
             'teams_cache': teams_cache,
