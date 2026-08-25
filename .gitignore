@@ -9,3 +9,5 @@ dist/
 # Database dumps
 *.sql
 lt3cil7v_eff_new.sql
+# Credentials — never commit
+infra/SFTP_ACCESS.md
