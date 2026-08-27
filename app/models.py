@@ -610,3 +610,18 @@ class TeamMemberLog(SQLModel, table=True):
     membersAfter: str | None = Field(default=None, max_length=500)
     createdIn: datetime = Field(sa_type=UTCDateTime())
     updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
+
+
+class Feed(SQLModel, table=True):
+    __tablename__ = "Feeds"
+
+    feedID: int | None = Field(default=None, primary_key=True)
+    feedName: str | None = Field(default=None, max_length=128)
+    feedType: str = Field(max_length=4)
+    versions: int = Field(default=1)
+    startDate: datetime = Field(sa_type=UTCDateTime())
+    endDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    duration: float | None = None
+    compressedName: str | None = Field(default=None, max_length=128)
+    createdIn: datetime = Field(default_factory=datetime.utcnow, sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())

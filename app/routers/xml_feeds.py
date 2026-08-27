@@ -10,9 +10,11 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
 from app.database import DbSession
+from app.models import Feed
 from app.services.f42_loader import F42Loader
 from app.services.f7_loader import F7Loader
 from app.services.xml_feeds import XmlFeedsStorage
+from app.utils.dt import utc_now
 
 router = APIRouter(tags=["xml_feeds"])
 
@@ -39,6 +41,41 @@ def _verify_pubsub_token(authorization: str | None) -> None:
         raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def _log_feed_start(db: DbSession, blob_name: str, feed_type: str) -> Feed:
+    """Insert or update a Feed row at the start of processing."""
+    start = utc_now()
+    existing = db.query(Feed).filter(Feed.feedName == blob_name).first()
+    if existing:
+        existing.versions += 1
+        existing.startDate = start
+        existing.endDate = None
+        existing.duration = None
+        existing.updatedIn = start
+        db.commit()
+        db.refresh(existing)
+        return existing
+    feed = Feed(
+        feedName=blob_name,
+        feedType=feed_type,
+        versions=1,
+        startDate=start,
+        createdIn=start,
+    )
+    db.add(feed)
+    db.commit()
+    db.refresh(feed)
+    return feed
+
+
+def _log_feed_end(db: DbSession, feed: Feed) -> None:
+    """Stamp endDate and duration once processing is done."""
+    end = utc_now()
+    feed.endDate = end
+    feed.duration = (end - feed.startDate).total_seconds()
+    feed.updatedIn = end
+    db.commit()
 
 
 @router.post("/api/v1/xml_feed_notify")
@@ -79,8 +116,10 @@ async def xml_feed_notify(
     try:
         content: bytes = XmlFeedsStorage.read_file(blob_name)
     except Exception as e:
-        # Return 200 so Pub/Sub does not retry on transient GCS errors
         return {"status": "error", "file": blob_name, "error": f"GCS read failed: {e!s}"}
+
+    # Open a Feeds log row
+    feed_row = _log_feed_start(db, blob_name, feed_type)
 
     # Write to a temp file (parsers take a file path, not bytes) and process
     tmp_path: str | None = None
@@ -100,10 +139,16 @@ async def xml_feed_notify(
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
+    # Stamp end time and duration
+    _log_feed_end(db, feed_row)
+
     return {
         "status": "processed",
         "bucket": bucket,
         "file": blob_name,
         "feed_type": feed_type,
+        "feed_id": feed_row.feedID,
+        "versions": feed_row.versions,
+        "duration_secs": feed_row.duration,
         "result": result,
     }
