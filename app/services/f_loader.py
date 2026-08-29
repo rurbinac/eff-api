@@ -1,13 +1,18 @@
+import hashlib
+import os
 import re
+import tempfile
 
 from sqlalchemy.orm import Session
 
 from app.models import Feed
+from app.services.f42_loader import F42Loader
+from app.services.f7_loader import F7Loader
 from app.utils.dt import utc_now
 
 
 class FLoader:
-    """F Loader - loads data into the database."""
+    """Central dispatcher for OPTA XML feed files."""
 
     # files like: srml-8-2012-results.xml  (competition 8=EPL, 1=Championship)
     _PATTERN_F1 = re.compile(r'^srml-([18])-(\d{4})-results\.xml$')
@@ -33,7 +38,7 @@ class FLoader:
 
     @staticmethod
     def get_feed_type(blob_name: str) -> str:
-        """Determine the feed type based on the blob name."""
+        """Determine the feed type from the filename. Returns '' if unrecognised."""
         if FLoader._PATTERN_F7.match(blob_name):
             return "f7"
         elif FLoader._PATTERN_F42.match(blob_name):
@@ -54,24 +59,37 @@ class FLoader:
             return ""
 
     @staticmethod
-    def log_feed_start(db: Session, blob_name: str) -> Feed:
-        """Insert or update a Feed row at the start of processing."""
+    def log_feed_start(db: Session, blob_name: str, content: bytes) -> Feed:
+        """Insert or update a Feed row at the start of processing.
+
+        Computes size, cumulative totalSize, and sha256 from the raw file bytes.
+        """
         start = utc_now()
+        file_size = len(content)
+        file_sha256 = hashlib.sha256(content).digest()  # 32 bytes
+
         existing = db.query(Feed).filter(Feed.feedName == blob_name).first()
         if existing:
             existing.versions += 1
             existing.startDate = start
             existing.endDate = None
             existing.duration = None
+            existing.size = file_size
+            existing.totalSize += file_size
+            existing.sha256 = file_sha256
             existing.updatedIn = start
             db.commit()
             db.refresh(existing)
             return existing
+
         feed = Feed(
             feedName=blob_name,
             feedType=FLoader.get_feed_type(blob_name),
             versions=1,
             startDate=start,
+            size=file_size,
+            totalSize=file_size,
+            sha256=file_sha256,
             createdIn=start,
         )
         db.add(feed)
@@ -87,3 +105,45 @@ class FLoader:
         feed.duration = (end - feed.startDate).total_seconds()
         feed.updatedIn = end
         db.commit()
+
+    @staticmethod
+    def load_file(db: Session, feed: Feed, content: bytes) -> dict:
+        """Download, parse, and persist a feed file; stamp the Feed log row when done.
+
+        Args:
+            db:      Database session
+            feed:    Feed log row (already created by log_feed_start)
+            content: Raw file bytes from GCS
+        """
+        tmp_path: str | None = None
+        try:
+            # Parsers expect a file path, so write content to a temp file
+            with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+
+            match feed.feedType:
+                case "f42":
+                    result = F42Loader.load_file(db, tmp_path)
+                case "f7":
+                    result = F7Loader.load_file(db, tmp_path, mode="quick")
+                case _:
+                    result = {"status": "not_implemented", "feed_type": feed.feedType}
+
+        except Exception as e:  # noqa: BLE001
+            result = {"status": "error", "error": str(e)}
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+        FLoader.log_feed_end(db, feed)
+
+        return {
+            "status": "processed",
+            "file": feed.feedName,
+            "feed_type": feed.feedType,
+            "feed_id": feed.feedID,
+            "versions": feed.versions,
+            "duration_secs": feed.duration,
+            "result": result,
+        }

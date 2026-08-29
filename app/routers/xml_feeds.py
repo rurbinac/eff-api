@@ -1,16 +1,12 @@
-﻿# ruff: noqa: BLE001  – broad Exception catches are intentional in Pub/Sub handlers
+# ruff: noqa: BLE001  – broad Exception catches are intentional in Pub/Sub handlers
 import base64
 import json
-import os
-import tempfile
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
 from app.database import DbSession
-from app.services.f42_loader import F42Loader
-from app.services.f7_loader import F7Loader
 from app.services.f_loader import FLoader
 from app.services.xml_feeds import XmlFeedsStorage
 
@@ -57,7 +53,7 @@ async def xml_feed_notify(
     blob_name: str = gcs_event.get("name", "")
     bucket: str = gcs_event.get("bucket", "")
 
-    # Determine feed type - empty string means unrecognised
+    # Determine feed type — empty string means unrecognised
     feed_type = FLoader.get_feed_type(blob_name)
     if not feed_type:
         return {
@@ -72,39 +68,6 @@ async def xml_feed_notify(
     except Exception as e:
         return {"status": "error", "file": blob_name, "error": f"GCS read failed: {e!s}"}
 
-    # Open a Feeds log row
-    feed_row = FLoader.log_feed_start(db, blob_name)
-
-    # Write to a temp file (parsers take a file path, not bytes) and process
-    tmp_path: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
-
-        if feed_type == "f42":
-            result = F42Loader.load_file(db, tmp_path)
-        elif feed_type == "f7":
-            result = F7Loader.load_file(db, tmp_path, mode="quick")
-        else:
-            result = {"status": "not_implemented", "feed_type": feed_type}
-
-    except Exception as e:
-        result = {"status": "error", "error": str(e)}
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-
-    # Stamp end time and duration
-    FLoader.log_feed_end(db, feed_row)
-
-    return {
-        "status": "processed",
-        "bucket": bucket,
-        "file": blob_name,
-        "feed_type": feed_type,
-        "feed_id": feed_row.feedID,
-        "versions": feed_row.versions,
-        "duration_secs": feed_row.duration,
-        "result": result,
-    }
+    # Open Feed log row (records size + sha256), process, stamp end time
+    feed_row = FLoader.log_feed_start(db, blob_name, content)
+    return FLoader.load_file(db, feed_row, content) | {"bucket": bucket}
