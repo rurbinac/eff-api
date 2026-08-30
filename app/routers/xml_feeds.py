@@ -69,5 +69,8 @@ async def xml_feed_notify(
         return {"status": "error", "file": blob_name, "error": f"GCS read failed: {e!s}"}
 
     # Open Feed log row (records size + sha256), process, stamp end time
+    # Returns None when the file content is identical to the previous version
     feed_row = FLoader.log_feed_start(db, blob_name, content)
+    if feed_row is None:
+        return {"status": "skipped", "reason": "identical content (sha256 unchanged)", "file": blob_name}
     return FLoader.load_file(db, feed_row, content) | {"bucket": bucket}

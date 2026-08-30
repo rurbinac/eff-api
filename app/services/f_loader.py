@@ -70,17 +70,21 @@ class FLoader:
 
         existing = db.query(Feed).filter(Feed.feedName == blob_name).first()
         if existing:
+            file_changed = existing.sha256 != file_sha256
             existing.versions += 1
-            existing.startDate = start
-            existing.endDate = None
-            existing.duration = None
-            existing.size = file_size
-            existing.totalSize += file_size
-            existing.sha256 = file_sha256
             existing.updatedIn = start
+            if file_changed:
+                # Content is different — reset processing fields and reprocess
+                existing.startDate = start
+                existing.endDate = None
+                existing.duration = None
+                existing.size = file_size
+                existing.totalSize += file_size
+                existing.sha256 = file_sha256
+            # If content is identical, only versions/updatedIn were bumped; skip reprocessing
             db.commit()
             db.refresh(existing)
-            return existing
+            return existing if file_changed else None
 
         feed = Feed(
             feedName=blob_name,
