@@ -1,12 +1,15 @@
 import json
+from datetime import datetime
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.actions.divisions import (
     DivisionsReadListAction,
     DivisionsTransactionsDetailAction,
+    DivisionsUpdateAction,
 )
 from app.actions.draft import DraftResultAction, DraftSituationAction
 from app.actions.draft.draft_exception import DraftException
@@ -54,6 +57,9 @@ async def legacy_divisions(
     f: str = Query(..., description="Action name"),
     leagueID: int | None = Form(None),
     divisionID: int | None = Form(None),
+    draftType: str | None = Form(None),
+    draftDate: datetime | None = Form(None),
+    draftCompleteDate: datetime | None = Form(None),
 ):
     """Legacy PHP-compatible endpoint for Divisions actions."""
     RequestContext.set_datetime()
@@ -118,6 +124,27 @@ async def legacy_divisions(
                     "draftingStart": dv.division.get("draftingStart"),
                     "draftingLimit": dv.division.get("draftingLimit"),
                 }
+            }
+        elif f == "Update":
+            if divisionID is None:
+                return {"error": "divisionID is required for Update"}
+            if current_user is None:
+                return {"error": "Authentication required"}, 401
+            try:
+                values = DivisionsUpdateAction.execute(
+                    db,
+                    division_id=divisionID,
+                    user_id=current_user,
+                    draft_type=draftType,
+                    draft_date=draftDate,
+                    draft_complete_date=draftCompleteDate,
+                )
+            except HTTPException as e:
+                return {"error": e.detail}, e.status_code
+            return {
+                "table": "Divisions",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "values": values,
             }
         else:
             return {"error": f"Unknown action: {f}"}, 400
@@ -266,6 +293,44 @@ async def rest_divisions_pusher_webhook(request: Request, db: DbSession):
         _update_drafting_users(db, division_id, int(user_id), name == "member_added", sequence)
 
     return {"status": "ok"}
+
+
+class DivisionsUpdateRequest(BaseModel):
+    draftType: str | None = None
+    draftDate: datetime | None = None
+    draftCompleteDate: datetime | None = None
+
+
+@router.patch("/api/v1/divisions/{division_id}")
+async def rest_divisions_update(
+    division_id: int,
+    payload: DivisionsUpdateRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update editable division settings (division or league commissioner only)."""
+    RequestContext.set_datetime()
+    try:
+        if current_user is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        values = DivisionsUpdateAction.execute(
+            db,
+            division_id=division_id,
+            user_id=current_user,
+            draft_type=payload.draftType,
+            draft_date=payload.draftDate,
+            draft_complete_date=payload.draftCompleteDate,
+        )
+        return {
+            "data": {
+                "type": "divisions",
+                "id": str(division_id),
+                "attributes": values,
+            },
+            "meta": {"timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S")},
+        }
+    finally:
+        RequestContext.reset()
 
 
 def _update_drafting_users(db: Session, division_id: int, user_id: int, online: bool, sequence: int) -> None:

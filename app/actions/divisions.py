@@ -1,8 +1,13 @@
+from datetime import datetime
+
+from fastapi import HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.models import Division, League
 from app.services import QueryService
 from app.utils import MKeys
+from app.utils.dt import utc_now
 
 
 class DivisionsReadListAction:
@@ -156,3 +161,48 @@ class DivisionsTransactionsDetailAction:
                     members.append(member_record)
 
         return members
+
+
+class DivisionsUpdateAction:
+    """Update editable division settings (commissioner only)."""
+
+    @staticmethod
+    def execute(
+        db: Session,
+        division_id: int,
+        user_id: int,
+        draft_type: str | None = None,
+        draft_date: datetime | None = None,
+        draft_complete_date: datetime | None = None,
+    ) -> dict:
+        division = db.get(Division, division_id)
+        if division is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Division not found")
+
+        # Auth: division commissioner OR league commissioner
+        league = db.get(League, division.leagueID)
+        is_division_commissioner = division.commissionerID == user_id
+        is_league_commissioner = league is not None and league.commissionerID == user_id
+        if not is_division_commissioner and not is_league_commissioner:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+        if draft_type is not None:
+            division.draftType = draft_type
+        if draft_date is not None:
+            division.draftDate = draft_date
+        if draft_complete_date is not None:
+            division.draftCompleteDate = draft_complete_date
+
+        division.updatedBy = user_id
+        division.updatedIn = utc_now()
+        db.commit()
+        db.refresh(division)
+
+        return {
+            "divisionID": division.divisionID,
+            "draftType": division.draftType,
+            "draftDate": division.draftDate.isoformat() if division.draftDate else None,
+            "draftCompleteDate": division.draftCompleteDate.isoformat() if division.draftCompleteDate else None,
+            "updatedBy": division.updatedBy,
+            "updatedIn": division.updatedIn.isoformat() if division.updatedIn else None,
+        }

@@ -213,6 +213,20 @@ _format={{format}}
 &divisionID={{division-id}}
 
 
+### 03.08 -> Divisions - Update - {{division-id}}
+
+POST {{base-url}}/Divisions.php?f=Update
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&divisionID={{division-id}}
+&draftType=A
+&draftDate={{trade-deadline}}
+&draftCompleteDate={{trade-deadline}}
+
+
 ### 03.07 -> Divisions - TransactionsDetail - {{division-id}}
 
 POST {{base-url}}/Divisions.php?f=TransactionsDetail

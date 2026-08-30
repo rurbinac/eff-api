@@ -223,6 +223,20 @@ User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
 
+### 03.08 -> PATCH divisions/{{division-id}}
+
+PATCH {{base-url}}/divisions/{{division-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+{
+  "draftType": "A",
+  "draftDate": "{{trade-deadline}}",
+  "draftCompleteDate": "{{trade-deadline}}"
+}
+
+
 ### 03.07 -> GET divisions/transactions-detail?divisionID={{division-id}}
 
 GET {{base-url}}/divisions/transactions-detail?divisionID={{division-id}}
