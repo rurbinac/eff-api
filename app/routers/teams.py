@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Form, Query
+from fastapi import APIRouter, Form, HTTPException, Query
+from pydantic import BaseModel
 
 from app.actions.teams import (
     TeamsGetCurrentMembersAction,
     TeamsGetRealMembersRankingAction,
     TeamsReadListAction,
+    TeamsUpdateAction,
     TeamsWaiverMembersDetailAction,
     TeamsWishListDetailAction,
 )
 from app.context import RequestContext
-from app.database import DbSession
+from app.database import CurrentUser, DbSession
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["teams"])
@@ -17,10 +19,13 @@ router = APIRouter(tags=["teams"])
 @router.post("/eff/eff_api/Teams.php")
 async def legacy_teams(
     db: DbSession,
+    current_user: CurrentUser,
     f: str = Query(..., description="Action name"),
     leagueID: int | None = Form(None),
     divisionID: int | None = Form(None),
     teamID: int | None = Form(None),
+    teamName: str | None = Form(None),
+    notes: str | None = Form(None),
     type: str | None = Form(None, alias="_type"),
 ):
     """Legacy PHP-compatible endpoint for Teams actions."""
@@ -82,6 +87,26 @@ async def legacy_teams(
                     "%Y-%m-%d %H:%M:%S"
                 ),
                 "items": [{"values": item} for item in items],
+            }
+        elif f == "Update":
+            if teamID is None:
+                return {"error": "teamID is required for Update"}, 400
+            if current_user is None:
+                return {"error": "Authentication required"}, 401
+            try:
+                values = TeamsUpdateAction.execute(
+                    db,
+                    team_id=teamID,
+                    user_id=current_user,
+                    team_name=teamName,
+                    notes=notes,
+                )
+            except HTTPException as e:
+                return {"error": e.detail}, e.status_code
+            return {
+                "table": "Teams",
+                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "values": values,
             }
         else:
             return {"error": f"Unknown action: {f}"}, 400
@@ -199,5 +224,41 @@ def rest_teams_real_members_ranking(
             resource_id_key="realTeamMemberID",
         )
         return JsonApiSerializer.add_timestamp(response)
+    finally:
+        RequestContext.reset()
+
+
+class TeamsUpdateRequest(BaseModel):
+    teamName: str | None = None
+    notes: str | None = None
+
+
+@router.patch("/api/v1/teams/{team_id}")
+async def rest_teams_update(
+    team_id: int,
+    payload: TeamsUpdateRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Update editable team settings (team owner only)."""
+    RequestContext.set_datetime()
+    try:
+        if current_user is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        values = TeamsUpdateAction.execute(
+            db,
+            team_id=team_id,
+            user_id=current_user,
+            team_name=payload.teamName,
+            notes=payload.notes,
+        )
+        return {
+            "data": {
+                "type": "teams",
+                "id": str(team_id),
+                "attributes": values,
+            },
+            "meta": {"timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S")},
+        }
     finally:
         RequestContext.reset()

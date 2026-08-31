@@ -352,6 +352,19 @@ _format={{format}}
 &teamID={{team-id}}
 
 
+### 05.07 -> Teams - Update - {{team-id}}
+
+POST {{base-url}}/Teams.php?f=Update
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+&teamName=My New Name
+&notes=Some notes here
+
+
 #
 #   06    => TeamMemberTransfers
 #

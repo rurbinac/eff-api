@@ -1,3 +1,4 @@
+from fastapi import HTTPException, status
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
@@ -5,6 +6,7 @@ from app.context import RequestContext
 from app.guards import require_team
 from app.models import Team
 from app.utils import MKeys
+from app.utils.dt import utc_now
 
 
 class TeamsGetCurrentMembersAction:
@@ -346,6 +348,42 @@ class TeamsGetRealMembersRankingAction:
         # Return non-None values, preserving ranking order
         result = [v for v in my_dict.values() if v is not None]
         return result
+
+
+class TeamsUpdateAction:
+    """Update editable team settings (team owner only)."""
+
+    @staticmethod
+    def execute(
+        db: Session,
+        team_id: int,
+        user_id: int,
+        team_name: str | None = None,
+        notes: str | None = None,
+    ) -> dict:
+        team = db.get(Team, team_id)
+        if team is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+        if team.userID != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+        if team_name is not None:
+            team.teamName = team_name
+        if notes is not None:
+            team.notes = notes
+
+        team.updatedBy = user_id
+        team.updatedIn = utc_now()
+        db.commit()
+        db.refresh(team)
+
+        return {
+            "teamID": team.teamID,
+            "teamName": team.teamName,
+            "notes": team.notes,
+            "updatedBy": team.updatedBy,
+            "updatedIn": team.updatedIn.isoformat() if team.updatedIn else None,
+        }
 
 
 class TeamsReadListAction:

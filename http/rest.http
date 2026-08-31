@@ -317,6 +317,19 @@ User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
 
+### 05.07 -> PATCH teams/{{team-id}}
+
+PATCH {{base-url}}/teams/{{team-id}}
+Content-Type: application/json
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+{
+  "teamName": "My New Name",
+  "notes": "Some notes here"
+}
+
+
 #
 #   06    => TeamMemberTransfers
 #
