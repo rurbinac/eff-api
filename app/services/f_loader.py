@@ -1,4 +1,3 @@
-import gzip
 import hashlib
 import os
 import re
@@ -10,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.models import Feed
 from app.services.f42_loader import F42Loader
 from app.services.f7_loader import F7Loader
-from app.services.xml_feeds import XmlFeedsStorage
 from app.utils.dt import utc_now
 
 
@@ -149,9 +147,9 @@ class FLoader:
                 case FeedTypes.F42:
                     result = F42Loader.load_file(db, tmp_path)
                 case FeedTypes.F7:
-                    result = F7Loader.load_file(db, tmp_path, mode="quick")
+                    result = F7Loader.load_file(db, tmp_path, quick_mode=True)
                 case _:
-                    result = FLoader._load_file(db, feed, content)
+                    result = {}
 
         except Exception as e:  # noqa: BLE001
             result = {"status": "error", "error": str(e)}
@@ -171,16 +169,3 @@ class FLoader:
             "result": result,
         }
 
-    @staticmethod
-    def _load_file(db: Session, feed: Feed, content: bytes) -> dict:
-        """Compress and archive an unimplemented feed type back to GCS.
-
-        Gzip-compresses the raw XML bytes, writes the result to the same bucket
-        as <feedName>.gz, and stamps feed.compressedName so the Feeds row tracks
-        where the archived copy lives.  The DB commit happens in log_feed_end.
-        """
-        compressed_name = feed.feedName + ".gz"
-        compressed_bytes = gzip.compress(content)
-        XmlFeedsStorage.write_file(compressed_name, compressed_bytes, content_type="application/gzip")
-        feed.compressedName = compressed_name
-        return {"status": "compressed", "compressed_name": compressed_name, "compressed_size": len(compressed_bytes)}
