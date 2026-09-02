@@ -7,8 +7,8 @@ from enum import StrEnum
 from sqlalchemy.orm import Session
 
 from app.models import Feed
-from app.services.f42_loader import F42Loader
 from app.services.f7_loader import F7Loader
+from app.services.f42_loader import F42Loader
 from app.utils.dt import utc_now
 
 
@@ -128,34 +128,41 @@ class FLoader:
         db.commit()
 
     @staticmethod
-    def load_file(db: Session, feed: Feed, content: bytes) -> dict:
+    def create_temp_file(content: bytes) -> str:
+        tmp_path: str | None = None
+        # Parsers expect a file path, so write content to a temp file
+        with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        return tmp_path
+
+    @staticmethod
+    def load_file(db: Session, feed: Feed, tmp_name: str | None = None) -> dict:
         """Download, parse, and persist a feed file; stamp the Feed log row when done.
 
         Args:
             db:      Database session
             feed:    Feed log row (already created by log_feed_start)
-            content: Raw file bytes from GCS
+            tmp_name: Path to the temporary file containing the feed data
         """
-        tmp_path: str | None = None
         try:
             # Parsers expect a file path, so write content to a temp file
-            with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as tmp:
-                tmp.write(content)
-                tmp_path = tmp.name
 
             match feed.feedType:
                 case FeedTypes.F42:
-                    result = F42Loader.load_file(db, tmp_path)
+                    result = F42Loader.load_file(db, feed=feed, tmp_name=tmp_name)
                 case FeedTypes.F7:
-                    result = F7Loader.load_file(db, tmp_path, quick_mode=True)
+                    result = F7Loader.load_file(
+                        db, feed=feed, tmp_name=tmp_name, quick_mode=True
+                    )
                 case _:
                     result = {}
 
         except Exception as e:  # noqa: BLE001
             result = {"status": "error", "error": str(e)}
         finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+            if tmp_name and os.path.exists(tmp_name):
+                os.unlink(tmp_name)
 
         FLoader.log_feed_end(db, feed)
 
@@ -168,4 +175,3 @@ class FLoader:
             "duration_secs": feed.duration,
             "result": result,
         }
-

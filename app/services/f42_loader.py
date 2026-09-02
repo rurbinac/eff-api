@@ -1,29 +1,32 @@
 """F42 OPTA feed loader - loads data into the database."""
 
-from datetime import datetime
 
-from app.utils.dt import utc_now
-from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.services.f42_parser import F42Parser
+from sqlalchemy.orm import Session
+
 from app.constants import DraftPositionConstants
+from app.models import Feed
+from app.services.f42_parser import F42Parser
+from app.utils.dt import utc_now
 
 
 class F42Loader:
     """Load F42 parsed data into the database."""
 
     @staticmethod
-    def load_file(db: Session, file_path: str) -> dict:
+    def load_file(db: Session, feed: Feed, tmp_name: str | None = None) -> dict:
         """Parse and load an F42 file into the database.
 
         Args:
             db: Database session
-            file_path: Path to the F42 XML file
+            feed: Feed log row
+            tmp_name: Path to the temporary file containing the F42 data
 
         Returns:
             Dictionary with statistics: competitions_inserted, competitions_updated, etc.
         """
         # Parse the file
+        file_path = tmp_name or feed.feedName
         parsed_data = F42Parser.parse_file(file_path)
 
         # Load data

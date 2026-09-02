@@ -1,4 +1,4 @@
-# ruff: noqa: BLE001  – broad Exception catches are intentional in Pub/Sub handlers
+﻿# ruff: noqa: BLE001  – broad Exception catches are intentional in Pub/Sub handlers
 import base64
 import json
 
@@ -51,6 +51,8 @@ async def xml_feed_notify(
         return {"status": "error", "error": f"Failed to parse Pub/Sub message: {e!s}"}
 
     blob_name: str = gcs_event.get("name", "")
+    if not FLoader.is_xml_file(blob_name):
+        return {"status": "ignored", "reason": "not an XML file", "file": blob_name}
     bucket: str = gcs_event.get("bucket", "")
 
     # Determine feed type — empty string means unrecognised
@@ -72,5 +74,6 @@ async def xml_feed_notify(
     # Returns None when the file content is identical to the previous version
     feed_row = FLoader.log_feed_start(db, blob_name, content)
     if feed_row is None:
-        return {"status": "skipped", "reason": "identical content (sha256 unchanged)", "file": blob_name}
-    return FLoader.load_file(db, feed_row, content) | {"bucket": bucket}
+        return {"status": "skipped", "reason": "identical content (sha256 and size unchanged)", "file": blob_name}
+    tmp_name = FLoader.create_temp_file(content)
+    return FLoader.load_file(db, feed_row, tmp_name) | {"bucket": bucket}

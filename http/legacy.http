@@ -2,7 +2,8 @@
 # VARIABLES
 #
 
-@base-url = https://eff-api-338220807664.us-central1.run.app/eff/eff_api
+@base-url     = https://eff-api-338220807664.us-central1.run.app/eff/eff_api
+@base-url-dev = https://eff-api-dev-338220807664.us-central1.run.app/eff/eff_api
 @user-agent = Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
 @format = json
 @user-name = nigel@bowmantx.com
@@ -213,18 +214,15 @@ _format={{format}}
 &divisionID={{division-id}}
 
 
-### 03.08 -> Divisions - Update - {{division-id}}
+### 03.06 -> Divisions - RestartDraft - {{division-id}}
 
-POST {{base-url}}/Divisions.php?f=Update
+POST {{base-url}}/Divisions.php?f=RestartDraft
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
 User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
 _format={{format}}
 &divisionID={{division-id}}
-&draftType=A
-&draftDate={{trade-deadline}}
-&draftCompleteDate={{trade-deadline}}
 
 
 ### 03.07 -> Divisions - TransactionsDetail - {{division-id}}
@@ -238,15 +236,18 @@ _format={{format}}
 &divisionID={{division-id}}
 
 
-### 03.06 -> Divisions - RestartDraft - {{division-id}}
+### 03.08 -> Divisions - Update - {{division-id}}
 
-POST {{base-url}}/Divisions.php?f=RestartDraft
+POST {{base-url}}/Divisions.php?f=Update
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
 User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
 _format={{format}}
 &divisionID={{division-id}}
+&draftType=A
+&draftDate={{trade-deadline}}
+&draftCompleteDate={{trade-deadline}}
 
 
 #
