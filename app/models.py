@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import LargeBinary
+from sqlalchemy import JSON, LargeBinary
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlmodel import Field, SQLModel
 
@@ -623,6 +623,7 @@ class Feed(SQLModel, table=True):
     startDate: datetime = Field(sa_type=UTCDateTime())
     endDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
     duration: float | None = None
+    results: dict | None = Field(default=None, sa_type=JSON)
     size: int = Field(default=0)
     totalSize: int = Field(default=0)
     sha256: bytes | None = Field(default=None, sa_type=LargeBinary(32))

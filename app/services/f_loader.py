@@ -119,12 +119,14 @@ class FLoader:
         return feed if file_changed or force else None
 
     @staticmethod
-    def log_feed_end(db: Session, feed: Feed) -> None:
-        """Stamp endDate and duration once processing is done."""
+    def log_feed_end(db: Session, feed: Feed, result: dict | None = None) -> None:
+        """Stamp endDate, duration, and results once processing is done."""
         end = utc_now()
         feed.endDate = end
         feed.duration = (end - feed.startDate).total_seconds()
         feed.updatedIn = end
+        if result is not None:
+            feed.results = result
         db.commit()
 
     @staticmethod
@@ -164,7 +166,7 @@ class FLoader:
             if tmp_name and os.path.exists(tmp_name):
                 os.unlink(tmp_name)
 
-        FLoader.log_feed_end(db, feed)
+        FLoader.log_feed_end(db, feed, result=result)
 
         return {
             "status": "processed",
