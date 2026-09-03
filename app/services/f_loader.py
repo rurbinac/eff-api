@@ -119,7 +119,7 @@ class FLoader:
         return feed if file_changed or force else None
 
     @staticmethod
-    def log_feed_end(db: Session, feed: Feed, result: dict | None = None) -> None:
+    def log_feed_end(db: Session, feed: Feed, result: dict | None = None) -> Feed:
         """Stamp endDate, duration, and results once processing is done."""
         end = utc_now()
         feed.endDate = end
@@ -128,6 +128,8 @@ class FLoader:
         if result is not None:
             feed.results = result
         db.commit()
+        db.refresh(feed)
+        return feed
 
     @staticmethod
     def create_temp_file(content: bytes) -> str:
@@ -139,7 +141,7 @@ class FLoader:
         return tmp_path
 
     @staticmethod
-    def load_file(db: Session, feed: Feed, tmp_name: str | None = None) -> dict:
+    def load_file(db: Session, feed: Feed, tmp_name: str | None = None) -> Feed:
         """Download, parse, and persist a feed file; stamp the Feed log row when done.
 
         Args:
@@ -166,14 +168,4 @@ class FLoader:
             if tmp_name and os.path.exists(tmp_name):
                 os.unlink(tmp_name)
 
-        FLoader.log_feed_end(db, feed, result=result)
-
-        return {
-            "status": "processed",
-            "file": feed.feedName,
-            "feed_type": feed.feedType,
-            "feed_id": feed.feedID,
-            "versions": feed.versions,
-            "duration_secs": feed.duration,
-            "result": result,
-        }
+        return FLoader.log_feed_end(db, feed, result=result)
