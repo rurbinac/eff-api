@@ -52,6 +52,8 @@ class F7Loader:
                 "match_id": foundation["parsed_data"].get("match_id"),
             }
             return FLoader.log_feed_end(db, feed, result=result)
+        finally:
+            FLoader.delete_temp_file(tmp_name)
 
         # Phase 3: Persist based on mode
         if quick_mode:
@@ -289,14 +291,6 @@ class F7Loader:
             results["errors"].append(f"RealStandings player update failed: {str(e)}")
 
         # TODO: Process RealMatchEvents (insert/update)
-
-        try:
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            results["status"] = "error"
-            results["errors"] = results.get("errors", [])
-            results["errors"].append(f"Commit failed: {str(e)}")
 
         return results
 

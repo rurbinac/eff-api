@@ -108,14 +108,8 @@ class F42Loader:
             stats['matches_updated'] += matches_result['updated']
         except Exception as e:
             stats['errors'].append(f"Error loading matches: {str(e)}")
-
-        # Commit changes
-        try:
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            stats['errors'].append(f"Error committing changes: {str(e)}")
-            return FLoader.log_feed_end(db, feed, result=stats)
+        finally:
+            FLoader.delete_temp_file(tmp_name)
 
         return FLoader.log_feed_end(db, feed, result=stats)
 
