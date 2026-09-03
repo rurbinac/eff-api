@@ -141,6 +141,11 @@ class FLoader:
         return tmp_path
 
     @staticmethod
+    def delete_temp_file(tmp_name: str) -> None:
+        if tmp_name and os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+
+    @staticmethod
     def load_file(db: Session, feed: Feed, tmp_name: str | None = None) -> Feed:
         """Download, parse, and persist a feed file; stamp the Feed log row when done.
 
@@ -150,13 +155,11 @@ class FLoader:
             tmp_name: Path to the temporary file containing the feed data
         """
         try:
-            # Parsers expect a file path, so write content to a temp file
-
             match feed.feedType:
                 case FeedTypes.F42:
-                    result = F42Loader.load_file(db, feed=feed, tmp_name=tmp_name)
+                    return F42Loader.load_file(db, feed=feed, tmp_name=tmp_name)
                 case FeedTypes.F7:
-                    result = F7Loader.load_file(
+                    return F7Loader.load_file(
                         db, feed=feed, tmp_name=tmp_name, quick_mode=True
                     )
                 case _:
@@ -164,8 +167,8 @@ class FLoader:
 
         except Exception as e:  # noqa: BLE001
             result = {"status": "error", "error": str(e)}
+
         finally:
-            if tmp_name and os.path.exists(tmp_name):
-                os.unlink(tmp_name)
+            FLoader.delete_temp_file(tmp_name)
 
         return FLoader.log_feed_end(db, feed, result=result)

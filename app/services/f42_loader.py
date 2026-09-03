@@ -14,7 +14,7 @@ class F42Loader:
     """Load F42 parsed data into the database."""
 
     @staticmethod
-    def load_file(db: Session, feed: Feed, tmp_name: str | None = None) -> dict:
+    def load_file(db: Session, feed: Feed, tmp_name: str | None = None) -> Feed:
         """Parse and load an F42 file into the database.
 
         Args:
@@ -23,8 +23,10 @@ class F42Loader:
             tmp_name: Path to the temporary file containing the F42 data
 
         Returns:
-            Dictionary with statistics: competitions_inserted, competitions_updated, etc.
+            Feed row stamped with processing results.
         """
+        from app.services.f_loader import FLoader  # lazy — avoids circular import
+
         # Parse the file
         file_path = tmp_name or feed.feedName
         parsed_data = F42Parser.parse_file(file_path)
@@ -51,7 +53,7 @@ class F42Loader:
             real_competition_id = comp_result['real_competition_id']
         except Exception as e:
             stats['errors'].append(f"Error loading competition: {str(e)}")
-            return stats
+            return FLoader.log_feed_end(db, feed, result=stats)
 
         # Load teams
         team_id_mapping = {}
@@ -113,9 +115,9 @@ class F42Loader:
         except Exception as e:
             db.rollback()
             stats['errors'].append(f"Error committing changes: {str(e)}")
-            return stats
+            return FLoader.log_feed_end(db, feed, result=stats)
 
-        return stats
+        return FLoader.log_feed_end(db, feed, result=stats)
 
     @staticmethod
     def _load_competition(db: Session, comp_data: dict) -> dict:

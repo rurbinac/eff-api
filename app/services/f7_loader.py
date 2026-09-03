@@ -17,7 +17,7 @@ class F7Loader:
     @staticmethod
     def load_file(
         db: Session, feed: Feed, tmp_name: str | None = None, quick_mode: bool = True
-    ) -> dict:
+    ) -> Feed:
         """Parse and load an F7 file with mode-specific persistence.
 
         Args:
@@ -29,11 +29,13 @@ class F7Loader:
         Returns:
             Dictionary with processing result status
         """
+        from app.services.f_loader import FLoader  # lazy — avoids circular import
+
         # Phase 1: Foundation layer (get caches)
         file_path = tmp_name or feed.feedName
         foundation = F7Loader._get_foundation(db, file_path)
         if foundation["status"] != "ready":
-            return foundation
+            return FLoader.log_feed_end(db, feed, result=foundation)
 
         # Phase 2: Process F7 data into in-memory structures
         try:
@@ -44,17 +46,19 @@ class F7Loader:
                 foundation["players_cache"],
             )
         except Exception as e:
-            return {
+            result = {
                 "status": "error",
                 "error": f"Failed to process F7 data: {str(e)}",
                 "match_id": foundation["parsed_data"].get("match_id"),
             }
+            return FLoader.log_feed_end(db, feed, result=result)
 
         # Phase 3: Persist based on mode
         if quick_mode:
-            return F7Loader._save_quick_mode(db, foundation, processed_data)
+            result = F7Loader._save_quick_mode(db, foundation, processed_data)
         else:
-            return F7Loader._save_full_mode(db, foundation, processed_data)
+            result = F7Loader._save_full_mode(db, foundation, processed_data)
+        return FLoader.log_feed_end(db, feed, result=result)
 
     @staticmethod
     def _get_foundation(db: Session, file_path: str) -> dict:
