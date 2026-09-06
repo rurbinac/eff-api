@@ -265,13 +265,34 @@ class F42Parser:
             "var": match_info.get("Var"),
         }
 
-        # Parse date/time
+        # Parse date/time.
+        # Prefer DateUtc for realMatchDate; fall back to Date+TZ if absent.
+        # realMatchDateOffset comes from DateLocal's Offset attribute (e.g. "+01:00" → 100).
         date_elem = match_elem.find("MatchInfo/Date")
         date_utc_elem = match_elem.find("MatchInfo/DateUtc")
-        if date_elem is not None:
-            match["date"] = date_elem.text
+        date_local_elem = match_elem.find("MatchInfo/DateLocal")
+
         if date_utc_elem is not None:
             match["date_utc"] = date_utc_elem.text
+        elif date_elem is not None:
+            # Older feeds: no DateUtc — use local Date (TZ captured separately)
+            match["date_utc"] = date_elem.text
+
+        if date_elem is not None:
+            match["date"] = date_elem.text
+
+        tz_elem = match_elem.find("MatchInfo/TZ")
+        if tz_elem is not None:
+            match["tz"] = tz_elem.text
+
+        # Date offset as integer (HHMM, e.g. "+01:00" → 100, "-05:00" → -500)
+        if date_local_elem is not None:
+            offset_str = date_local_elem.get("Offset")  # e.g. "+01:00"
+            if offset_str:
+                try:
+                    match["date_offset"] = int(offset_str.replace(":", ""))
+                except (ValueError, TypeError):
+                    pass
 
         # Parse venue and attendance
         for stat in match_elem.findall("Stat"):
