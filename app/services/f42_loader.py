@@ -1,3 +1,4 @@
+# ruff: noqa: BLE001  – broad except blocks are intentional diagnostic catches
 """F42 OPTA feed loader - loads data into the database."""
 
 from datetime import datetime
@@ -8,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.constants import DraftPositionConstants
 from app.models import Feed
 from app.services.f42_parser import F42Parser
-from app.services.services_exception import ServiceException
 from app.utils.dt import utc_now
 
 
@@ -58,8 +58,8 @@ class F42Loader:
                 result["errors"].append("Competition not found — feed skipped")
                 return FLoader.log_feed_end(db, feed, result=result)
             result.update(comp_data)
-        except ServiceException as e:
-            result["errors"].append(f"Error loading competition: {e!s}")
+        except Exception as e:
+            result["errors"].append(f"Error loading competition [{type(e).__name__}]: {e!s}")
             return FLoader.log_feed_end(db, feed, result=result)
 
         # Load teams
@@ -69,8 +69,8 @@ class F42Loader:
             result["teams_inserted"] += teams_result["inserted"]
             result["teams_updated"] += teams_result["updated"]
             team_id_mapping = teams_result.get("team_uid_mapping", {})
-        except ServiceException as e:
-            result["errors"].append(f"Error loading teams: {e!s}")
+        except Exception as e:
+            result["errors"].append(f"Error loading teams [{type(e).__name__}]: {e!s}")
             return FLoader.log_feed_end(db, feed, result=result)
 
         # Load players
@@ -80,39 +80,43 @@ class F42Loader:
             )
             result["players_inserted"] += players_result["inserted"]
             result["players_updated"] += players_result["updated"]
-        except ServiceException as e:
-            result["errors"].append(f"Error loading players: {e!s}")
+        except Exception as e:
+            result["errors"].append(f"Error loading players [{type(e).__name__}]: {e!s}")
             return FLoader.log_feed_end(db, feed, result=result)
 
         # Pre-load existing matches cache
         matches_cache = {}
         try:
             matches_cache = F42Loader._load_matches_cache(db, comp_data)
-        except ServiceException as e:
-            result["errors"].append(f"Error pre-loading matches: {e!s}")
+        except Exception as e:
+            result["errors"].append(f"Error pre-loading matches [{type(e).__name__}]: {e!s}")
             return FLoader.log_feed_end(db, feed, result=result)
 
         # Build teams cache from loaded teams
         teams_cache = {}
-        for team_data in parsed_data["teams"]:
-            team_uid = team_data.get("uID")
-            if team_uid in team_id_mapping:
-                # Query for team details
-                team_query = text("""
-                    SELECT realTeamID, realTeamName, realTeamShortName
-                    FROM `RealTeams`
-                    WHERE realCompetitionID = :comp_id AND realTeamUID = :uid
-                    LIMIT 1
-                """)
-                team_result = db.execute(
-                    team_query,
-                    {
-                        "comp_id": result["real_competition_id"],
-                        "uid": team_uid,
-                    },
-                ).first()
-                if team_result:
-                    teams_cache[team_uid] = list(team_result)
+        try:
+            for team_data in parsed_data["teams"]:
+                team_uid = team_data.get("uID")
+                if team_uid in team_id_mapping:
+                    # Query for team details
+                    team_query = text("""
+                        SELECT realTeamID, realTeamName, realTeamShortName
+                        FROM `RealTeams`
+                        WHERE realCompetitionID = :comp_id AND realTeamUID = :uid
+                        LIMIT 1
+                    """)
+                    team_result = db.execute(
+                        team_query,
+                        {
+                            "comp_id": result["real_competition_id"],
+                            "uid": team_uid,
+                        },
+                    ).first()
+                    if team_result:
+                        teams_cache[team_uid] = list(team_result)
+        except Exception as e:
+            result["errors"].append(f"Error building teams cache [{type(e).__name__}]: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=result)
 
         # Load matches
         try:
@@ -126,8 +130,8 @@ class F42Loader:
             )
             result["matches_inserted"] += matches_result["inserted"]
             result["matches_updated"] += matches_result["updated"]
-        except ServiceException as e:
-            result["errors"].append(f"Error loading matches: {e!s}")
+        except Exception as e:
+            result["errors"].append(f"Error loading matches [{type(e).__name__}]: {e!s}")
 
         return FLoader.log_feed_end(db, feed, result=result)
 
