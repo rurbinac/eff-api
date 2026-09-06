@@ -196,7 +196,7 @@ class F7Parser:
         }
 
     @staticmethod
-    def _parse_player(player_elem, team_uid: str) -> Optional[dict]:
+    def _parse_player(player_elem, team_uid: str) -> dict | None:
         """Parse Player element from Team."""
         uid = player_elem.get('uID')
         if not uid:
@@ -222,7 +222,7 @@ class F7Parser:
         }
 
     @staticmethod
-    def _get_text(elem, tag: str) -> Optional[str]:
+    def _get_text(elem, tag: str) -> str | None:
         """Get text from a child element."""
         child = elem.find(tag)
         return child.text if child is not None else None

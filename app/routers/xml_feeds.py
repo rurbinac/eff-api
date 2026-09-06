@@ -75,8 +75,12 @@ async def xml_feed_notify(
     feed_row = FLoader.log_feed_start(db, blob_name, content)
     if feed_row is None:
         return {"status": "skipped", "reason": "identical content (sha256 and size unchanged)", "file": blob_name}
-    tmp_name = FLoader.create_temp_file(content)
-    feed = FLoader.load_file(db, feed_row, tmp_name)
+    try:
+        tmp_name = FLoader.create_temp_file(content)
+        feed = FLoader.load_file(db, feed_row, tmp_name)
+    finally:
+        FLoader.delete_temp_file(tmp_name)
+
     return {
         "status": "processed",
         "bucket": bucket,

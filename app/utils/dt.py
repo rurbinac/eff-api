@@ -3,11 +3,26 @@ from datetime import datetime, timezone
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
 
+_UTC_LOWEST = datetime(2000, 1, 1, tzinfo=timezone.utc).replace(tzinfo=None)
+_UTC_LARGEST = datetime.max.replace(tzinfo=timezone.utc).replace(tzinfo=None)
 
 def utc_now() -> datetime:
     """Current UTC time as a naive datetime (DB-safe)."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
+
+def utc_lowest() -> datetime:
+    """Sentinel 'never processed' datetime (2000-01-01 UTC, naive, DB-safe).
+
+    Used as the default for lastF*Date columns so that any real feed date
+    compares as newer.
+    """
+    return _UTC_LOWEST
+
+
+def utc_largest() -> datetime:
+    """Return a largest reasonable UTC datetime (DB-safe)."""
+    return _UTC_LARGEST
 
 class UTCDateTime(TypeDecorator):
     """

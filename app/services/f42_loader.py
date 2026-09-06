@@ -1,5 +1,6 @@
 """F42 OPTA feed loader - loads data into the database."""
 
+from datetime import datetime
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.constants import DraftPositionConstants
 from app.models import Feed
 from app.services.f42_parser import F42Parser
+from app.services.services_exception import ServiceException
 from app.utils.dt import utc_now
 
 
@@ -32,60 +34,69 @@ class F42Loader:
         parsed_data = F42Parser.parse_file(file_path)
 
         # Load data
-        stats = {
-            'competitions_inserted': 0,
-            'competitions_updated': 0,
-            'teams_inserted': 0,
-            'teams_updated': 0,
-            'players_inserted': 0,
-            'players_updated': 0,
-            'matches_inserted': 0,
-            'matches_updated': 0,
-            'errors': [],
-        }
 
         # Load competitions
-        comp_data = parsed_data['competition']
+        result: dict[str, str | int | datetime | None] = {
+            "real_competition_id": None,
+            "real_competition_symid": parsed_data["competition"].get("competition_code"),
+            "real_competition_season_id": parsed_data["competition"].get("season_id"),
+            "real_competition_country": None,
+            "real_competition_first_match_day": None,
+            "real_competition_last_match_day": None,
+            "teams_inserted": 0,
+            "teams_updated": 0,
+            "players_inserted": 0,
+            "players_updated": 0,
+            "matches_inserted": 0,
+            "matches_updated": 0,
+            "errors": [],
+        }
+
         try:
-            comp_result = F42Loader._load_competition(db, comp_data)
-            stats['competitions_inserted'] += comp_result['inserted']
-            stats['competitions_updated'] += comp_result['updated']
-            real_competition_id = comp_result['real_competition_id']
-        except Exception as e:
-            stats['errors'].append(f"Error loading competition: {str(e)}")
-            return FLoader.log_feed_end(db, feed, result=stats)
+            comp_data = F42Loader._load_competition(db, parsed_data["competition"])
+            if not comp_data["real_competition_id"]:
+                result["errors"].append("Competition not found — feed skipped")
+                return FLoader.log_feed_end(db, feed, result=result)
+            result.update(comp_data)
+        except ServiceException as e:
+            result["errors"].append(f"Error loading competition: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=result)
 
         # Load teams
         team_id_mapping = {}
         try:
-            teams_result = F42Loader._load_teams(db, parsed_data['teams'], real_competition_id)
-            stats['teams_inserted'] += teams_result['inserted']
-            stats['teams_updated'] += teams_result['updated']
-            team_id_mapping = teams_result.get('team_uid_mapping', {})
-        except Exception as e:
-            stats['errors'].append(f"Error loading teams: {str(e)}")
+            teams_result = F42Loader._load_teams(db, parsed_data["teams"], comp_data)
+            result["teams_inserted"] += teams_result["inserted"]
+            result["teams_updated"] += teams_result["updated"]
+            team_id_mapping = teams_result.get("team_uid_mapping", {})
+        except ServiceException as e:
+            result["errors"].append(f"Error loading teams: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=result)
 
         # Load players
         try:
-            players_result = F42Loader._load_players(db, parsed_data['players'], real_competition_id, team_id_mapping)
-            stats['players_inserted'] += players_result['inserted']
-            stats['players_updated'] += players_result['updated']
-        except Exception as e:
-            stats['errors'].append(f"Error loading players: {str(e)}")
+            players_result = F42Loader._load_players(
+                db, parsed_data["players"], comp_data, team_id_mapping
+            )
+            result["players_inserted"] += players_result["inserted"]
+            result["players_updated"] += players_result["updated"]
+        except ServiceException as e:
+            result["errors"].append(f"Error loading players: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=result)
 
         # Pre-load existing matches cache
         matches_cache = {}
         try:
-            matches_cache = F42Loader._load_matches_cache(db, real_competition_id)
-        except Exception as e:
-            stats['errors'].append(f"Error loading matches cache: {str(e)}")
+            matches_cache = F42Loader._load_matches_cache(db, comp_data)
+        except ServiceException as e:
+            result["errors"].append(f"Error pre-loading matches: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=result)
 
         # Build teams cache from loaded teams
         teams_cache = {}
-        for team_data in parsed_data['teams']:
-            team_uid = team_data.get('uID')
+        for team_data in parsed_data["teams"]:
+            team_uid = team_data.get("uID")
             if team_uid in team_id_mapping:
-                real_team_id = team_id_mapping[team_uid]
                 # Query for team details
                 team_query = text("""
                     SELECT realTeamID, realTeamName, realTeamShortName
@@ -93,107 +104,107 @@ class F42Loader:
                     WHERE realCompetitionID = :comp_id AND realTeamUID = :uid
                     LIMIT 1
                 """)
-                team_result = db.execute(team_query, {
-                    'comp_id': real_competition_id,
-                    'uid': team_uid,
-                }).first()
+                team_result = db.execute(
+                    team_query,
+                    {
+                        "comp_id": result["real_competition_id"],
+                        "uid": team_uid,
+                    },
+                ).first()
                 if team_result:
                     teams_cache[team_uid] = list(team_result)
 
         # Load matches
         try:
-            matches_result = F42Loader._load_matches(db, parsed_data['matches'], real_competition_id,
-                                                      matches_cache, teams_cache, comp_data)
-            stats['matches_inserted'] += matches_result['inserted']
-            stats['matches_updated'] += matches_result['updated']
-        except Exception as e:
-            stats['errors'].append(f"Error loading matches: {str(e)}")
-        finally:
-            FLoader.delete_temp_file(tmp_name)
+            matches_result = F42Loader._load_matches(
+                db,
+                parsed_data["matches"],
+                result["real_competition_id"],
+                matches_cache,
+                teams_cache,
+                comp_data,
+            )
+            result["matches_inserted"] += matches_result["inserted"]
+            result["matches_updated"] += matches_result["updated"]
+        except ServiceException as e:
+            result["errors"].append(f"Error loading matches: {e!s}")
 
-        return FLoader.log_feed_end(db, feed, result=stats)
+        return FLoader.log_feed_end(db, feed, result=result)
 
     @staticmethod
-    def _load_competition(db: Session, comp_data: dict) -> dict:
-        """Load or update a competition in RealCompetitions."""
-        real_competition_symid = comp_data.get('competition_code')
-        real_competition_season_id = comp_data.get('season_id')
-        competition_id = comp_data.get('competition_id')
-        country = comp_data.get('country', 'England')
+    def _load_competition(db: Session, comp_data: dict) -> dict[str, str | int | datetime | None]:
+        """Look up a competition in RealCompetitions and stamp lastF42Date.
 
-        if not (real_competition_symid and real_competition_season_id):
-            raise ValueError("Missing competition_code or season_id")
-
-        # Build realCompetitionUID
-        real_competition_uid = f"c{competition_id}" if competition_id else None
+        Competitions are managed externally — this loader does not insert.
+        """
+        real_competition_symid = comp_data.get("competition_code")
+        real_competition_season_id = comp_data.get("season_id")
+        last_f42_date = comp_data.get("timestamp")
 
         # Query for existing competition
         query = text("""
-            SELECT realCompetitionID
+            SELECT `realCompetitionID`,
+                   `realCompetitionUID`,
+                   `realCompetitionCountry`,
+                   `realCompetitionFirstMatchDay`,
+                   `realCompetitionLastMatchDay`,
+                   `baseRealCompetitionID`,
+                   `extraRealCompetitionID`
             FROM `RealCompetitions`
-            WHERE realCompetitionSYMID = :symid
-              AND realCompetitionSeasonId = :season_id
+            WHERE `realCompetitionSYMID` = :symid
+              AND `realCompetitionSeasonId` = :season_id
             LIMIT 1
         """)
+        row = db.execute(
+            query,
+            {"symid": real_competition_symid, "season_id": real_competition_season_id},
+        ).first()
 
-        result = db.execute(query, {
-            'symid': real_competition_symid,
-            'season_id': real_competition_season_id,
-        }).first()
-
-        now = utc_now()
-
-        if result:
-            # Update existing
-            real_competition_id = result[0]
-            update_query = text("""
-                UPDATE `RealCompetitions`
-                SET updatedIn = :now
-                WHERE realCompetitionID = :id
-            """)
-            db.execute(update_query, {'id': real_competition_id, 'now': now})
-            return {
-                'inserted': 0,
-                'updated': 1,
-                'real_competition_id': real_competition_id,
-            }
+        if row:
+            real_competition_id = row["realCompetitionID"]
+            real_competition_uid = row["realCompetitionUID"]
+            real_competition_country = row["realCompetitionCountry"]
+            real_competition_first_match_day = row["realCompetitionFirstMatchDay"]
+            real_competition_last_match_day = row["realCompetitionLastMatchDay"]
+            base_real_comp_id = row["baseRealCompetitionID"]
+            extra_real_comp_id = row["extraRealCompetitionID"]
+            db.execute(
+                text("""
+                    UPDATE `RealCompetitions`
+                    SET `lastF42Date` = :last_f42_date,
+                        `updatedIn`   = :now
+                    WHERE `realCompetitionID` = :id
+                """),
+                {
+                    "id": real_competition_id,
+                    "last_f42_date": last_f42_date,
+                    "now": utc_now(),
+                },
+            )
         else:
-            # Insert new
-            insert_query = text("""
-                INSERT INTO `RealCompetitions`
-                (realCompetitionUID, realCompetitionSYMID, realCompetitionSeasonId, realCompetitionCountry, createdIn, updatedIn)
-                VALUES (:uid, :symid, :season_id, :country, :now, :now)
-            """)
-            db.execute(insert_query, {
-                'uid': real_competition_uid,
-                'symid': real_competition_symid,
-                'season_id': real_competition_season_id,
-                'country': country,
-                'now': now,
-            })
-            db.flush()
+            real_competition_id = None
+            real_competition_uid = None
+            real_competition_country = None
+            real_competition_first_match_day = None
+            real_competition_last_match_day = None
+            base_real_comp_id = None
+            extra_real_comp_id = None
 
-            # Get the inserted ID
-            result = db.execute(text("""
-                SELECT realCompetitionID
-                FROM `RealCompetitions`
-                WHERE realCompetitionSYMID = :symid
-                  AND realCompetitionSeasonId = :season_id
-                LIMIT 1
-            """), {
-                'symid': real_competition_symid,
-                'season_id': real_competition_season_id,
-            }).first()
-
-            real_competition_id = result[0] if result else None
-            return {
-                'inserted': 1,
-                'updated': 0,
-                'real_competition_id': real_competition_id,
-            }
+        return {
+            "real_competition_id": real_competition_id,
+            "real_competition_uid": real_competition_uid,
+            "real_competition_symid": real_competition_symid,
+            "real_competition_season_id": real_competition_season_id,
+            "base_real_competition_id": base_real_comp_id,
+            "extra_real_competition_id": extra_real_comp_id,
+            "real_competition_country": real_competition_country,
+            "real_competition_first_match_day": real_competition_first_match_day,
+            "real_competition_last_match_day": real_competition_last_match_day,
+            "last_f42_date": last_f42_date,
+        }
 
     @staticmethod
-    def _load_teams(db: Session, teams_data: list, real_competition_id: int) -> dict:
+    def _load_teams(db: Session, teams_data: list, comp_data: dict[str, str | int | datetime | None]) -> dict:
         """Load or update teams in RealTeams.
 
         Returns:
@@ -204,40 +215,37 @@ class F42Loader:
         now = utc_now()
         team_uid_mapping = {}  # Map team uID to realTeamID for later use
 
-        # Get competition details for defaults
-        comp_query = text("""
-            SELECT realCompetitionUID, realCompetitionSYMID, realCompetitionSeasonId, realCompetitionCountry, baseRealCompetitionID, extraRealCompetitionID
-            FROM `RealCompetitions`
-            WHERE realCompetitionID = :id
-            LIMIT 1
-        """)
-        comp_result = db.execute(comp_query, {'id': real_competition_id}).first()
-        if not comp_result:
-            raise ValueError(f"RealCompetition {real_competition_id} not found")
-
-        comp_uid, comp_symid, season_id, comp_country, base_real_comp_id, extra_real_comp_id = comp_result
+        comp_uid = comp_data["real_competition_uid"]
+        comp_symid = comp_data["real_competition_symid"]
+        season_id = comp_data["real_competition_season_id"]
+        comp_country = comp_data["real_competition_country"]
+        base_real_comp_id = comp_data["base_real_competition_id"]
+        extra_real_comp_id = comp_data["extra_real_competition_id"]
 
         for team_data in teams_data:
-            real_team_uid = team_data.get('uID')
-            real_team_name = team_data.get('name')
-            real_team_symid = team_data.get('symid')
+            real_team_uid = team_data.get("uID")
+            real_team_name = team_data.get("name")
+            real_team_symid = team_data.get("symid")
 
             if not (real_team_uid and real_team_name):
                 continue
 
             # Query for existing team
             query = text("""
-                SELECT realTeamID
+                SELECT `realTeamID`
                 FROM `RealTeams`
-                WHERE realCompetitionID = :comp_id
-                  AND realTeamUID = :uid
+                WHERE `realCompetitionID` = :comp_id
+                  AND `realTeamUID` = :uid
                 LIMIT 1
             """)
 
-            result = db.execute(query, {
-                'comp_id': real_competition_id,
-                'uid': real_team_uid,
-            }).first()
+            result = db.execute(
+                query,
+                {
+                    "comp_id": comp_data["real_competition_id"],
+                    "uid": real_team_uid,
+                },
+            ).first()
 
             if result:
                 # Update existing
@@ -252,13 +260,16 @@ class F42Loader:
                         updatedIn = :now
                     WHERE realTeamID = :id
                 """)
-                db.execute(update_query, {
-                    'id': real_team_id,
-                    'name': real_team_name,
-                    'symid': real_team_symid,
-                    'short_name': real_team_symid,
-                    'now': now,
-                })
+                db.execute(
+                    update_query,
+                    {
+                        "id": real_team_id,
+                        "name": real_team_name,
+                        "symid": real_team_symid,
+                        "short_name": real_team_symid,
+                        "now": now,
+                    },
+                )
                 updated += 1
             else:
                 # Insert new
@@ -279,32 +290,39 @@ class F42Loader:
                             :now, :now,
                             :now, :now)
                 """)
-                db.execute(insert_query, {
-                    'comp_id': real_competition_id,
-                    'comp_uid': comp_uid,
-                    'comp_symid': comp_symid,
-                    'season_id': season_id,
-                    'base_comp_id': base_real_comp_id,
-                    'extra_comp_id': extra_real_comp_id,
-                    'uid': real_team_uid,
-                    'name': real_team_name,
-                    'symid': real_team_symid,
-                    'short_name': real_team_symid,
-                    'country': comp_country,
-                    'position': 'EPLTeam',
-                    'draft_position': 'EPLTeam',
-                    'draft_position_order': 5,
-                    'is_processed': 0,
-                    'now': now,
-                })
+                db.execute(
+                    insert_query,
+                    {
+                        "comp_id": comp_data["real_competition_id"],
+                        "comp_uid": comp_uid,
+                        "comp_symid": comp_symid,
+                        "season_id": season_id,
+                        "base_comp_id": base_real_comp_id,
+                        "extra_comp_id": extra_real_comp_id,
+                        "uid": real_team_uid,
+                        "name": real_team_name,
+                        "symid": real_team_symid,
+                        "short_name": real_team_symid,
+                        "country": comp_country,
+                        "position": "EPLTeam",
+                        "draft_position": "EPLTeam",
+                        "draft_position_order": 5,
+                        "is_processed": 0,
+                        "now": now,
+                    },
+                )
                 inserted += 1
                 # Get the inserted realTeamID
-                result = db.execute(text("""
+                result = db.execute(
+                    text("""
                     SELECT realTeamID
                     FROM `RealTeams`
-                    WHERE realCompetitionID = :comp_id AND realTeamUID = :uid
+                    WHERE `realCompetitionID` = :comp_id
+                      AND `realTeamUID` = :uid
                     LIMIT 1
-                """), {'comp_id': real_competition_id, 'uid': real_team_uid}).first()
+                """),
+                    {"comp_id": comp_data["real_competition_id"], "uid": real_team_uid},
+                ).first()
                 if result:
                     team_uid_mapping[real_team_uid] = result[0]
 
@@ -313,34 +331,32 @@ class F42Loader:
                 team_uid_mapping[real_team_uid] = real_team_id
 
         return {
-            'inserted': inserted,
-            'updated': updated,
-            'team_uid_mapping': team_uid_mapping,
+            "inserted": inserted,
+            "updated": updated,
+            "team_uid_mapping": team_uid_mapping,
         }
 
     @staticmethod
-    def _load_players(db: Session, players_data: list, real_competition_id: int, team_uid_mapping: dict) -> dict:
+    def _load_players(
+        db: Session,
+        players_data: list,
+        comp_data: dict,
+        team_uid_mapping: dict,
+    ) -> dict:
         """Load or update players in RealPlayers."""
         inserted = 0
         updated = 0
         now = utc_now()
 
-        # Get competition details
-        comp_query = text("""
-            SELECT realCompetitionUID, realCompetitionSYMID, realCompetitionSeasonId, baseRealCompetitionID, extraRealCompetitionID
-            FROM `RealCompetitions`
-            WHERE realCompetitionID = :id
-            LIMIT 1
-        """)
-        comp_result = db.execute(comp_query, {'id': real_competition_id}).first()
-        if not comp_result:
-            raise ValueError(f"RealCompetition {real_competition_id} not found")
-
-        comp_uid, comp_symid, season_id, base_real_comp_id, extra_real_comp_id = comp_result
+        comp_uid = comp_data["real_competition_uid"]
+        comp_symid = comp_data["real_competition_symid"]
+        season_id = comp_data["real_competition_season_id"]
+        base_real_comp_id = comp_data["base_real_competition_id"]
+        extra_real_comp_id = comp_data["extra_real_competition_id"]
 
         for player_data in players_data:
-            real_player_uid = player_data.get('uID')
-            team_uid = player_data.get('team_uID')
+            real_player_uid = player_data.get("uID")
+            team_uid = player_data.get("team_uID")
 
             if not (real_player_uid and team_uid):
                 continue
@@ -352,15 +368,19 @@ class F42Loader:
 
             # Get realTeamUID from RealTeams
             team_query = text("""
-                SELECT realTeamUID
+                SELECT `realTeamUID`
                 FROM `RealTeams`
-                WHERE realCompetitionID = :comp_id AND realTeamID = :team_id
+                WHERE `realCompetitionID` = :comp_id
+                  AND `realTeamID` = :team_id
                 LIMIT 1
             """)
-            team_result = db.execute(team_query, {
-                'comp_id': real_competition_id,
-                'team_id': real_team_id,
-            }).first()
+            team_result = db.execute(
+                team_query,
+                {
+                    "comp_id": comp_data["real_competition_id"],
+                    "team_id": real_team_id,
+                },
+            ).first()
             if not team_result:
                 continue
 
@@ -368,24 +388,27 @@ class F42Loader:
 
             # Check for existing player
             query = text("""
-                SELECT realPlayerID
+                SELECT `realPlayerID`
                 FROM `RealPlayers`
-                WHERE realCompetitionID = :comp_id
-                  AND realPlayerUID = :player_uid
+                WHERE `realCompetitionID` = :comp_id
+                  AND `realPlayerUID` = :player_uid
                 LIMIT 1
             """)
 
-            result = db.execute(query, {
-                'comp_id': real_competition_id,
-                'player_uid': real_player_uid,
-            }).first()
+            result = db.execute(
+                query,
+                {
+                    "comp_id": comp_data["real_competition_id"],
+                    "player_uid": real_player_uid,
+                },
+            ).first()
 
             # Extract player data
-            first_name = player_data.get('first_name')
-            last_name = player_data.get('last_name')
-            known_name = player_data.get('known_name')
-            position = player_data.get('position')
-            real_position = player_data.get('real_position')
+            first_name = player_data.get("first_name")
+            last_name = player_data.get("last_name")
+            known_name = player_data.get("known_name")
+            position = player_data.get("position")
+            real_position = player_data.get("real_position")
 
             # Convert numeric fields safely
             def safe_int(value):
@@ -401,24 +424,31 @@ class F42Loader:
                     return None
 
             def safe_date(value):
-                if not value or value.lower() == 'unknown':
+                if not value or value.lower() == "unknown":
                     return None
                 try:
                     # Validate it's a proper date format (YYYY-MM-DD)
                     from datetime import datetime as dt
-                    dt.strptime(value, '%Y-%m-%d')
+
+                    dt.strptime(value, "%Y-%m-%d")
                     return value
                 except (ValueError, TypeError):
                     return None
 
-            birth_date = safe_date(player_data.get('birth_date'))
-            weight = safe_float(player_data.get('weight'))
-            height = safe_float(player_data.get('height'))
-            jersey_number = safe_int(player_data.get('jersey_number'))
+            birth_date = safe_date(player_data.get("birth_date"))
+            weight = safe_float(player_data.get("weight"))
+            height = safe_float(player_data.get("height"))
+            jersey_number = safe_int(player_data.get("jersey_number"))
 
             # Calculate draft position order and name
-            draft_position_order = DraftPositionConstants.get_order(position, real_position)
-            draft_position = DraftPositionConstants.get_position(draft_position_order) if draft_position_order else None
+            draft_position_order = DraftPositionConstants.get_order(
+                position, real_position
+            )
+            draft_position = (
+                DraftPositionConstants.get_position(draft_position_order)
+                if draft_position_order
+                else None
+            )
 
             if result:
                 # Update existing
@@ -436,26 +466,30 @@ class F42Loader:
                         jerseyNumber = :jersey_number,
                         draftPosition = :draft_position,
                         draftPositionOrder = :draft_pos_order,
-                        lastF42Date = :now,
+                        lastF42Date = :lastF42Date,
                         lastFDate = :now,
                         updatedIn = :now
                     WHERE realPlayerID = :id
                 """)
-                db.execute(update_query, {
-                    'id': real_player_id,
-                    'first_name': first_name,
-                    'last_name': last_name,
-                    'known_name': known_name,
-                    'position': position,
-                    'real_position': real_position,
-                    'birth_date': birth_date,
-                    'weight': weight,
-                    'height': height,
-                    'jersey_number': jersey_number,
-                    'draft_position': draft_position,
-                    'draft_pos_order': draft_position_order,
-                    'now': now,
-                })
+                db.execute(
+                    update_query,
+                    {
+                        "id": real_player_id,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "known_name": known_name,
+                        "position": position,
+                        "real_position": real_position,
+                        "birth_date": birth_date,
+                        "weight": weight,
+                        "height": height,
+                        "jersey_number": jersey_number,
+                        "draft_position": draft_position,
+                        "draft_pos_order": draft_position_order,
+                        "now": now,
+                        "lastF42Date": comp_data["last_f42_date"],
+                    },
+                )
                 updated += 1
             else:
                 # Insert new
@@ -479,39 +513,43 @@ class F42Loader:
                             :birth_date, :weight, :height, :jersey_number,
                             :draft_position, :draft_pos_order,
                             :is_processed,
-                            :now, :now,
+                            :lastF42Date, :now,
                             :now, :now)
                 """)
-                db.execute(insert_query, {
-                    'comp_id': real_competition_id,
-                    'comp_uid': comp_uid,
-                    'comp_symid': comp_symid,
-                    'season_id': season_id,
-                    'base_comp_id': base_real_comp_id,
-                    'extra_comp_id': extra_real_comp_id,
-                    'team_id': real_team_id,
-                    'team_uid': real_team_uid,
-                    'player_uid': real_player_uid,
-                    'first_name': first_name,
-                    'last_name': last_name,
-                    'known_name': known_name,
-                    'position': position,
-                    'real_position': real_position,
-                    'birth_date': birth_date,
-                    'weight': weight,
-                    'height': height,
-                    'jersey_number': jersey_number,
-                    'draft_position': draft_position,
-                    'draft_pos_order': draft_position_order,
-                    'is_processed': 0,
-                    'now': now,
-                })
+                db.execute(
+                    insert_query,
+                    {
+                        "comp_id": comp_data["real_competition_id"],
+                        "comp_uid": comp_uid,
+                        "comp_symid": comp_symid,
+                        "season_id": season_id,
+                        "base_comp_id": base_real_comp_id,
+                        "extra_comp_id": extra_real_comp_id,
+                        "team_id": real_team_id,
+                        "team_uid": real_team_uid,
+                        "player_uid": real_player_uid,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "known_name": known_name,
+                        "position": position,
+                        "real_position": real_position,
+                        "birth_date": birth_date,
+                        "weight": weight,
+                        "height": height,
+                        "jersey_number": jersey_number,
+                        "draft_position": draft_position,
+                        "draft_pos_order": draft_position_order,
+                        "is_processed": 0,
+                        "now": now,
+                        "lastF42Date": comp_data["last_f42_date"],
+                    },
+                )
                 inserted += 1
 
-        return {'inserted': inserted, 'updated': updated}
+        return {"inserted": inserted, "updated": updated}
 
     @staticmethod
-    def _load_matches_cache(db: Session, real_competition_id: int) -> dict:
+    def _load_matches_cache(db: Session, comp_data: dict) -> dict:
         """Pre-load existing RealMatches and RealMatchTeams IDs into a cache.
 
         Returns:
@@ -533,50 +571,57 @@ class F42Loader:
             WHERE `m`.`realCompetitionID` = :realCompetitionID
         """)
 
-        results = db.execute(query_text, {'realCompetitionID': real_competition_id}).mappings().all()
+        results = (
+            db.execute(query_text, {"realCompetitionID": comp_data["real_competition_id"]})
+            .mappings()
+            .all()
+        )
 
         for row in results:
             key = f"{row['tUID_1']},{row['tUID_2']}"
-            cache[key] = [row['mID'], row['mtID_1'], row['mtID_2']]
+            cache[key] = [row["mID"], row["mtID_1"], row["mtID_2"]]
 
         return cache
 
     @staticmethod
-    def _load_matches(db: Session, matches_data: list, real_competition_id: int,
-                     matches_cache: dict, teams_cache: dict, comp_data: dict) -> dict:
+    def _load_matches(
+        db: Session,
+        matches_data: list,
+        real_competition_id: int,
+        matches_cache: dict,
+        teams_cache: dict,
+        comp_data: dict,
+    ) -> dict:
         """Load or update matches and match teams."""
         inserted = 0
         updated = 0
         now = utc_now()
 
-        # Get competition details
-        comp_query = text("""
-            SELECT realCompetitionUID, realCompetitionSYMID, realCompetitionSeasonId,
-                   realCompetitionMatchDay, realCompetitionFirstMatchDay, realCompetitionLastMatchDay,
-                   baseRealCompetitionID, extraRealCompetitionID
-            FROM `RealCompetitions`
-            WHERE realCompetitionID = :id
-            LIMIT 1
-        """)
-        comp_result = db.execute(comp_query, {'id': real_competition_id}).first()
-        if not comp_result:
-            raise ValueError(f"RealCompetition {real_competition_id} not found")
-
-        comp_uid, comp_symid, season_id, _, first_match_day, last_match_day, base_comp_id, extra_comp_id = comp_result
+        comp_uid = comp_data["real_competition_uid"]
+        comp_symid = comp_data["real_competition_symid"]
+        season_id = comp_data["real_competition_season_id"]
+        first_match_day = comp_data["real_competition_first_match_day"]
+        last_match_day = comp_data["real_competition_last_match_day"]
+        base_comp_id = comp_data["base_real_competition_id"]
+        extra_comp_id = comp_data["extra_real_competition_id"]
 
         for match_data in matches_data:
-            if not match_data.get('team_data') or len(match_data['team_data']) < 2:
+            if not match_data.get("team_data") or len(match_data["team_data"]) < 2:
                 continue
 
             # Get the two teams (Home and Away)
-            home_team_data = next((t for t in match_data['team_data'] if t['side'] == 'Home'), None)
-            away_team_data = next((t for t in match_data['team_data'] if t['side'] == 'Away'), None)
+            home_team_data = next(
+                (t for t in match_data["team_data"] if t["side"] == "Home"), None
+            )
+            away_team_data = next(
+                (t for t in match_data["team_data"] if t["side"] == "Away"), None
+            )
 
             if not (home_team_data and away_team_data):
                 continue
 
-            home_team_uid = home_team_data.get('team_ref')
-            away_team_uid = away_team_data.get('team_ref')
+            home_team_uid = home_team_data.get("team_ref")
+            away_team_uid = away_team_data.get("team_ref")
 
             if not (home_team_uid and away_team_uid):
                 continue
@@ -595,13 +640,13 @@ class F42Loader:
             away_team_id = away_team_info[0]
 
             # Parse match data
-            match_date = match_data.get('date_utc')
-            match_day = match_data.get('match_day')
+            match_date = match_data.get("date_utc")
+            match_day = match_data.get("match_day")
 
             # Check if match exists in cache
             if cache_key in matches_cache:
                 # Update existing match
-                real_match_id, mt_id_home, mt_id_away = matches_cache[cache_key]
+                real_match_id, *_ = matches_cache[cache_key]
 
                 update_query = text("""
                     UPDATE `RealMatches`
@@ -614,15 +659,18 @@ class F42Loader:
                         updatedIn = :now
                     WHERE realMatchID = :id
                 """)
-                db.execute(update_query, {
-                    'id': real_match_id,
-                    'match_type': match_data.get('match_type'),
-                    'period': match_data.get('period'),
-                    'real_period': match_data.get('period'),
-                    'match_date': match_date,
-                    'match_day': match_day,
-                    'now': now,
-                })
+                db.execute(
+                    update_query,
+                    {
+                        "id": real_match_id,
+                        "match_type": match_data.get("match_type"),
+                        "period": match_data.get("period"),
+                        "real_period": match_data.get("period"),
+                        "match_date": match_date,
+                        "match_day": match_day,
+                        "now": now,
+                    },
+                )
                 updated += 1
             else:
                 # Insert new match
@@ -645,35 +693,41 @@ class F42Loader:
                             :now,
                             :now, :now)
                 """)
-                db.execute(insert_match_query, {
-                    'comp_id': real_competition_id,
-                    'comp_uid': comp_uid,
-                    'comp_symid': comp_symid,
-                    'season_id': season_id,
-                    'match_day': match_day,
-                    'first_match_day': first_match_day,
-                    'last_match_day': last_match_day,
-                    'base_comp_id': base_comp_id,
-                    'extra_comp_id': extra_comp_id,
-                    'match_type': match_data.get('match_type'),
-                    'period': match_data.get('period'),
-                    'real_period': match_data.get('period'),
-                    'match_date': match_date,
-                    'ignore': 0,
-                    'enabled': 1,
-                    'now': now,
-                })
+                db.execute(
+                    insert_match_query,
+                    {
+                        "comp_id": real_competition_id,
+                        "comp_uid": comp_uid,
+                        "comp_symid": comp_symid,
+                        "season_id": season_id,
+                        "match_day": match_day,
+                        "first_match_day": first_match_day,
+                        "last_match_day": last_match_day,
+                        "base_comp_id": base_comp_id,
+                        "extra_comp_id": extra_comp_id,
+                        "match_type": match_data.get("match_type"),
+                        "period": match_data.get("period"),
+                        "real_period": match_data.get("period"),
+                        "match_date": match_date,
+                        "ignore": 0,
+                        "enabled": 1,
+                        "now": now,
+                    },
+                )
                 db.flush()
 
                 # Get the inserted match ID
-                result = db.execute(text("""
+                result = db.execute(
+                    text("""
                     SELECT realMatchID FROM `RealMatches`
                     WHERE realCompetitionID = :comp_id AND realMatchDate = :match_date
                     ORDER BY realMatchID DESC LIMIT 1
-                """), {
-                    'comp_id': real_competition_id,
-                    'match_date': match_date,
-                }).first()
+                """),
+                    {
+                        "comp_id": real_competition_id,
+                        "match_date": match_date,
+                    },
+                ).first()
 
                 if result:
                     real_match_id = result[0]
@@ -681,10 +735,10 @@ class F42Loader:
 
                     # Insert RealMatchTeams for Home and Away teams
                     for side, team_uid, team_id, team_info in [
-                        ('Home', home_team_uid, home_team_id, home_team_info),
-                        ('Away', away_team_uid, away_team_id, away_team_info),
+                        ("Home", home_team_uid, home_team_id, home_team_info),
+                        ("Away", away_team_uid, away_team_id, away_team_info),
                     ]:
-                        real_team_number = 1 if side == 'Home' else 2
+                        real_team_number = 1 if side == "Home" else 2
 
                         insert_mt_query = text("""
                             INSERT INTO `RealMatchTeams`
@@ -695,15 +749,18 @@ class F42Loader:
                                     :side, :team_number,
                                     :now, :now)
                         """)
-                        db.execute(insert_mt_query, {
-                            'match_id': real_match_id,
-                            'team_id': team_id,
-                            'team_uid': team_uid,
-                            'team_name': team_info[1],
-                            'team_short_name': team_info[2],
-                            'side': side,
-                            'team_number': real_team_number,
-                            'now': now,
-                        })
+                        db.execute(
+                            insert_mt_query,
+                            {
+                                "match_id": real_match_id,
+                                "team_id": team_id,
+                                "team_uid": team_uid,
+                                "team_name": team_info[1],
+                                "team_short_name": team_info[2],
+                                "side": side,
+                                "team_number": real_team_number,
+                                "now": now,
+                            },
+                        )
 
-        return {'inserted': inserted, 'updated': updated}
+        return {"inserted": inserted, "updated": updated}

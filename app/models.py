@@ -4,7 +4,7 @@ from sqlalchemy import JSON, LargeBinary
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlmodel import Field, SQLModel
 
-from app.utils.dt import UTCDateTime
+from app.utils.dt import UTCDateTime, utc_lowest
 
 
 class User(SQLModel, table=True):
@@ -50,9 +50,9 @@ class RealCompetition(SQLModel, table=True):
     baseRealCompetitionID: int | None = None
     extraRealCompetitionID: int | None = None
     calcStandings: int = Field(sa_type=TINYINT)
-    lastF7Date: datetime = Field(default_factory=lambda: datetime(2000, 1, 1), sa_type=UTCDateTime())
-    lastF42Date: datetime = Field(default_factory=lambda: datetime(2000, 1, 1), sa_type=UTCDateTime())
-    lastFDate: datetime = Field(default_factory=lambda: datetime(2000, 1, 1), sa_type=UTCDateTime())
+    lastF7Date: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
+    lastF42Date: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
+    lastFDate: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
     createdIn: datetime = Field(sa_type=UTCDateTime())
     updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
@@ -295,8 +295,12 @@ class MatchDaysStatus(SQLModel, table=True):
     active: int = Field(sa_type=TINYINT)
     locked: int = Field(default=0, sa_type=TINYINT)
     overlapped: int = Field(default=0, sa_type=TINYINT)
-    minAllowedRealMatchDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
-    maxAllowedRealMatchDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    minAllowedRealMatchDate: datetime | None = Field(
+        default=None, sa_type=UTCDateTime()
+    )
+    maxAllowedRealMatchDate: datetime | None = Field(
+        default=None, sa_type=UTCDateTime()
+    )
     minRealMatchDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
     maxRealMatchDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
     startWaivers: datetime | None = Field(default=None, sa_type=UTCDateTime())
@@ -306,7 +310,9 @@ class MatchDaysStatus(SQLModel, table=True):
     startOpenWaivers: datetime | None = Field(default=None, sa_type=UTCDateTime())
     finishOpenWaivers: datetime | None = Field(default=None, sa_type=UTCDateTime())
     startOpenWaiversSettle: datetime | None = Field(default=None, sa_type=UTCDateTime())
-    finishOpenWaiversSettle: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    finishOpenWaiversSettle: datetime | None = Field(
+        default=None, sa_type=UTCDateTime()
+    )
     startPreMatch: datetime | None = Field(default=None, sa_type=UTCDateTime())
     finishPreMatch: datetime | None = Field(default=None, sa_type=UTCDateTime())
     startMatch: datetime | None = Field(default=None, sa_type=UTCDateTime())
