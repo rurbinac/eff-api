@@ -158,7 +158,7 @@ class F42Loader:
         row = db.execute(
             query,
             {"symid": real_competition_symid, "season_id": real_competition_season_id},
-        ).first()
+        ).mappings().first()
 
         if row:
             real_competition_id = row["realCompetitionID"]
