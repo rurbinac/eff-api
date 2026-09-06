@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.constants import DraftPositionConstants
+from app.constants import DraftPositionConstants, RealMatchPeriod
 from app.models import Feed
 from app.services.f42_parser import F42Parser
 from app.utils.dt import utc_now
@@ -719,7 +719,7 @@ class F42Loader:
                         "base_comp_id": base_comp_id,
                         "extra_comp_id": extra_comp_id,
                         "match_type": match_data.get("match_type"),
-                        "match_status": match_data.get("period") or "Fixture",
+                        "match_status": RealMatchPeriod.to_match_status(match_data.get("period")),
                         "period": match_data.get("period"),
                         "real_period": match_data.get("period"),
                         "match_date": match_date,
