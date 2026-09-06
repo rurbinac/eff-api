@@ -127,7 +127,12 @@ class FLoader:
         feed.updatedIn = end
         if result is not None:
             feed.results = result
-        db.commit()
+        try:
+            db.commit()
+        except Exception:  # noqa: BLE001
+            # Session may be in a failed-transaction state; rollback and retry once.
+            db.rollback()
+            db.commit()
         db.refresh(feed)
         return feed
 

@@ -29,17 +29,12 @@ class F42Loader:
         """
         from app.services.f_loader import FLoader  # lazy — avoids circular import
 
-        # Parse the file
+        # Parse the file — wrap so a parse error still stamps the Feed row
         file_path = tmp_name or feed.feedName
-        parsed_data = F42Parser.parse_file(file_path)
-
-        # Load data
-
-        # Load competitions
-        result: dict[str, str | int | datetime | None] = {
+        result: dict = {
             "real_competition_id": None,
-            "real_competition_symid": parsed_data["competition"].get("competition_code"),
-            "real_competition_season_id": parsed_data["competition"].get("season_id"),
+            "real_competition_symid": None,
+            "real_competition_season_id": None,
             "real_competition_country": None,
             "real_competition_first_match_day": None,
             "real_competition_last_match_day": None,
@@ -51,7 +46,15 @@ class F42Loader:
             "matches_updated": 0,
             "errors": [],
         }
+        try:
+            parsed_data = F42Parser.parse_file(file_path)
+            result["real_competition_symid"] = parsed_data["competition"].get("competition_code")
+            result["real_competition_season_id"] = parsed_data["competition"].get("season_id")
+        except Exception as e:
+            result["errors"].append(f"Error parsing feed [{type(e).__name__}]: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=result)
 
+        # Load competitions
         try:
             comp_data = F42Loader._load_competition(db, parsed_data["competition"])
             if not comp_data["real_competition_id"]:
@@ -59,6 +62,7 @@ class F42Loader:
                 return FLoader.log_feed_end(db, feed, result=result)
             result.update(comp_data)
         except Exception as e:
+            db.rollback()
             result["errors"].append(f"Error loading competition [{type(e).__name__}]: {e!s}")
             return FLoader.log_feed_end(db, feed, result=result)
 
@@ -70,6 +74,7 @@ class F42Loader:
             result["teams_updated"] += teams_result["updated"]
             team_id_mapping = teams_result.get("team_uid_mapping", {})
         except Exception as e:
+            db.rollback()
             result["errors"].append(f"Error loading teams [{type(e).__name__}]: {e!s}")
             return FLoader.log_feed_end(db, feed, result=result)
 
@@ -81,6 +86,7 @@ class F42Loader:
             result["players_inserted"] += players_result["inserted"]
             result["players_updated"] += players_result["updated"]
         except Exception as e:
+            db.rollback()
             result["errors"].append(f"Error loading players [{type(e).__name__}]: {e!s}")
             return FLoader.log_feed_end(db, feed, result=result)
 
@@ -89,6 +95,7 @@ class F42Loader:
         try:
             matches_cache = F42Loader._load_matches_cache(db, comp_data)
         except Exception as e:
+            db.rollback()
             result["errors"].append(f"Error pre-loading matches [{type(e).__name__}]: {e!s}")
             return FLoader.log_feed_end(db, feed, result=result)
 
@@ -115,6 +122,7 @@ class F42Loader:
                     if team_result:
                         teams_cache[team_uid] = list(team_result)
         except Exception as e:
+            db.rollback()
             result["errors"].append(f"Error building teams cache [{type(e).__name__}]: {e!s}")
             return FLoader.log_feed_end(db, feed, result=result)
 
@@ -131,6 +139,7 @@ class F42Loader:
             result["matches_inserted"] += matches_result["inserted"]
             result["matches_updated"] += matches_result["updated"]
         except Exception as e:
+            db.rollback()
             result["errors"].append(f"Error loading matches [{type(e).__name__}]: {e!s}")
 
         return FLoader.log_feed_end(db, feed, result=result)
@@ -204,7 +213,7 @@ class F42Loader:
             "real_competition_country": real_competition_country,
             "real_competition_first_match_day": real_competition_first_match_day,
             "real_competition_last_match_day": real_competition_last_match_day,
-            "last_f42_date": last_f42_date,
+            "last_f42_date": last_f42_date.isoformat() if last_f42_date else None,
         }
 
     @staticmethod
