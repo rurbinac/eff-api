@@ -694,6 +694,7 @@ class F42Loader:
                      baseRealCompetitionID, extraRealCompetitionID,
                      realMatchType, realMatchStatus, realMatchPeriod, realMatchRealPeriod,
                      realMatchDate, realMatchDateOffset,
+                     realMatchEnded,
                      realMatchIgnore, enabled,
                      lastF42Date,
                      createdIn, updatedIn)
@@ -702,6 +703,7 @@ class F42Loader:
                             :base_comp_id, :extra_comp_id,
                             :match_type, :match_status, :period, :real_period,
                             :match_date, :date_offset,
+                            :match_ended,
                             :ignore, :enabled,
                             :now,
                             :now, :now)
@@ -724,6 +726,7 @@ class F42Loader:
                         "real_period": match_data.get("period"),
                         "match_date": match_date,
                         "date_offset": match_data.get("date_offset"),
+                        "match_ended": RealMatchPeriod.to_match_ended(match_data.get("period")),
                         "ignore": 0,
                         "enabled": 1,
                         "now": now,
