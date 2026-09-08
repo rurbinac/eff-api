@@ -4,8 +4,9 @@ Syncs Real* table data (RealCompetitions, RealTeams, RealPlayers, RealMatches, e
 across competitions and seasons.
 """
 
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
+
 from app.constants import DraftPositionConstants, RealCompetitionConstants
 
 
@@ -13,7 +14,7 @@ class SyncRealService:
     """Synchronize Real* table data."""
 
     @staticmethod
-    def sync_real(db: Session, real_competition_id: int = None) -> dict:
+    def sync_all(db: Session, real_competition_id: int | None = None) -> dict:
         """Sync all Real* data (RealCompetitions → RealTeams → RealPlayers → RealMatches → RealTeamMembers → RealStandings).
 
         Args:
@@ -286,6 +287,7 @@ class SyncRealService:
             result = db.execute(q3, {
                 'realCompetitionID': real_competition_id,
                 'draftPosition': DraftPositionConstants.EPL_TEAM,
+                'draftPositionOrder': 5,
             })
             results['queries_executed'] += 1
             results['rows_affected'] += result.rowcount
@@ -359,6 +361,7 @@ class SyncRealService:
             result = db.execute(q5, {
                 'realCompetitionID': real_competition_id,
                 'draftPosition': DraftPositionConstants.EPL_TEAM,
+                'draftPositionOrder': 5,
             })
             results['queries_executed'] += 1
             results['rows_affected'] += result.rowcount
@@ -572,19 +575,19 @@ class SyncRealService:
             # Query #1: Sync team info to RealMatchTeams
             q1 = text("""
                 UPDATE `RealMatchTeams` `mt`
+                   INNER JOIN `RealMatches` `m` ON `m`.`realMatchID` = `mt`.`realMatchID`
                    LEFT OUTER JOIN `RealTeams` `t` ON `t`.`realTeamID` = `mt`.`realTeamID`
                    SET `mt`.`realTeamMemberID` = `t`.`realTeamMemberID`,
                        `mt`.`realTeamMemberKey` = `t`.`realTeamMemberKey`,
                        `mt`.`realTeamUID` = `t`.`realTeamUID`,
                        `mt`.`realTeamName` = `t`.`realTeamName`,
                        `mt`.`realTeamShortName` = `t`.`realTeamShortName`,
-                       `mt`.`realTeamSide` = `t`.`realTeamSide`,
                        `mt`.`realTeamNumber` = CASE `mt`.`realTeamSide`
                                                   WHEN 'Home' THEN 1
                                                   WHEN 'Away' THEN 2
                                                   ELSE NULL
                                                END
-                   WHERE `mt`.`realCompetitionID` = :realCompetitionID
+                   WHERE `m`.`realCompetitionID` = :realCompetitionID
             """)
             result = db.execute(q1, {'realCompetitionID': real_competition_id})
             results['queries_executed'] += 1

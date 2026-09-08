@@ -4,14 +4,56 @@ Syncs RealTeamMembers with match statistics and RealStandings data,
 calculating standings, places, and rankings.
 """
 
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.constants import RealCompetitionConstants
+from app.utils.dt import utc_now
 
 
 class SyncStandingsService:
     """Synchronize standings and calculate rankings."""
+
+    @staticmethod
+    def sync_all(db: Session, real_competition_id: int) -> dict:
+        all_results = {
+            'status': 'success',
+            'queries_executed': 0,
+            'rows_affected': 0,
+            'operations': {},
+        }
+
+        try:
+            # Derive real_competition_id if not provided
+            if not real_competition_id:
+                from app.services import SyncFantasyService
+                real_competition_id = SyncFantasyService._get_real_competition_id(db)
+                if not real_competition_id:
+                    all_results['status'] = 'error'
+                    all_results['error'] = 'Could not determine realCompetitionID'
+                    return all_results
+
+            # Sync RealTeamMembers
+            result = SyncStandingsService.sync_real_team_members(db, real_competition_id)
+            all_results['operations']['sync_real_team_members'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+            # Sync RealStandings
+            result = SyncStandingsService.sync_real_standings(db, real_competition_id)
+            all_results['operations']['sync_real_standings'] = result
+            all_results['queries_executed'] += result.get('queries_executed', 0)
+            all_results['rows_affected'] += result.get('rows_affected', 0)
+            if result.get('status') != 'success':
+                all_results['status'] = 'partial'
+
+        except Exception as e:
+            all_results['status'] = 'error'
+            all_results['error'] = str(e)
+
+        return all_results
 
     @staticmethod
     def sync_real_team_members(db: Session, real_competition_id: int) -> dict:
@@ -80,6 +122,7 @@ class SyncStandingsService:
                 if member_key.startswith('T'):
                     teams[member_key] = {
                         'realTeamMemberID': row_dict.get('realTeamMemberID'),
+                        'realTeamMemberKey': member_key,
                         'prevRealTeamMemberKey': row_dict.get('prevRealTeamMemberKey'),
                         'nextRealTeamMemberKey': row_dict.get('nextRealTeamMemberKey'),
                         'baseRealCompetitionID': real_comp[RealCompetitionConstants.BASE_SYMID]['realCompetitionID'],
@@ -126,6 +169,7 @@ class SyncStandingsService:
                 elif member_key.startswith('P'):
                     players[member_key] = {
                         'realTeamMemberID': row_dict.get('realTeamMemberID'),
+                        'realTeamMemberKey': member_key,
                         'prevRealTeamMemberKey': row_dict.get('prevRealTeamMemberKey'),
                         'nextRealTeamMemberKey': row_dict.get('nextRealTeamMemberKey'),
                         'baseRealCompetitionID': row_dict.get('baseRealCompetitionID'),
@@ -168,7 +212,7 @@ class SyncStandingsService:
                     }
 
             # Step 3: Process each competition and match day
-            for rc_key, rc in real_comp.items():
+            for rc in real_comp.values():
                 comp_id = rc.get('realCompetitionID')
                 first_match_day = rc.get('realCompetitionFirstMatchDay', 1)
                 last_match_day = rc.get('realCompetitionLastMatchDay', 1)
@@ -196,11 +240,20 @@ class SyncStandingsService:
                         'match_day': match_day,
                     }).fetchall()
 
+                    # Skip match days with no finished matches — no point writing standings
+                    # for unplayed fixtures (and avoids 40k+ no-op INSERTs on a fixtures file).
+                    match_rows_dicts = [
+                        dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
+                        for row in match_rows
+                    ]
+                    if not any(r.get('realMatchStatus') == 3 for r in match_rows_dicts):
+                        results['match_days_processed'] += 1
+                        continue
+
                     # Organize matches by team member key, tracking opposite teams
                     opposite = {}
                     matches = {}
-                    for row in match_rows:
-                        row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(row.keys(), row))
+                    for row_dict in match_rows_dicts:
                         match_id = row_dict.get('realMatchID')
                         team_member_key = row_dict.get('realTeamMemberKey')
 
@@ -225,9 +278,13 @@ class SyncStandingsService:
                     # 3. Update/insert into RealStandings
                     team_result = SyncStandingsService._sync_rmt_teams(db, rc, matches, match_day, teams)
                     results['rows_affected'] += team_result.get('rows_affected', 0)
+                    if 'error' in team_result and 'first_team_error' not in results:
+                        results['first_team_error'] = f"md{match_day}: {team_result['error']}"
 
                     player_result = SyncStandingsService._sync_rmt_players(db, rc, matches, match_day, teams, players)
                     results['rows_affected'] += player_result.get('rows_affected', 0)
+                    if 'error' in player_result and 'first_player_error' not in results:
+                        results['first_player_error'] = f"md{match_day}: {player_result['error']}"
 
                     results['match_days_processed'] += 1
 
@@ -271,12 +328,12 @@ class SyncStandingsService:
             if key not in matches or key not in teams:
                 continue
 
-            # Extract match data
-            score = matches[key].get('realTeamScore', 0)
-            points = matches[key].get('realTeamPoints', 0)
-            side = matches[key].get('realTeamSide', '')
+            # Extract match data (use `or 0` — NULL columns return None, not the .get() default)
+            score = matches[key].get('realTeamScore') or 0
+            points = matches[key].get('realTeamPoints') or 0
+            side = matches[key].get('realTeamSide') or ''
             op_key = matches[key].get('op_realTeamMemberKey')
-            op_score = matches[op_key].get('realTeamScore', 0) if op_key else 0
+            op_score = (matches[op_key].get('realTeamScore') or 0) if op_key else 0
 
             # Calculate match result
             match_won = 1 if points == 3 else 0
@@ -361,25 +418,25 @@ class SyncStandingsService:
             if key not in players:
                 continue
 
-            # Aggregate match statistics
-            players[key]['timePlayed'] += row_dict.get('matchTimePlayed', 0)
-            players[key]['gamePlayed'] += row_dict.get('matchGamePlayed', 0)
-            players[key]['goals'] += row_dict.get('matchGoals', 0)
-            players[key]['assists'] += row_dict.get('matchAssists', 0)
-            players[key]['yellowCards'] += row_dict.get('matchYellowCards', 0)
-            players[key]['redCards'] += row_dict.get('matchRedCards', 0)
-            players[key]['goalsConceded'] += row_dict.get('matchGoalsConceded', 0)
-            players[key]['cleanSheet'] += row_dict.get('matchCleanSheet', 0)
+            # Aggregate match statistics (use `or 0` — NULL columns return None, not the .get() default)
+            players[key]['timePlayed'] += row_dict.get('matchTimePlayed') or 0
+            players[key]['gamePlayed'] += row_dict.get('matchGamePlayed') or 0
+            players[key]['goals'] += row_dict.get('matchGoals') or 0
+            players[key]['assists'] += row_dict.get('matchAssists') or 0
+            players[key]['yellowCards'] += row_dict.get('matchYellowCards') or 0
+            players[key]['redCards'] += row_dict.get('matchRedCards') or 0
+            players[key]['goalsConceded'] += row_dict.get('matchGoalsConceded') or 0
+            players[key]['cleanSheet'] += row_dict.get('matchCleanSheet') or 0
 
             # Aggregate points breakdown
-            players[key]['pointsL1Played'] += row_dict.get('matchPointsL1Played', 0)
-            players[key]['pointsL1GoalsAllowed'] += row_dict.get('matchPointsL1GoalsAllowed', 0)
-            players[key]['pointsL1CleanSheet'] += row_dict.get('matchPointsL1CleanSheet', 0)
-            players[key]['pointsL1Cards'] += row_dict.get('matchPointsL1Cards', 0)
-            players[key]['pointsL1Goals'] += row_dict.get('matchPointsL1Goals', 0)
-            players[key]['pointsL1Assists'] += row_dict.get('matchPointsL1Assists', 0)
-            players[key]['pointsL1OwnGoals'] += row_dict.get('matchPointsL1OwnGoals', 0)
-            players[key]['pointsL1'] += row_dict.get('matchPointsL1', 0)
+            players[key]['pointsL1Played'] += row_dict.get('matchPointsL1Played') or 0
+            players[key]['pointsL1GoalsAllowed'] += row_dict.get('matchPointsL1GoalsAllowed') or 0
+            players[key]['pointsL1CleanSheet'] += row_dict.get('matchPointsL1CleanSheet') or 0
+            players[key]['pointsL1Cards'] += row_dict.get('matchPointsL1Cards') or 0
+            players[key]['pointsL1Goals'] += row_dict.get('matchPointsL1Goals') or 0
+            players[key]['pointsL1Assists'] += row_dict.get('matchPointsL1Assists') or 0
+            players[key]['pointsL1OwnGoals'] += row_dict.get('matchPointsL1OwnGoals') or 0
+            players[key]['pointsL1'] += row_dict.get('matchPointsL1') or 0
 
             # Store realStandingID for later updates
             players[key]['realStandingID'] = standing_id
@@ -393,7 +450,7 @@ class SyncStandingsService:
         """
         for side in ["", "Home", "Away"]:
             data = []
-            for team_key, team in teams.items():
+            for team in teams.values():
                 data.append({
                     "key": team["realTeamMemberKey"],
                     "pts": team['pointsL1'],
@@ -420,7 +477,7 @@ class SyncStandingsService:
         data = []
 
         # Add teams to ranking pool
-        for team_key, team in teams.items():
+        for team in teams.values():
             data.append({
                 "key": team["realTeamMemberKey"],
                 "pts": team['pointsL1'],
@@ -428,7 +485,7 @@ class SyncStandingsService:
             })
 
         # Add players to ranking pool
-        for player_key, player in players.items():
+        for player in players.values():
             data.append({
                 "key": player["realTeamMemberKey"],
                 "pts": player['pointsL1'],
@@ -471,6 +528,7 @@ class SyncStandingsService:
 
                 op_key = matches[key].get('op_realTeamMemberKey')
                 standing_id = team_data.pop('realStandingID', None)
+                now = utc_now()
 
                 # Build common parameters for both UPDATE and INSERT
                 params = {
@@ -536,6 +594,7 @@ class SyncStandingsService:
                     'placeAway': team_data.get('placeAway', 0),
                     'pointsL1': team_data.get('pointsL1', 0),
                     'ranking': team_data.get('ranking', 0),
+                    'now': now,
                 }
 
                 if standing_id:
@@ -627,7 +686,8 @@ class SyncStandingsService:
                          `played`, `won`, `draw`, `lost`, `goalsFor`, `goalsAgainst`,
                          `playedHome`, `wonHome`, `drawHome`, `lostHome`, `goalsForHome`, `goalsAgainstHome`,
                          `playedAway`, `wonAway`, `drawAway`, `lostAway`, `goalsForAway`, `goalsAgainstAway`,
-                         `place`, `placeHome`, `placeAway`, `pointsL1`, `ranking`, `processed`)
+                         `place`, `placeHome`, `placeAway`, `pointsL1`, `ranking`, `processed`,
+                         `createdIn`, `updatedIn`)
                         VALUES
                         (:realTeamMemberID, :realTeamMemberKey, :prevRealTeamMemberKey, :nextRealTeamMemberKey,
                          :realCompetitionID, :realCompetitionUID, :realCompetitionSYMID, :realCompetitionSeasonId,
@@ -640,7 +700,8 @@ class SyncStandingsService:
                          :played, :won, :draw, :lost, :goalsFor, :goalsAgainst,
                          :playedHome, :wonHome, :drawHome, :lostHome, :goalsForHome, :goalsAgainstHome,
                          :playedAway, :wonAway, :drawAway, :lostAway, :goalsForAway, :goalsAgainstAway,
-                         :place, :placeHome, :placeAway, :pointsL1, :ranking, 1)
+                         :place, :placeHome, :placeAway, :pointsL1, :ranking, 1,
+                         :now, :now)
                     """)
                     result = db.execute(q_insert, params)
                     rows_affected += result.rowcount
@@ -671,7 +732,7 @@ class SyncStandingsService:
 
         try:
             # Loop over players and update/insert based on realStandingID
-            for key, player_data in players.items():
+            for player_data in players.values():
                 # Construct team_key from player's realTeamID
                 team_key = 'T' + str(player_data.get('realTeamID', ''))
 
@@ -680,6 +741,7 @@ class SyncStandingsService:
 
                 op_key = matches[team_key].get('op_realTeamMemberKey')
                 standing_id = player_data.pop('realStandingID', None)
+                now = utc_now()
 
                 # Build common parameters for both UPDATE and INSERT
                 params = {
@@ -740,6 +802,7 @@ class SyncStandingsService:
                     'pointsL1': player_data.get('pointsL1', 0),
                     'livePointsL1': player_data.get('pointsL1', 0),
                     'ranking': player_data.get('ranking', 0),
+                    'now': now,
                 }
 
                 if standing_id:
@@ -824,7 +887,8 @@ class SyncStandingsService:
                          `realPlayerID`, `realPlayerUID`, `firstName`, `lastName`, `knownName`, `name`, `sortName`, `position`, `draftPosition`,
                          `draftPositionOrder`, `timePlayed`, `gamePlayed`, `goals`, `assists`, `yellowCards`, `redCards`, `goalsConceded`, `cleanSheet`,
                          `pointsL1Played`, `pointsL1GoalsAllowed`, `pointsL1CleanSheet`, `pointsL1Cards`, `pointsL1Goals`, `pointsL1Assists`,
-                         `pointsL1OwnGoals`, `pointsL1`, `livePointsL1`, `ranking`, `processed`)
+                         `pointsL1OwnGoals`, `pointsL1`, `livePointsL1`, `ranking`, `processed`,
+                         `createdIn`, `updatedIn`)
                         VALUES
                         (:realTeamMemberID, :realTeamMemberKey, :prevRealTeamMemberKey, :nextRealTeamMemberKey,
                          :realCompetitionID, :realCompetitionUID, :realCompetitionSYMID, :realCompetitionSeasonId,
@@ -835,7 +899,8 @@ class SyncStandingsService:
                          :realPlayerID, :realPlayerUID, :firstName, :lastName, :knownName, :name, :sortName, :position, :draftPosition,
                          :draftPositionOrder, :timePlayed, :gamePlayed, :goals, :assists, :yellowCards, :redCards, :goalsConceded, :cleanSheet,
                          :pointsL1Played, :pointsL1GoalsAllowed, :pointsL1CleanSheet, :pointsL1Cards, :pointsL1Goals, :pointsL1Assists,
-                         :pointsL1OwnGoals, :pointsL1, :livePointsL1, :ranking, 1)
+                         :pointsL1OwnGoals, :pointsL1, :livePointsL1, :ranking, 1,
+                         :now, :now)
                     """)
                     result = db.execute(q_insert, params)
                     rows_affected += result.rowcount

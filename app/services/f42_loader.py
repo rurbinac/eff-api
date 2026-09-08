@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.constants import DraftPositionConstants, RealMatchPeriod
 from app.models import Feed
 from app.services.f42_parser import F42Parser
+from app.services.sync_real import SyncRealService
+from app.services.sync_standings import SyncStandingsService
 from app.utils.dt import utc_now
 
 
@@ -142,7 +144,39 @@ class F42Loader:
             db.rollback()
             result["errors"].append(f"Error loading matches [{type(e).__name__}]: {e!s}")
 
+        try:
+            sync_result = F42Loader._sync(db, result["real_competition_id"])
+            result["sync"] = sync_result
+        except Exception as e:
+            db.rollback()
+            result["errors"].append(f"Error syncing data [{type(e).__name__}]: {e!s}")
+
         return FLoader.log_feed_end(db, feed, result=result)
+
+    @staticmethod
+    def _sync(db: Session, real_competition_id: int) -> dict:
+        # Each service gets its own commit+rollback so a dirty session from an
+        # internal SQL failure (caught inside the service) never leaks out and
+        # corrupts log_feed_end's final commit.
+        result = {}
+
+        try:
+            sync_real = SyncRealService.sync_all(db, real_competition_id)
+            db.commit()
+            result["sync_real"] = sync_real
+        except Exception as e:
+            db.rollback()
+            result["sync_real"] = {"status": "error", "error": f"[{type(e).__name__}]: {e!s}"}
+
+        try:
+            sync_standings = SyncStandingsService.sync_all(db, real_competition_id)
+            db.commit()
+            result["sync_standings"] = sync_standings
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            result["sync_standings"] = {"status": "error", "error": f"[{type(e).__name__}]: {e!s}"}
+
+        return result
 
     @staticmethod
     def _load_competition(db: Session, comp_data: dict) -> dict[str, str | int | datetime | None]:
