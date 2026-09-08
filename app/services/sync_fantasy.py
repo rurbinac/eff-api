@@ -3,8 +3,8 @@
 Syncs application-level fantasy data across Leagues, Divisions, Teams, and Matches.
 """
 
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.constants import RealCompetitionConstants
 
@@ -23,6 +23,7 @@ class SyncFantasyService:
             realCompetitionID or None if not found
         """
         from app.services import QueryService
+
         current_season = QueryService.get_season_id()
 
         q = text("""
@@ -32,15 +33,22 @@ class SyncFantasyService:
               AND realCompetitionSYMID = :symid
             LIMIT 1
         """)
-        result = db.execute(q, {
-            'season_id': current_season,
-            'symid': RealCompetitionConstants.BASE_SYMID,
-        }).first()
+        result = db.execute(
+            q,
+            {
+                "season_id": current_season,
+                "symid": RealCompetitionConstants.BASE_SYMID,
+            },
+        ).first()
 
         return result[0] if result else None
 
     @staticmethod
-    def sync_fantasy(db: Session, real_competition_id: int = None, league_id: int = None) -> dict:
+    def sync_fantasy(
+        db: Session,
+        real_competition_id: int | None = None,
+        league_id: int | None = None,
+    ) -> dict:
         """Sync all fantasy data (Leagues → Divisions → Teams → Matches).
 
         Args:
@@ -52,53 +60,57 @@ class SyncFantasyService:
             Combined results from all sync operations.
         """
         all_results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
-            'operations': {},
+            "status": "success",
+            "queries_executed": 0,
+            "rows_affected": 0,
+            "operations": {},
         }
 
         try:
             # Sync Leagues
             result = SyncFantasyService.sync_leagues(db, real_competition_id, league_id)
-            all_results['operations']['sync_leagues'] = result
-            all_results['queries_executed'] += result.get('queries_executed', 0)
-            all_results['rows_affected'] += result.get('rows_affected', 0)
-            if result.get('status') != 'success':
-                all_results['status'] = 'partial'
+            all_results["operations"]["sync_leagues"] = result
+            all_results["queries_executed"] += result.get("queries_executed", 0)
+            all_results["rows_affected"] += result.get("rows_affected", 0)
+            if result.get("status") != "success":
+                all_results["status"] = "partial"
 
             # Sync Divisions
-            result = SyncFantasyService.sync_divisions(db, real_competition_id, league_id)
-            all_results['operations']['sync_divisions'] = result
-            all_results['queries_executed'] += result.get('queries_executed', 0)
-            all_results['rows_affected'] += result.get('rows_affected', 0)
-            if result.get('status') != 'success':
-                all_results['status'] = 'partial'
+            result = SyncFantasyService.sync_divisions(
+                db, real_competition_id, league_id
+            )
+            all_results["operations"]["sync_divisions"] = result
+            all_results["queries_executed"] += result.get("queries_executed", 0)
+            all_results["rows_affected"] += result.get("rows_affected", 0)
+            if result.get("status") != "success":
+                all_results["status"] = "partial"
 
             # Sync Teams
             result = SyncFantasyService.sync_teams(db, real_competition_id, league_id)
-            all_results['operations']['sync_teams'] = result
-            all_results['queries_executed'] += result.get('queries_executed', 0)
-            all_results['rows_affected'] += result.get('rows_affected', 0)
-            if result.get('status') != 'success':
-                all_results['status'] = 'partial'
+            all_results["operations"]["sync_teams"] = result
+            all_results["queries_executed"] += result.get("queries_executed", 0)
+            all_results["rows_affected"] += result.get("rows_affected", 0)
+            if result.get("status") != "success":
+                all_results["status"] = "partial"
 
             # Sync Matches
             result = SyncFantasyService.sync_matches(db, real_competition_id, league_id)
-            all_results['operations']['sync_matches'] = result
-            all_results['queries_executed'] += result.get('queries_executed', 0)
-            all_results['rows_affected'] += result.get('rows_affected', 0)
-            if result.get('status') != 'success':
-                all_results['status'] = 'partial'
+            all_results["operations"]["sync_matches"] = result
+            all_results["queries_executed"] += result.get("queries_executed", 0)
+            all_results["rows_affected"] += result.get("rows_affected", 0)
+            if result.get("status") != "success":
+                all_results["status"] = "partial"
 
         except Exception as e:
-            all_results['status'] = 'error'
-            all_results['error'] = str(e)
+            all_results["status"] = "error"
+            all_results["error"] = str(e)
 
         return all_results
 
     @staticmethod
-    def sync_leagues(db: Session, real_competition_id: int = None, league_id: int = None) -> dict:
+    def sync_leagues(
+        db: Session, real_competition_id: int | None = None, league_id: int | None = None
+    ) -> dict:
         """Sync Leagues with RealCompetitions.
 
         Args:
@@ -107,9 +119,9 @@ class SyncFantasyService:
             league_id: Optional LeagueID to sync specific league.
         """
         results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
+            "status": "success",
+            "queries_executed": 0,
+            "rows_affected": 0,
         }
 
         try:
@@ -117,8 +129,8 @@ class SyncFantasyService:
             if not real_competition_id and not league_id:
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
-                    results['status'] = 'error'
-                    results['error'] = 'Could not determine realCompetitionID'
+                    results["status"] = "error"
+                    results["error"] = "Could not determine realCompetitionID"
                     return results
 
             # Build WHERE clause based on provided parameters
@@ -127,11 +139,13 @@ class SyncFantasyService:
 
             if league_id:
                 where_conditions.append("`lg`.`leagueID` = :league_id")
-                params['league_id'] = league_id
+                params["league_id"] = league_id
 
             if real_competition_id:
-                where_conditions.append("(`rc`.`baseRealCompetitionID` = :real_competition_id OR `rc`.`extraRealCompetitionID` = :real_competition_id)")
-                params['real_competition_id'] = real_competition_id
+                where_conditions.append(
+                    "(`rc`.`baseRealCompetitionID` = :real_competition_id OR `rc`.`extraRealCompetitionID` = :real_competition_id)"
+                )
+                params["real_competition_id"] = real_competition_id
 
             where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
@@ -145,17 +159,19 @@ class SyncFantasyService:
                    WHERE {where_clause}
             """)
             result = db.execute(q, params)
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            results["queries_executed"] += 1
+            results["rows_affected"] += result.rowcount
 
         except Exception as e:
-            results['status'] = 'error'
-            results['error'] = str(e)
+            results["status"] = "error"
+            results["error"] = str(e)
 
         return results
 
     @staticmethod
-    def sync_divisions(db: Session, real_competition_id: int = None, league_id: int = None) -> dict:
+    def sync_divisions(
+        db: Session, real_competition_id: int | None = None, league_id: int | None = None
+    ) -> dict:
         """Sync Divisions with Leagues.
 
         Args:
@@ -164,9 +180,9 @@ class SyncFantasyService:
             league_id: Optional LeagueID to sync specific league's divisions.
         """
         results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
+            "status": "success",
+            "queries_executed": 0,
+            "rows_affected": 0,
         }
 
         try:
@@ -174,8 +190,8 @@ class SyncFantasyService:
             if not real_competition_id and not league_id:
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
-                    results['status'] = 'error'
-                    results['error'] = 'Could not determine realCompetitionID'
+                    results["status"] = "error"
+                    results["error"] = "Could not determine realCompetitionID"
                     return results
 
             # Build WHERE clause based on provided parameters
@@ -184,11 +200,13 @@ class SyncFantasyService:
 
             if league_id:
                 where_conditions.append("`dv`.`leagueID` = :league_id")
-                params['league_id'] = league_id
+                params["league_id"] = league_id
 
             if real_competition_id:
-                where_conditions.append("(`lg`.`baseRealCompetitionID` = :real_competition_id OR `lg`.`extraRealCompetitionID` = :real_competition_id)")
-                params['real_competition_id'] = real_competition_id
+                where_conditions.append(
+                    "(`lg`.`baseRealCompetitionID` = :real_competition_id OR `lg`.`extraRealCompetitionID` = :real_competition_id)"
+                )
+                params["real_competition_id"] = real_competition_id
 
             where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
@@ -206,17 +224,19 @@ class SyncFantasyService:
                    WHERE {where_clause}
             """)
             result = db.execute(q, params)
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            results["queries_executed"] += 1
+            results["rows_affected"] += result.rowcount
 
         except Exception as e:
-            results['status'] = 'error'
-            results['error'] = str(e)
+            results["status"] = "error"
+            results["error"] = str(e)
 
         return results
 
     @staticmethod
-    def sync_teams(db: Session, real_competition_id: int = None, league_id: int = None) -> dict:
+    def sync_teams(
+        db: Session, real_competition_id: int | None = None, league_id: int | None = None
+    ) -> dict:
         """Sync Teams with Divisions.
 
         Args:
@@ -225,9 +245,9 @@ class SyncFantasyService:
             league_id: Optional LeagueID to sync specific league's teams.
         """
         results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
+            "status": "success",
+            "queries_executed": 0,
+            "rows_affected": 0,
         }
 
         try:
@@ -235,8 +255,8 @@ class SyncFantasyService:
             if not real_competition_id and not league_id:
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
-                    results['status'] = 'error'
-                    results['error'] = 'Could not determine realCompetitionID'
+                    results["status"] = "error"
+                    results["error"] = "Could not determine realCompetitionID"
                     return results
 
             # Build WHERE clause based on provided parameters
@@ -245,11 +265,13 @@ class SyncFantasyService:
 
             if league_id:
                 where_conditions.append("`dv`.`leagueID` = :league_id")
-                params['league_id'] = league_id
+                params["league_id"] = league_id
 
             if real_competition_id:
-                where_conditions.append("(`dv`.`baseRealCompetitionID` = :real_competition_id OR `dv`.`extraRealCompetitionID` = :real_competition_id)")
-                params['real_competition_id'] = real_competition_id
+                where_conditions.append(
+                    "(`dv`.`baseRealCompetitionID` = :real_competition_id OR `dv`.`extraRealCompetitionID` = :real_competition_id)"
+                )
+                params["real_competition_id"] = real_competition_id
 
             where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
@@ -274,17 +296,19 @@ class SyncFantasyService:
                    WHERE {where_clause}
             """)
             result = db.execute(q, params)
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            results["queries_executed"] += 1
+            results["rows_affected"] += result.rowcount
 
         except Exception as e:
-            results['status'] = 'error'
-            results['error'] = str(e)
+            results["status"] = "error"
+            results["error"] = str(e)
 
         return results
 
     @staticmethod
-    def sync_matches(db: Session, real_competition_id: int = None, league_id: int = None) -> dict:
+    def sync_matches(
+        db: Session, real_competition_id: int | None = None, league_id: int | None = None
+    ) -> dict:
         """Sync Matches and MatchTeams with Divisions/Teams.
 
         Args:
@@ -293,9 +317,9 @@ class SyncFantasyService:
             league_id: Optional LeagueID to sync specific league's matches.
         """
         results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
+            "status": "success",
+            "queries_executed": 0,
+            "rows_affected": 0,
         }
 
         try:
@@ -303,8 +327,8 @@ class SyncFantasyService:
             if not real_competition_id and not league_id:
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
-                    results['status'] = 'error'
-                    results['error'] = 'Could not determine realCompetitionID'
+                    results["status"] = "error"
+                    results["error"] = "Could not determine realCompetitionID"
                     return results
 
             # Build WHERE clause based on provided parameters
@@ -313,11 +337,13 @@ class SyncFantasyService:
 
             if league_id:
                 where_conditions.append("`dv`.`leagueID` = :league_id")
-                params['league_id'] = league_id
+                params["league_id"] = league_id
 
             if real_competition_id:
-                where_conditions.append("(`dv`.`baseRealCompetitionID` = :real_competition_id OR `dv`.`extraRealCompetitionID` = :real_competition_id)")
-                params['real_competition_id'] = real_competition_id
+                where_conditions.append(
+                    "(`dv`.`baseRealCompetitionID` = :real_competition_id OR `dv`.`extraRealCompetitionID` = :real_competition_id)"
+                )
+                params["real_competition_id"] = real_competition_id
 
             where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
@@ -331,8 +357,8 @@ class SyncFantasyService:
                    WHERE {where_clause}
             """)
             result = db.execute(q1, params)
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            results["queries_executed"] += 1
+            results["rows_affected"] += result.rowcount
 
             # Update MatchTeams with team data
             # Build separate WHERE clause for MatchTeams (uses Teams table)
@@ -343,9 +369,13 @@ class SyncFantasyService:
                 where_conditions_mt.append("`dv`.`leagueID` = :league_id")
 
             if real_competition_id:
-                where_conditions_mt.append("(`t`.`baseRealCompetitionID` = :real_competition_id OR `t`.`extraRealCompetitionID` = :real_competition_id)")
+                where_conditions_mt.append(
+                    "(`t`.`baseRealCompetitionID` = :real_competition_id OR `t`.`extraRealCompetitionID` = :real_competition_id)"
+                )
 
-            where_clause_mt = " AND ".join(where_conditions_mt) if where_conditions_mt else "1=1"
+            where_clause_mt = (
+                " AND ".join(where_conditions_mt) if where_conditions_mt else "1=1"
+            )
 
             q2 = text(f"""
                 UPDATE `MatchTeams` `mt`
@@ -364,11 +394,11 @@ class SyncFantasyService:
                    WHERE {where_clause_mt}
             """)
             result = db.execute(q2, params_mt)
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            results["queries_executed"] += 1
+            results["rows_affected"] += result.rowcount
 
         except Exception as e:
-            results['status'] = 'error'
-            results['error'] = str(e)
+            results["status"] = "error"
+            results["error"] = str(e)
 
         return results
