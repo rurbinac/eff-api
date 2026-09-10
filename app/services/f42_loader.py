@@ -353,8 +353,8 @@ class F42Loader:
                 team_uid_mapping[team_data["realTeamUID"]] = result[0]
         task.close()
         return {
-            "inserted": task.info.get("inserted", 0),
-            "updated": task.info.get("updated", 0),
+            "inserted": task.info.get("inserted") or 0,
+            "updated": task.info.get("updated") or 0,
             "team_uid_mapping": team_uid_mapping,
         }
 
@@ -487,8 +487,8 @@ class F42Loader:
 
         task.close()
         return {
-            "inserted": task.info.get("inserted", 0),
-            "updated": task.info.get("updated", 0),
+            "inserted": task.info.get("inserted") or 0,
+            "updated": task.info.get("updated") or 0,
         }
 
     @staticmethod
@@ -670,6 +670,6 @@ class F42Loader:
 
         task.close()
         return {
-            "inserted": task.info.get("inserted", 0),
-            "updated": task.info.get("updated", 0),
+            "inserted": task.info.get("inserted") or 0,
+            "updated": task.info.get("updated") or 0,
         }
