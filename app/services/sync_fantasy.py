@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.constants import RealCompetitionConstants
 from app.utils.tasks import Task
 
+
 class SyncFantasyService:
     """Synchronize application-level fantasy data."""
 
@@ -60,9 +61,8 @@ class SyncFantasyService:
         Returns:
             Task with aggregated results from all sync operations.
         """
-        task = Task(name="sync_fantasy_all", status_on_error="Error")
+        task = Task(name="sync_fantasy_all", status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info("queries_executed", "rows_affected")
-        had_partial = False
 
         try:
             # Sync Leagues
@@ -70,37 +70,29 @@ class SyncFantasyService:
             task.add_subtask(sub)
             task.inc("queries_executed", sub.info.get("queries_executed") or 0)
             task.inc("rows_affected", sub.info.get("rows_affected") or 0)
-            if sub.status != "Completed":
-                had_partial = True
 
             # Sync Divisions
             sub = SyncFantasyService.sync_divisions(db, real_competition_id, league_id)
             task.add_subtask(sub)
             task.inc("queries_executed", sub.info.get("queries_executed") or 0)
             task.inc("rows_affected", sub.info.get("rows_affected") or 0)
-            if sub.status != "Completed":
-                had_partial = True
 
             # Sync Teams
             sub = SyncFantasyService.sync_teams(db, real_competition_id, league_id)
             task.add_subtask(sub)
             task.inc("queries_executed", sub.info.get("queries_executed") or 0)
             task.inc("rows_affected", sub.info.get("rows_affected") or 0)
-            if sub.status != "Completed":
-                had_partial = True
 
             # Sync Matches
             sub = SyncFantasyService.sync_matches(db, real_competition_id, league_id)
             task.add_subtask(sub)
             task.inc("queries_executed", sub.info.get("queries_executed") or 0)
             task.inc("rows_affected", sub.info.get("rows_affected") or 0)
-            if sub.status != "Completed":
-                had_partial = True
 
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status="Partial" if had_partial else "Completed")
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
@@ -114,7 +106,7 @@ class SyncFantasyService:
             real_competition_id: RealCompetitionID to sync. If None, derived from current season.
             league_id: Optional LeagueID to sync specific league.
         """
-        task = Task(name="sync_leagues", status_on_error="Error")
+        task = Task(name="sync_leagues", status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info("queries_executed", "rows_affected")
 
         try:
@@ -158,7 +150,7 @@ class SyncFantasyService:
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status="Completed")
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
@@ -172,7 +164,7 @@ class SyncFantasyService:
             real_competition_id: RealCompetitionID to sync. If None, derived from current season.
             league_id: Optional LeagueID to sync specific league's divisions.
         """
-        task = Task(name="sync_divisions", status_on_error="Error")
+        task = Task(name="sync_divisions", status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info("queries_executed", "rows_affected")
 
         try:
@@ -220,7 +212,7 @@ class SyncFantasyService:
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status="Completed")
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
@@ -234,7 +226,7 @@ class SyncFantasyService:
             real_competition_id: RealCompetitionID to sync. If None, derived from current season.
             league_id: Optional LeagueID to sync specific league's teams.
         """
-        task = Task(name="sync_teams", status_on_error="Error")
+        task = Task(name="sync_teams", status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info("queries_executed", "rows_affected")
 
         try:
@@ -289,7 +281,7 @@ class SyncFantasyService:
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status="Completed")
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
@@ -303,7 +295,7 @@ class SyncFantasyService:
             real_competition_id: RealCompetitionID to sync. If None, derived from current season.
             league_id: Optional LeagueID to sync specific league's matches.
         """
-        task = Task(name="sync_matches", status_on_error="Error")
+        task = Task(name="sync_matches", status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info("queries_executed", "rows_affected")
 
         try:
@@ -384,5 +376,5 @@ class SyncFantasyService:
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status="Completed")
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task

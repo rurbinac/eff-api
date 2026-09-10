@@ -26,9 +26,8 @@ class SyncRealService:
         Returns:
             Task with aggregated results from all sync operations.
         """
-        task = Task(name='sync_all', status_on_error='Error')
+        task = Task(name='sync_all', status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info('queries_executed', 'rows_affected')
-        had_partial = False
 
         try:
             # Derive real_competition_id if not provided
@@ -37,7 +36,7 @@ class SyncRealService:
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
                     task.add_error('Could not determine realCompetitionID')
-                    task.close()
+                    task.close(status=Task.ERROR)
                     return task
 
             # Sync RealCompetitions
@@ -45,37 +44,29 @@ class SyncRealService:
             task.add_subtask(sub)
             task.inc('queries_executed', sub.info.get('queries_executed') or 0)
             task.inc('rows_affected', sub.info.get('rows_affected') or 0)
-            if sub.status != 'Completed':
-                had_partial = True
 
             # Sync RealTeams
             sub = SyncRealService.sync_real_teams(db, real_competition_id)
             task.add_subtask(sub)
             task.inc('queries_executed', sub.info.get('queries_executed') or 0)
             task.inc('rows_affected', sub.info.get('rows_affected') or 0)
-            if sub.status != 'Completed':
-                had_partial = True
 
             # Sync RealPlayers
             sub = SyncRealService.sync_real_players(db, real_competition_id)
             task.add_subtask(sub)
             task.inc('queries_executed', sub.info.get('queries_executed') or 0)
             task.inc('rows_affected', sub.info.get('rows_affected') or 0)
-            if sub.status != 'Completed':
-                had_partial = True
 
             # Sync RealMatches
             sub = SyncRealService.sync_real_matches(db, real_competition_id)
             task.add_subtask(sub)
             task.inc('queries_executed', sub.info.get('queries_executed') or 0)
             task.inc('rows_affected', sub.info.get('rows_affected') or 0)
-            if sub.status != 'Completed':
-                had_partial = True
 
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status='Partial' if had_partial else 'Completed')
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
@@ -111,7 +102,7 @@ class SyncRealService:
     @staticmethod
     def sync_real_competitions(db: Session) -> Task:
         """Sync RealCompetitions and cascade to related tables."""
-        task = Task(name='sync_real_competitions', status_on_error='Error')
+        task = Task(name='sync_real_competitions', status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info('queries_executed', 'rows_affected')
 
         try:
@@ -183,13 +174,13 @@ class SyncRealService:
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status='Completed')
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
     def sync_real_teams(db: Session, real_competition_id: int) -> Task:
         """Sync RealTeams and populate RealTeamMembers."""
-        task = Task(name='sync_real_teams', status_on_error='Error')
+        task = Task(name='sync_real_teams', status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info('queries_executed', 'rows_affected')
 
         try:
@@ -362,13 +353,13 @@ class SyncRealService:
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status='Completed')
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
     def sync_real_players(db: Session, real_competition_id: int) -> Task:
         """Sync RealPlayers and populate RealTeamMembers."""
-        task = Task(name='sync_real_players', status_on_error='Error')
+        task = Task(name='sync_real_players', status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info('queries_executed', 'rows_affected')
 
         try:
@@ -549,13 +540,13 @@ class SyncRealService:
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status='Completed')
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
     def sync_real_matches(db: Session, real_competition_id: int) -> Task:
         """Sync RealMatchTeams with team information."""
-        task = Task(name='sync_real_matches', status_on_error='Error')
+        task = Task(name='sync_real_matches', status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info('queries_executed', 'rows_affected')
 
         try:
@@ -583,5 +574,5 @@ class SyncRealService:
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status='Completed')
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task

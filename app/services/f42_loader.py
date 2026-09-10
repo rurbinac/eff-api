@@ -36,7 +36,9 @@ class F42Loader:
         # Parse the file — wrap so a parse error still stamps the Feed row
         file_path = tmp_name or feed.feedName
         task = Task(
-            name=f"Load {F42Parser._FEED} file: {file_path}", status_on_error="Failure"
+            name=f"Load {F42Parser._FEED} file: {file_path}",
+            status=Task.RUNNING,
+            status_on_error=Task.ERROR,
         )
         task.init_info(
             "realCompetitionID", "realCompetitionSYMID", "realCompetitionSeasonId"
@@ -74,7 +76,9 @@ class F42Loader:
         # Load teams
         team_id_mapping = {}
         try:
-            t_task, team_id_mapping = F42Loader._load_teams(db, parsed_data["teams"], comp_data)
+            t_task, team_id_mapping = F42Loader._load_teams(
+                db, parsed_data["teams"], comp_data
+            )
             task.add_subtask(t_task)
         except Exception as e:
             db.rollback()
@@ -149,6 +153,8 @@ class F42Loader:
             db.rollback()
             task.add_error(f"Error syncing data [{type(e).__name__}]: {e!s}")
 
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+
         return FLoader.log_feed_end(db, feed, result=task)
 
     @staticmethod
@@ -156,7 +162,7 @@ class F42Loader:
         # Each service gets its own commit+rollback so a dirty session from an
         # internal SQL failure (caught inside the service) never leaks out and
         # corrupts log_feed_end's final commit.
-        task = Task(name="Sync")
+        task = Task(name="Sync", status=Task.RUNNING, status_on_error=Task.ERROR)
 
         try:
             sync_real = SyncRealService.sync_all(db, real_competition_id)
@@ -164,7 +170,7 @@ class F42Loader:
             task.add_subtask(sync_real)
         except Exception as e:
             db.rollback()
-            sub = Task(name="sync_real", status_on_error="Error")
+            sub = Task(name="sync_real", status=Task.RUNNING, status_on_error=Task.ERROR)
             sub.add_error(f"[{type(e).__name__}]: {e!s}")
             sub.close()
             task.add_subtask(sub)
@@ -175,12 +181,12 @@ class F42Loader:
             task.add_subtask(sync_standings)
         except Exception as e:  # noqa: BLE001
             db.rollback()
-            sub = Task(name="sync_standings", status_on_error="Error")
+            sub = Task(name="sync_standings", status=Task.RUNNING, status_on_error=Task.ERROR)
             sub.add_error(f"[{type(e).__name__}]: {e!s}")
             sub.close()
             task.add_subtask(sub)
 
-        task.close()
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
@@ -191,7 +197,7 @@ class F42Loader:
 
         Competitions are managed externally — this loader does not insert.
         """
-        task = Task(name="Load Competition")
+        task = Task(name="Load Competition", status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info("updated")
         # Query for existing competition
         query = text("""
@@ -235,7 +241,7 @@ class F42Loader:
             )
             task.inc("updated")
             comp_data = dict(row) | comp_data
-        task.close()
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return (
             task,
             comp_data,
@@ -250,7 +256,7 @@ class F42Loader:
         Returns:
             Dictionary with inserted, updated counts and team_uid_mapping
         """
-        task = Task(name="Load Teams")
+        task = Task(name="Load Teams", status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info("inserted", "updated")
         team_uid_mapping = {}  # Map team uID to realTeamID for later use
 
@@ -342,7 +348,7 @@ class F42Loader:
             if result and team_data["realTeamUID"] not in team_uid_mapping:
                 team_uid_mapping[team_data["realTeamUID"]] = result[0]
 
-        task.close()
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return (task, team_uid_mapping)
 
     @staticmethod
@@ -353,7 +359,7 @@ class F42Loader:
         team_uid_mapping: dict,
     ) -> Task:
         """Load or update players in RealPlayers."""
-        task = Task(name="Load Players")
+        task = Task(name="Load Players", status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info("inserted", "updated")
 
         def safe_int(value):
@@ -472,7 +478,7 @@ class F42Loader:
                 )
                 task.inc("inserted")
 
-        task.close()
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
@@ -521,7 +527,7 @@ class F42Loader:
         comp_data: dict,
     ) -> Task:
         """Load or update matches and match teams."""
-        task = Task(name="Load Matches")
+        task = Task(name="Load Matches", status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info("inserted", "updated")
 
         for match_data in matches_data:
@@ -652,5 +658,5 @@ class F42Loader:
                             rmt_values,
                         )
 
-        task.close()
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task

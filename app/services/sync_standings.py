@@ -27,9 +27,8 @@ class SyncStandingsService:
         Returns:
             Task with aggregated results from all sync operations.
         """
-        task = Task(name='sync_standings_all', status_on_error='Error')
+        task = Task(name='sync_standings_all', status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info('queries_executed', 'rows_affected')
-        had_partial = False
 
         try:
             # Derive real_competition_id if not provided
@@ -38,7 +37,7 @@ class SyncStandingsService:
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
                     task.add_error('Could not determine realCompetitionID')
-                    task.close()
+                    task.close(status=Task.ERROR)
                     return task
 
             # Sync RealTeamMembers
@@ -46,21 +45,17 @@ class SyncStandingsService:
             task.add_subtask(sub)
             task.inc('queries_executed', sub.info.get('queries_executed') or 0)
             task.inc('rows_affected', sub.info.get('rows_affected') or 0)
-            if sub.status != 'Completed':
-                had_partial = True
 
             # Sync RealStandings
             sub = SyncStandingsService.sync_real_standings(db, real_competition_id)
             task.add_subtask(sub)
             task.inc('queries_executed', sub.info.get('queries_executed') or 0)
             task.inc('rows_affected', sub.info.get('rows_affected') or 0)
-            if sub.status != 'Completed':
-                had_partial = True
 
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status='Partial' if had_partial else 'Completed')
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
@@ -74,7 +69,7 @@ class SyncStandingsService:
         Returns:
             Task with rows_affected and match_days_processed counts.
         """
-        task = Task(name='sync_real_team_members', status_on_error='Error')
+        task = Task(name='sync_real_team_members', status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info('rows_affected', 'match_days_processed')
 
         try:
@@ -295,7 +290,7 @@ class SyncStandingsService:
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status='Completed')
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod
@@ -928,7 +923,7 @@ class SyncStandingsService:
         Returns:
             Task with queries_executed and rows_affected counts.
         """
-        task = Task(name='sync_real_standings', status_on_error='Error')
+        task = Task(name='sync_real_standings', status=Task.RUNNING, status_on_error=Task.ERROR)
         task.init_info('queries_executed', 'rows_affected')
 
         try:
@@ -1002,7 +997,7 @@ class SyncStandingsService:
         except Exception as e:
             task.add_error(str(e))
 
-        task.close(status='Completed')
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 
     @staticmethod

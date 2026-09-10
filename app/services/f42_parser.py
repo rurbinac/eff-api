@@ -29,7 +29,7 @@ class F42Parser:
             Dictionary with parsed data: competition, teams, players, matches
         """
         # Pass 1: Extract competition info and Squads (teams, players)
-        task = Task(name=f"Parse {F42Parser._FEED} file: {file_path}", status_on_error="Failure")
+        task = Task(name=f"Parse {F42Parser._FEED} file: {file_path}", status_on_error=Task.ERROR)
         task_1, competition, teams, players, team_id_mapping = (
             F42Parser._parse_pass_1_squads(file_path)
         )
@@ -37,7 +37,7 @@ class F42Parser:
         # Pass 2: Extract MatchData (using team mappings from Pass 1)
         task_2, matches = F42Parser._parse_pass_2_matches(file_path, team_id_mapping)
         task.add_subtask(task_2)
-        task.close(status="Completed")
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
 
         return {
             "task": task,
@@ -63,7 +63,7 @@ class F42Parser:
         team_id_mapping = {}  # Store team uID -> team data for Pass 2
         in_squads = None
 
-        task = Task(name="Parse pass 1", status_on_error="Failure")
+        task = Task(name="Parse pass 1", status_on_error=Task.ERROR)
         task.init_info("competition", "teams", "teams (err)", "players", "players (err)")
 
         # Use iterparse for memory-efficient streaming
@@ -112,7 +112,7 @@ class F42Parser:
                 in_squads = False
                 break
 
-        task.close(status="Completed")
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
 
         if competition is None:
             competition = {}
@@ -155,7 +155,7 @@ class F42Parser:
         """
         matches = []
 
-        task = Task(name="Parse pass 2", status_on_error="Failure")
+        task = Task(name="Parse pass 2", status_on_error=Task.ERROR)
         task.init_info("matches", "matches (err)")
 
 
@@ -178,7 +178,7 @@ class F42Parser:
         if len(matches) == 0:
             raise FeedParsingException(F42Parser._FEED, "No matches found")
 
-        task.close(status="Completed")
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task, matches
 
     @staticmethod

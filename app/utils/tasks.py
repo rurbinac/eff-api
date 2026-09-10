@@ -8,6 +8,14 @@ from app.utils.dt import utc_now
 
 @dataclass
 class Task:
+
+    # These are the possible status values for a task. They are defined as class variables
+    #    to provide a clear and consistent way to represent the state of a task.
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    ERROR = "error"
+
     name: str
     start: datetime = field(default_factory=lambda: utc_now(microsecond=True))
     end: datetime | None = None
@@ -99,6 +107,8 @@ class Task:
         Args:
             subtask (Task): the subtask to add
         """
+        if subtask is self:
+            raise ValueError("Cannot add a task as a subtask of itself.")
         if self.contains_task(subtask):
             raise ValueError("Cannot add a subtask that is already in the task's subtree.")
         if subtask.contains_task(self):
@@ -114,8 +124,6 @@ class Task:
         Returns:
             bool: True if this task contains the given task
         """
-        if self is task:
-            return True
         stack = [self]
         while stack:
             current = stack.pop()
@@ -151,10 +159,13 @@ class Task:
             name (str): the name of the info key to increment
             amount (int, optional): the amount to increment the info key by. Defaults to 1.
         """
-        if name in self.info and self.info[name] is not None:
-            self.info[name] += amount
-        else:
+        current = self.info.get(name)
+        if isinstance(current, int):
+            self.info[name] = current + amount
+        elif current is None or name not in self.info:
             self.info[name] = amount
+        else:
+            raise TypeError(f"Cannot increment non-integer value for '{name}': {current!r}")
 
     def remove(self, name: str) -> None:
         """Remove an info key from the task's info dictionary.
@@ -174,12 +185,13 @@ class Task:
         Returns:
             dict: the dictionary representation of the Task object, including its attributes and any nested subtasks.
         """
-        self.restart()  # Ensure any paused time is accounted for before closing
-        self.end = utc_now(microsecond=True)
-        if status is not None:
-            self.status = status
-        if self.status_on_error is not None and self.errors:
-            self.status = self.status_on_error
+        if not self.is_closed:
+            self.restart()  # Ensure any paused time is accounted for before closing
+            self.end = utc_now(microsecond=True)
+            if status is not None:
+                self.status = status
+            if self.status_on_error is not None and self.errors:
+                self.status = self.status_on_error
         return self.to_dict()
 
     def add_error(self, error: str) -> None:
