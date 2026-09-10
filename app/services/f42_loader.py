@@ -170,21 +170,9 @@ class F42Loader:
             task.add_subtask(sub)
 
         try:
-            sync_standings_dict = SyncStandingsService.sync_all(db, real_competition_id)
+            sync_standings = SyncStandingsService.sync_all(db, real_competition_id)
             db.commit()
-            # SyncStandingsService still returns a dict — wrap it in a Task for consistency
-            sub = Task(name="sync_standings")
-            sub.init_info("queries_executed", "rows_affected")
-            sub.inc("queries_executed", sync_standings_dict.get("queries_executed") or 0)
-            sub.inc("rows_affected", sync_standings_dict.get("rows_affected") or 0)
-            if sync_standings_dict.get("error"):
-                sub.add_error(sync_standings_dict["error"])
-            sub.close(
-                status="Completed"
-                if sync_standings_dict.get("status") == "success"
-                else "Error"
-            )
-            task.add_subtask(sub)
+            task.add_subtask(sync_standings)
         except Exception as e:  # noqa: BLE001
             db.rollback()
             sub = Task(name="sync_standings", status_on_error="Error")

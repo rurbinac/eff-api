@@ -1,3 +1,4 @@
+# ruff: noqa: BLE001  – broad Exception catches are intentional in sync handlers
 """Fantasy league synchronization service.
 
 Syncs application-level fantasy data across Leagues, Divisions, Teams, and Matches.
@@ -7,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.constants import RealCompetitionConstants
-
+from app.utils.tasks import Task
 
 class SyncFantasyService:
     """Synchronize application-level fantasy data."""
@@ -48,7 +49,7 @@ class SyncFantasyService:
         db: Session,
         real_competition_id: int | None = None,
         league_id: int | None = None,
-    ) -> dict:
+    ) -> Task:
         """Sync all fantasy data (Leagues → Divisions → Teams → Matches).
 
         Args:
@@ -57,60 +58,55 @@ class SyncFantasyService:
             league_id: Optional LeagueID to sync specific league only.
 
         Returns:
-            Combined results from all sync operations.
+            Task with aggregated results from all sync operations.
         """
-        all_results = {
-            "status": "success",
-            "queries_executed": 0,
-            "rows_affected": 0,
-            "operations": {},
-        }
+        task = Task(name="sync_fantasy_all", status_on_error="Error")
+        task.init_info("queries_executed", "rows_affected")
+        had_partial = False
 
         try:
             # Sync Leagues
-            result = SyncFantasyService.sync_leagues(db, real_competition_id, league_id)
-            all_results["operations"]["sync_leagues"] = result
-            all_results["queries_executed"] += result.get("queries_executed", 0)
-            all_results["rows_affected"] += result.get("rows_affected", 0)
-            if result.get("status") != "success":
-                all_results["status"] = "partial"
+            sub = SyncFantasyService.sync_leagues(db, real_competition_id, league_id)
+            task.add_subtask(sub)
+            task.inc("queries_executed", sub.info.get("queries_executed") or 0)
+            task.inc("rows_affected", sub.info.get("rows_affected") or 0)
+            if sub.status != "Completed":
+                had_partial = True
 
             # Sync Divisions
-            result = SyncFantasyService.sync_divisions(
-                db, real_competition_id, league_id
-            )
-            all_results["operations"]["sync_divisions"] = result
-            all_results["queries_executed"] += result.get("queries_executed", 0)
-            all_results["rows_affected"] += result.get("rows_affected", 0)
-            if result.get("status") != "success":
-                all_results["status"] = "partial"
+            sub = SyncFantasyService.sync_divisions(db, real_competition_id, league_id)
+            task.add_subtask(sub)
+            task.inc("queries_executed", sub.info.get("queries_executed") or 0)
+            task.inc("rows_affected", sub.info.get("rows_affected") or 0)
+            if sub.status != "Completed":
+                had_partial = True
 
             # Sync Teams
-            result = SyncFantasyService.sync_teams(db, real_competition_id, league_id)
-            all_results["operations"]["sync_teams"] = result
-            all_results["queries_executed"] += result.get("queries_executed", 0)
-            all_results["rows_affected"] += result.get("rows_affected", 0)
-            if result.get("status") != "success":
-                all_results["status"] = "partial"
+            sub = SyncFantasyService.sync_teams(db, real_competition_id, league_id)
+            task.add_subtask(sub)
+            task.inc("queries_executed", sub.info.get("queries_executed") or 0)
+            task.inc("rows_affected", sub.info.get("rows_affected") or 0)
+            if sub.status != "Completed":
+                had_partial = True
 
             # Sync Matches
-            result = SyncFantasyService.sync_matches(db, real_competition_id, league_id)
-            all_results["operations"]["sync_matches"] = result
-            all_results["queries_executed"] += result.get("queries_executed", 0)
-            all_results["rows_affected"] += result.get("rows_affected", 0)
-            if result.get("status") != "success":
-                all_results["status"] = "partial"
+            sub = SyncFantasyService.sync_matches(db, real_competition_id, league_id)
+            task.add_subtask(sub)
+            task.inc("queries_executed", sub.info.get("queries_executed") or 0)
+            task.inc("rows_affected", sub.info.get("rows_affected") or 0)
+            if sub.status != "Completed":
+                had_partial = True
 
         except Exception as e:
-            all_results["status"] = "error"
-            all_results["error"] = str(e)
+            task.add_error(str(e))
 
-        return all_results
+        task.close(status="Partial" if had_partial else "Completed")
+        return task
 
     @staticmethod
     def sync_leagues(
         db: Session, real_competition_id: int | None = None, league_id: int | None = None
-    ) -> dict:
+    ) -> Task:
         """Sync Leagues with RealCompetitions.
 
         Args:
@@ -118,20 +114,17 @@ class SyncFantasyService:
             real_competition_id: RealCompetitionID to sync. If None, derived from current season.
             league_id: Optional LeagueID to sync specific league.
         """
-        results = {
-            "status": "success",
-            "queries_executed": 0,
-            "rows_affected": 0,
-        }
+        task = Task(name="sync_leagues", status_on_error="Error")
+        task.init_info("queries_executed", "rows_affected")
 
         try:
             # Derive real_competition_id if not provided
             if not real_competition_id and not league_id:
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
-                    results["status"] = "error"
-                    results["error"] = "Could not determine realCompetitionID"
-                    return results
+                    task.add_error("Could not determine realCompetitionID")
+                    task.close()
+                    return task
 
             # Build WHERE clause based on provided parameters
             where_conditions = []
@@ -159,19 +152,19 @@ class SyncFantasyService:
                    WHERE {where_clause}
             """)
             result = db.execute(q, params)
-            results["queries_executed"] += 1
-            results["rows_affected"] += result.rowcount
+            task.inc("queries_executed")
+            task.inc("rows_affected", result.rowcount)
 
         except Exception as e:
-            results["status"] = "error"
-            results["error"] = str(e)
+            task.add_error(str(e))
 
-        return results
+        task.close(status="Completed")
+        return task
 
     @staticmethod
     def sync_divisions(
         db: Session, real_competition_id: int | None = None, league_id: int | None = None
-    ) -> dict:
+    ) -> Task:
         """Sync Divisions with Leagues.
 
         Args:
@@ -179,20 +172,17 @@ class SyncFantasyService:
             real_competition_id: RealCompetitionID to sync. If None, derived from current season.
             league_id: Optional LeagueID to sync specific league's divisions.
         """
-        results = {
-            "status": "success",
-            "queries_executed": 0,
-            "rows_affected": 0,
-        }
+        task = Task(name="sync_divisions", status_on_error="Error")
+        task.init_info("queries_executed", "rows_affected")
 
         try:
             # Derive real_competition_id if not provided
             if not real_competition_id and not league_id:
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
-                    results["status"] = "error"
-                    results["error"] = "Could not determine realCompetitionID"
-                    return results
+                    task.add_error("Could not determine realCompetitionID")
+                    task.close()
+                    return task
 
             # Build WHERE clause based on provided parameters
             where_conditions = []
@@ -224,19 +214,19 @@ class SyncFantasyService:
                    WHERE {where_clause}
             """)
             result = db.execute(q, params)
-            results["queries_executed"] += 1
-            results["rows_affected"] += result.rowcount
+            task.inc("queries_executed")
+            task.inc("rows_affected", result.rowcount)
 
         except Exception as e:
-            results["status"] = "error"
-            results["error"] = str(e)
+            task.add_error(str(e))
 
-        return results
+        task.close(status="Completed")
+        return task
 
     @staticmethod
     def sync_teams(
         db: Session, real_competition_id: int | None = None, league_id: int | None = None
-    ) -> dict:
+    ) -> Task:
         """Sync Teams with Divisions.
 
         Args:
@@ -244,20 +234,17 @@ class SyncFantasyService:
             real_competition_id: RealCompetitionID to sync. If None, derived from current season.
             league_id: Optional LeagueID to sync specific league's teams.
         """
-        results = {
-            "status": "success",
-            "queries_executed": 0,
-            "rows_affected": 0,
-        }
+        task = Task(name="sync_teams", status_on_error="Error")
+        task.init_info("queries_executed", "rows_affected")
 
         try:
             # Derive real_competition_id if not provided
             if not real_competition_id and not league_id:
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
-                    results["status"] = "error"
-                    results["error"] = "Could not determine realCompetitionID"
-                    return results
+                    task.add_error("Could not determine realCompetitionID")
+                    task.close()
+                    return task
 
             # Build WHERE clause based on provided parameters
             where_conditions = []
@@ -296,19 +283,19 @@ class SyncFantasyService:
                    WHERE {where_clause}
             """)
             result = db.execute(q, params)
-            results["queries_executed"] += 1
-            results["rows_affected"] += result.rowcount
+            task.inc("queries_executed")
+            task.inc("rows_affected", result.rowcount)
 
         except Exception as e:
-            results["status"] = "error"
-            results["error"] = str(e)
+            task.add_error(str(e))
 
-        return results
+        task.close(status="Completed")
+        return task
 
     @staticmethod
     def sync_matches(
         db: Session, real_competition_id: int | None = None, league_id: int | None = None
-    ) -> dict:
+    ) -> Task:
         """Sync Matches and MatchTeams with Divisions/Teams.
 
         Args:
@@ -316,20 +303,17 @@ class SyncFantasyService:
             real_competition_id: RealCompetitionID to sync. If None, derived from current season.
             league_id: Optional LeagueID to sync specific league's matches.
         """
-        results = {
-            "status": "success",
-            "queries_executed": 0,
-            "rows_affected": 0,
-        }
+        task = Task(name="sync_matches", status_on_error="Error")
+        task.init_info("queries_executed", "rows_affected")
 
         try:
             # Derive real_competition_id if not provided
             if not real_competition_id and not league_id:
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
-                    results["status"] = "error"
-                    results["error"] = "Could not determine realCompetitionID"
-                    return results
+                    task.add_error("Could not determine realCompetitionID")
+                    task.close()
+                    return task
 
             # Build WHERE clause based on provided parameters
             where_conditions = []
@@ -357,8 +341,8 @@ class SyncFantasyService:
                    WHERE {where_clause}
             """)
             result = db.execute(q1, params)
-            results["queries_executed"] += 1
-            results["rows_affected"] += result.rowcount
+            task.inc("queries_executed")
+            task.inc("rows_affected", result.rowcount)
 
             # Update MatchTeams with team data
             # Build separate WHERE clause for MatchTeams (uses Teams table)
@@ -394,11 +378,11 @@ class SyncFantasyService:
                    WHERE {where_clause_mt}
             """)
             result = db.execute(q2, params_mt)
-            results["queries_executed"] += 1
-            results["rows_affected"] += result.rowcount
+            task.inc("queries_executed")
+            task.inc("rows_affected", result.rowcount)
 
         except Exception as e:
-            results["status"] = "error"
-            results["error"] = str(e)
+            task.add_error(str(e))
 
-        return results
+        task.close(status="Completed")
+        return task

@@ -1,3 +1,4 @@
+# ruff: noqa: BLE001  – broad Exception catches are intentional in sync handlers
 """Standings synchronization and calculation service.
 
 Syncs RealTeamMembers with match statistics and RealStandings data,
@@ -9,19 +10,26 @@ from sqlalchemy.orm import Session
 
 from app.constants import RealCompetitionConstants
 from app.utils.dt import utc_now
+from app.utils.tasks import Task
 
 
 class SyncStandingsService:
     """Synchronize standings and calculate rankings."""
 
     @staticmethod
-    def sync_all(db: Session, real_competition_id: int) -> dict:
-        all_results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
-            'operations': {},
-        }
+    def sync_all(db: Session, real_competition_id: int) -> Task:
+        """Sync all standings data (RealTeamMembers → RealStandings).
+
+        Args:
+            db: Database session
+            real_competition_id: RealCompetitionID to sync.
+
+        Returns:
+            Task with aggregated results from all sync operations.
+        """
+        task = Task(name='sync_standings_all', status_on_error='Error')
+        task.init_info('queries_executed', 'rows_affected')
+        had_partial = False
 
         try:
             # Derive real_competition_id if not provided
@@ -29,34 +37,34 @@ class SyncStandingsService:
                 from app.services import SyncFantasyService
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
-                    all_results['status'] = 'error'
-                    all_results['error'] = 'Could not determine realCompetitionID'
-                    return all_results
+                    task.add_error('Could not determine realCompetitionID')
+                    task.close()
+                    return task
 
             # Sync RealTeamMembers
-            result = SyncStandingsService.sync_real_team_members(db, real_competition_id)
-            all_results['operations']['sync_real_team_members'] = result
-            all_results['queries_executed'] += result.get('queries_executed', 0)
-            all_results['rows_affected'] += result.get('rows_affected', 0)
-            if result.get('status') != 'success':
-                all_results['status'] = 'partial'
+            sub = SyncStandingsService.sync_real_team_members(db, real_competition_id)
+            task.add_subtask(sub)
+            task.inc('queries_executed', sub.info.get('queries_executed') or 0)
+            task.inc('rows_affected', sub.info.get('rows_affected') or 0)
+            if sub.status != 'Completed':
+                had_partial = True
 
             # Sync RealStandings
-            result = SyncStandingsService.sync_real_standings(db, real_competition_id)
-            all_results['operations']['sync_real_standings'] = result
-            all_results['queries_executed'] += result.get('queries_executed', 0)
-            all_results['rows_affected'] += result.get('rows_affected', 0)
-            if result.get('status') != 'success':
-                all_results['status'] = 'partial'
+            sub = SyncStandingsService.sync_real_standings(db, real_competition_id)
+            task.add_subtask(sub)
+            task.inc('queries_executed', sub.info.get('queries_executed') or 0)
+            task.inc('rows_affected', sub.info.get('rows_affected') or 0)
+            if sub.status != 'Completed':
+                had_partial = True
 
         except Exception as e:
-            all_results['status'] = 'error'
-            all_results['error'] = str(e)
+            task.add_error(str(e))
 
-        return all_results
+        task.close(status='Partial' if had_partial else 'Completed')
+        return task
 
     @staticmethod
-    def sync_real_team_members(db: Session, real_competition_id: int) -> dict:
+    def sync_real_team_members(db: Session, real_competition_id: int) -> Task:
         """Sync RealTeamMembers with match and player data across competitions.
 
         Args:
@@ -64,14 +72,10 @@ class SyncStandingsService:
             real_competition_id: RealCompetitionID to sync (base or extra)
 
         Returns:
-            Results dict with status and operation counts
+            Task with rows_affected and match_days_processed counts.
         """
-        results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
-            'match_days_processed': 0,
-        }
+        task = Task(name='sync_real_team_members', status_on_error='Error')
+        task.init_info('rows_affected', 'match_days_processed')
 
         try:
             # Step 1: Load RealCompetitions and organize by SYMID
@@ -94,9 +98,9 @@ class SyncStandingsService:
                     real_comp[RealCompetitionConstants.EXTRA_SYMID] = row_dict
 
             if not real_comp:
-                results['status'] = 'error'
-                results['error'] = 'No RealCompetitions found for given ID'
-                return results
+                task.add_error('No RealCompetitions found for given ID')
+                task.close()
+                return task
 
             # Step 2: Load RealTeamMembers and separate into teams/players
             base_comp_id = real_comp.get(RealCompetitionConstants.BASE_SYMID, {}).get('realCompetitionID')
@@ -247,7 +251,7 @@ class SyncStandingsService:
                         for row in match_rows
                     ]
                     if not any(r.get('realMatchStatus') == 3 for r in match_rows_dicts):
-                        results['match_days_processed'] += 1
+                        task.inc('match_days_processed')
                         continue
 
                     # Organize matches by team member key, tracking opposite teams
@@ -277,22 +281,22 @@ class SyncStandingsService:
 
                     # 3. Update/insert into RealStandings
                     team_result = SyncStandingsService._sync_rmt_teams(db, rc, matches, match_day, teams)
-                    results['rows_affected'] += team_result.get('rows_affected', 0)
-                    if 'error' in team_result and 'first_team_error' not in results:
-                        results['first_team_error'] = f"md{match_day}: {team_result['error']}"
+                    task.inc('rows_affected', team_result.get('rows_affected') or 0)
+                    if 'error' in team_result:
+                        task.add_error(f"md{match_day} teams: {team_result['error']}")
 
                     player_result = SyncStandingsService._sync_rmt_players(db, rc, matches, match_day, teams, players)
-                    results['rows_affected'] += player_result.get('rows_affected', 0)
-                    if 'error' in player_result and 'first_player_error' not in results:
-                        results['first_player_error'] = f"md{match_day}: {player_result['error']}"
+                    task.inc('rows_affected', player_result.get('rows_affected') or 0)
+                    if 'error' in player_result:
+                        task.add_error(f"md{match_day} players: {player_result['error']}")
 
-                    results['match_days_processed'] += 1
+                    task.inc('match_days_processed')
 
         except Exception as e:
-            results['status'] = 'error'
-            results['error'] = str(e)
+            task.add_error(str(e))
 
-        return results
+        task.close(status='Completed')
+        return task
 
     @staticmethod
     def _sync_rmt_read_rs_teams(db: Session, rc: dict, matches: dict, match_day: int, teams: dict) -> None:
@@ -516,7 +520,7 @@ class SyncStandingsService:
             teams: Teams dict with calculated stats (includes realStandingID if existing)
 
         Returns:
-            Results dict with rows_affected
+            Dict with rows_affected, and 'error' key on failure.
         """
         rows_affected = 0
 
@@ -726,7 +730,7 @@ class SyncStandingsService:
             players: Players dict with calculated stats (includes realStandingID if existing)
 
         Returns:
-            Results dict with rows_affected
+            Dict with rows_affected, and 'error' key on failure.
         """
         rows_affected = 0
 
@@ -911,7 +915,7 @@ class SyncStandingsService:
         return {'rows_affected': rows_affected}
 
     @staticmethod
-    def sync_real_standings(db: Session, real_competition_id: int) -> dict:
+    def sync_real_standings(db: Session, real_competition_id: int) -> Task:
         """Sync RealTeamMembers with data from RealStandings.
 
         Updates both last season data and current season data in RealTeamMembers
@@ -922,20 +926,19 @@ class SyncStandingsService:
             real_competition_id: RealCompetitionID to sync (base or extra)
 
         Returns:
-            Results dict with status and rows_affected
+            Task with queries_executed and rows_affected counts.
         """
-        rows_affected = 0
+        task = Task(name='sync_real_standings', status_on_error='Error')
+        task.init_info('queries_executed', 'rows_affected')
 
         try:
             # Load RealCompetitions organized by SYMID
             real_comp = SyncStandingsService._load_real_competitions(db, real_competition_id)
 
             if not real_comp or RealCompetitionConstants.BASE_SYMID not in real_comp:
-                return {
-                    'status': 'error',
-                    'error': 'Could not load RealCompetitions',
-                    'rows_affected': 0,
-                }
+                task.add_error('Could not load RealCompetitions')
+                task.close()
+                return task
 
             base_comp_id = real_comp[RealCompetitionConstants.BASE_SYMID]['realCompetitionID']
 
@@ -964,7 +967,8 @@ class SyncStandingsService:
                    WHERE `rtm`.`baseRealCompetitionID` = :base_comp_id
             """)
             result = db.execute(q1, {'base_comp_id': base_comp_id})
-            rows_affected += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #2: Update current season fields from current standings
             q2 = text("""
@@ -992,19 +996,14 @@ class SyncStandingsService:
                    WHERE `rtm`.`baseRealCompetitionID` = :base_comp_id
             """)
             result = db.execute(q2, {'base_comp_id': base_comp_id})
-            rows_affected += result.rowcount
-
-            return {
-                'status': 'success',
-                'rows_affected': rows_affected,
-            }
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
         except Exception as e:
-            return {
-                'status': 'error',
-                'error': str(e),
-                'rows_affected': 0,
-            }
+            task.add_error(str(e))
+
+        task.close(status='Completed')
+        return task
 
     @staticmethod
     def _load_real_competitions(db: Session, real_competition_id: int) -> dict:
