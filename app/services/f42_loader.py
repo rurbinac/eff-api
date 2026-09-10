@@ -65,7 +65,7 @@ class F42Loader:
             if "realCompetitionID" not in comp_data:
                 result["errors"].append("Competition not found — feed skipped")
                 return FLoader.log_feed_end(db, feed, result=result)
-            result.update(comp_data)
+            result["realCompetitionID"] = comp_data["realCompetitionID"]
         except Exception as e:
             db.rollback()
             result["errors"].append(
