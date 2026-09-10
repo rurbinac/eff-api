@@ -1,6 +1,7 @@
 ﻿# ruff: noqa: BLE001  – broad Exception catches are intentional in Pub/Sub handlers
 import base64
 import json
+import logging
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from google.auth.transport import requests as google_requests
@@ -9,6 +10,8 @@ from google.oauth2 import id_token
 from app.database import DbSession
 from app.services.f_loader import FLoader
 from app.services.xml_feeds import XmlFeedsStorage
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["xml_feeds"])
 
@@ -51,6 +54,7 @@ async def xml_feed_notify(
         return {"status": "error", "error": f"Failed to parse Pub/Sub message: {e!s}"}
 
     blob_name: str = gcs_event.get("name", "")
+    logger.info("xml_feed_notify: blob=%s event_type=%s", blob_name, gcs_event.get("eventType", gcs_event.get("kind", "?")))
     if not FLoader.is_xml_file(blob_name):
         return {"status": "ignored", "reason": "not an XML file", "file": blob_name}
     bucket: str = gcs_event.get("bucket", "")
@@ -68,11 +72,13 @@ async def xml_feed_notify(
     try:
         content: bytes = XmlFeedsStorage.read_file(blob_name)
     except Exception as e:
+        logger.error("xml_feed_notify: GCS read failed: %s", e)
         return {"status": "error", "file": blob_name, "error": f"GCS read failed: {e!s}"}
 
     # Open Feed log row (records size + sha256), process, stamp end time
     # Returns None when the file content is identical to the previous version
     feed_row = FLoader.log_feed_start(db, blob_name, content)
+    logger.info("xml_feed_notify: log_feed_start returned feed_id=%s", feed_row.feedID if feed_row else None)
     if feed_row is None:
         return {"status": "skipped", "reason": "identical content (sha256 and size unchanged)", "file": blob_name}
     try:
@@ -81,6 +87,7 @@ async def xml_feed_notify(
     finally:
         FLoader.delete_temp_file(tmp_name)
 
+    logger.info("xml_feed_notify: done feed_id=%s endDate=%s results=%s", feed.feedID, feed.endDate, feed.results)
     return {
         "status": "processed",
         "bucket": bucket,
