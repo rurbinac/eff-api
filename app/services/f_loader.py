@@ -177,3 +177,4 @@ class FLoader:
             FLoader.delete_temp_file(tmp_name)
 
         return FLoader.log_feed_end(db, feed, result=result)
+

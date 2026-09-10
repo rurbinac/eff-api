@@ -44,7 +44,7 @@ class SyncFantasyService:
         return result[0] if result else None
 
     @staticmethod
-    def sync_fantasy(
+    def sync_all(
         db: Session,
         real_competition_id: int | None = None,
         league_id: int | None = None,

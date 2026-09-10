@@ -6,9 +6,15 @@ from sqlalchemy.types import TypeDecorator
 _UTC_LOWEST = datetime(2000, 1, 1, tzinfo=timezone.utc).replace(tzinfo=None)
 _UTC_LARGEST = datetime.max.replace(tzinfo=timezone.utc).replace(tzinfo=None)
 
-def utc_now() -> datetime:
-    """Current UTC time as a naive datetime (DB-safe)."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+def utc_now(microsecond: bool = False) -> datetime:
+    """Current UTC time as a naive datetime (DB-safe).
+
+    Args:
+        microsecond: If True, keeps microsecond precision (for DATETIME(6) columns).
+                     If False (default), truncates to seconds (for plain DATETIME columns).
+    """
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    return now if microsecond else now.replace(microsecond=0)
 
 
 def utc_lowest() -> datetime:

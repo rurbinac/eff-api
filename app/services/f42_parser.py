@@ -6,6 +6,7 @@ from datetime import datetime
 from app.constants import RealCompetitionConstants
 from app.services.services_exception import FeedParsingException
 from app.utils.dt import utc_lowest
+from app.utils.tasks import Task
 
 
 class F42Parser:
@@ -28,14 +29,18 @@ class F42Parser:
             Dictionary with parsed data: competition, teams, players, matches
         """
         # Pass 1: Extract competition info and Squads (teams, players)
-        competition, teams, players, team_id_mapping = F42Parser._parse_pass_1_squads(
-            file_path
+        task = Task(name=f"Parse {F42Parser._FEED} file: {file_path}", status_on_error="Failure")
+        task_1, competition, teams, players, team_id_mapping = (
+            F42Parser._parse_pass_1_squads(file_path)
         )
-
+        task.add_subtask(task_1)
         # Pass 2: Extract MatchData (using team mappings from Pass 1)
-        matches = F42Parser._parse_pass_2_matches(file_path, team_id_mapping)
+        task_2, matches = F42Parser._parse_pass_2_matches(file_path, team_id_mapping)
+        task.add_subtask(task_2)
+        task.close(status="Completed")
 
         return {
+            "task": task,
             "competition": competition,
             "teams": teams,
             "players": players,
@@ -45,11 +50,11 @@ class F42Parser:
     @staticmethod
     def _parse_pass_1_squads(
         file_path: str,
-    ) -> tuple[dict, list[dict], list[dict], dict]:
+    ) -> tuple[Task, dict, list[dict], list[dict], dict]:
         """Pass 1: Stream through XML and extract Squads (teams and players).
 
         Returns:
-            (competition, teams, players, team_id_mapping)
+            (task, competition, teams, players, team_id_mapping)
             team_id_mapping: dict mapping team uID to team data for Pass 2
         """
         competition = None
@@ -57,6 +62,9 @@ class F42Parser:
         players = []
         team_id_mapping = {}  # Store team uID -> team data for Pass 2
         in_squads = None
+
+        task = Task(name="Parse pass 1", status_on_error="Failure")
+        task.init_info("competition", "teams", "teams (err)", "players", "players (err)")
 
         # Use iterparse for memory-efficient streaming
         context = ET.iterparse(file_path, events=["start", "end"])
@@ -69,6 +77,8 @@ class F42Parser:
                 and competition is None
             ):
                 competition = F42Parser._parse_competition_element(elem)
+                task.inc("competition")
+
             # Track when we enter/exit Squads section
             elif event == "start" and elem.tag == "Squads":
                 in_squads = True
@@ -77,16 +87,22 @@ class F42Parser:
             elif event == "end" and elem.tag == "Team" and in_squads:
                 team = F42Parser._parse_team_element(elem)
                 if team:
+                    task.inc("teams")
                     teams.append(team)
-                    team_id_mapping[team["uID"]] = team
+                    team_id_mapping[team["realTeamUID"]] = team
 
                     # Parse players within this team (from already-parsed element)
                     for player_elem in elem.findall("Player"):
                         player = F42Parser._parse_player_element(
-                            player_elem, team["uID"]
+                            player_elem, team["realTeamUID"]
                         )
                         if player:
                             players.append(player)
+                            task.inc("players")
+                        else:
+                            task.inc("players (err)")
+                else:
+                    task.inc("teams (err)")
 
                 # Clear element to save memory
                 elem.clear()
@@ -96,21 +112,25 @@ class F42Parser:
                 in_squads = False
                 break
 
+        task.close(status="Completed")
+
         if competition is None:
             competition = {}
 
-        if not competition.get("competition_code"):
-            raise FeedParsingException(F42Parser._FEED, "Missing competition_code")
-        elif competition["competition_code"] not in (
+        if not competition.get("realCompetitionSYMID"):
+            raise FeedParsingException(F42Parser._FEED, "Missing realCompetitionSYMID")
+        elif competition["realCompetitionSYMID"] not in (
             RealCompetitionConstants.BASE_SYMID,
             RealCompetitionConstants.EXTRA_SYMID,
         ):
             raise FeedParsingException(
                 F42Parser._FEED,
-                f"Invalid competition_code: '{competition['competition_code']}'",
+                f"Invalid realCompetitionSYMID: '{competition['realCompetitionSYMID']}'",
             )
-        if not competition.get("season_id"):
-            raise FeedParsingException(F42Parser._FEED, "Missing season_id")
+        if not competition.get("realCompetitionSeasonId"):
+            raise FeedParsingException(
+                F42Parser._FEED, "Missing realCompetitionSeasonId"
+            )
         if in_squads is None:
             raise FeedParsingException(F42Parser._FEED, "Missing Squads section")
         if len(teams) == 0:
@@ -118,10 +138,12 @@ class F42Parser:
         if len(players) == 0:
             raise FeedParsingException(F42Parser._FEED, "No players found")
 
-        return competition, teams, players, team_id_mapping
+        return task, competition, teams, players, team_id_mapping
 
     @staticmethod
-    def _parse_pass_2_matches(file_path: str, team_id_mapping: dict) -> list[dict]:
+    def _parse_pass_2_matches(
+        file_path: str, team_id_mapping: dict
+    ) -> tuple[Task, list[dict]]:
         """Pass 2: Stream through XML and extract MatchData only.
 
         Args:
@@ -129,9 +151,13 @@ class F42Parser:
             team_id_mapping: Team uID mapping from Pass 1
 
         Returns:
-            List of match dictionaries
+            tuple[Task, list[dict]]: The pass-2 task and the list of match dictionaries
         """
         matches = []
+
+        task = Task(name="Parse pass 2", status_on_error="Failure")
+        task.init_info("matches", "matches (err)")
+
 
         # Use iterparse for memory-efficient streaming
         context = ET.iterparse(file_path, events=["end"])
@@ -142,13 +168,18 @@ class F42Parser:
                 match = F42Parser._parse_match_element(elem, team_id_mapping)
                 if match:
                     matches.append(match)
+                    task.inc("matches")
+                else:
+                    task.inc("matches (err)")
 
                 # Clear element to save memory
                 elem.clear()
 
         if len(matches) == 0:
             raise FeedParsingException(F42Parser._FEED, "No matches found")
-        return matches
+
+        task.close(status="Completed")
+        return task, matches
 
     @staticmethod
     def _parse_competition_element(competition_elem) -> dict:
@@ -158,13 +189,13 @@ class F42Parser:
             competition_elem: The XML node
 
         Returns:
-            dict | None: The parsed competition data
+            dict: The parsed competition data
         """
         return {
-            "competition_code": competition_elem.get("competition_code"),
-            "competition_name": competition_elem.get("competition_name"),
-            "season_id": competition_elem.get("season_id"),
-            "timestamp": F42Parser._parse_feed_timestamp(
+            "realCompetitionSYMID": competition_elem.get("competition_code"),
+            # "realCompetitionName": competition_elem.get("competition_name"),
+            "realCompetitionSeasonId": competition_elem.get("season_id"),
+            "lastF42Date": F42Parser._parse_feed_timestamp(
                 competition_elem.get("timestamp")
             ),
         }
@@ -187,9 +218,9 @@ class F42Parser:
         symid_elem = team_elem.find("SYMID")
 
         return {
-            "uID": uid,
-            "name": name_elem.text if name_elem is not None else None,
-            "symid": symid_elem.text if symid_elem is not None else None,
+            "realTeamUID": uid,
+            "realTeamName": name_elem.text if name_elem is not None else None,
+            "realTeamSYMID": symid_elem.text if symid_elem is not None else None,
         }
 
     @staticmethod
@@ -210,8 +241,8 @@ class F42Parser:
         name_elem = player_elem.find("Name")
         position_elem = player_elem.find("Position")
         player = {
-            "uID": uid,
-            "team_uID": team_uid,
+            "realPlayerUID": uid,
+            "realTeamUID": team_uid,
             "name": name_elem.text if name_elem is not None else None,
             "position": position_elem.text if position_elem is not None else None,
             "shirt_number": player_elem.get("ShirtNumber"),
@@ -220,14 +251,14 @@ class F42Parser:
 
         # Extract player stats from Stat elements
         stat_map = {
-            "first_name": "first_name",
-            "last_name": "last_name",
-            "known_name": "known_name",
-            "real_position": "real_position",
-            "birth_date": "birth_date",
+            "first_name": "firstName",
+            "last_name": "lastName",
+            "known_name": "knownName",
+            "real_position": "realPosition",
+            "birth_date": "birthDate",
             "weight": "weight",
             "height": "height",
-            "jersey_num": "jersey_number",
+            "jersey_num": "jerseyNumber",
         }
 
         for stat_elem in player_elem.findall("Stat"):
