@@ -1,3 +1,4 @@
+# ruff: noqa: BLE001  – broad Exception catches are intentional in sync handlers
 """Real competition synchronization service.
 
 Syncs Real* table data (RealCompetitions, RealTeams, RealPlayers, RealMatches, etc.)
@@ -8,13 +9,14 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.constants import DraftPositionConstants, RealCompetitionConstants
+from app.utils.tasks import Task
 
 
 class SyncRealService:
     """Synchronize Real* table data."""
 
     @staticmethod
-    def sync_all(db: Session, real_competition_id: int | None = None) -> dict:
+    def sync_all(db: Session, real_competition_id: int | None = None) -> Task:
         """Sync all Real* data (RealCompetitions → RealTeams → RealPlayers → RealMatches → RealTeamMembers → RealStandings).
 
         Args:
@@ -22,14 +24,11 @@ class SyncRealService:
             real_competition_id: RealCompetitionID to sync. If None, derived from current season.
 
         Returns:
-            Combined results from all sync operations.
+            Task with aggregated results from all sync operations.
         """
-        all_results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
-            'operations': {},
-        }
+        task = Task(name='sync_all', status_on_error='Error')
+        task.init_info('queries_executed', 'rows_affected')
+        had_partial = False
 
         try:
             # Derive real_competition_id if not provided
@@ -37,47 +36,47 @@ class SyncRealService:
                 from app.services import SyncFantasyService
                 real_competition_id = SyncFantasyService._get_real_competition_id(db)
                 if not real_competition_id:
-                    all_results['status'] = 'error'
-                    all_results['error'] = 'Could not determine realCompetitionID'
-                    return all_results
+                    task.add_error('Could not determine realCompetitionID')
+                    task.close()
+                    return task
 
             # Sync RealCompetitions
-            result = SyncRealService.sync_real_competitions(db)
-            all_results['operations']['sync_real_competitions'] = result
-            all_results['queries_executed'] += result.get('queries_executed', 0)
-            all_results['rows_affected'] += result.get('rows_affected', 0)
-            if result.get('status') != 'success':
-                all_results['status'] = 'partial'
+            sub = SyncRealService.sync_real_competitions(db)
+            task.add_subtask(sub)
+            task.inc('queries_executed', sub.info.get('queries_executed') or 0)
+            task.inc('rows_affected', sub.info.get('rows_affected') or 0)
+            if sub.status != 'Completed':
+                had_partial = True
 
             # Sync RealTeams
-            result = SyncRealService.sync_real_teams(db, real_competition_id)
-            all_results['operations']['sync_real_teams'] = result
-            all_results['queries_executed'] += result.get('queries_executed', 0)
-            all_results['rows_affected'] += result.get('rows_affected', 0)
-            if result.get('status') != 'success':
-                all_results['status'] = 'partial'
+            sub = SyncRealService.sync_real_teams(db, real_competition_id)
+            task.add_subtask(sub)
+            task.inc('queries_executed', sub.info.get('queries_executed') or 0)
+            task.inc('rows_affected', sub.info.get('rows_affected') or 0)
+            if sub.status != 'Completed':
+                had_partial = True
 
             # Sync RealPlayers
-            result = SyncRealService.sync_real_players(db, real_competition_id)
-            all_results['operations']['sync_real_players'] = result
-            all_results['queries_executed'] += result.get('queries_executed', 0)
-            all_results['rows_affected'] += result.get('rows_affected', 0)
-            if result.get('status') != 'success':
-                all_results['status'] = 'partial'
+            sub = SyncRealService.sync_real_players(db, real_competition_id)
+            task.add_subtask(sub)
+            task.inc('queries_executed', sub.info.get('queries_executed') or 0)
+            task.inc('rows_affected', sub.info.get('rows_affected') or 0)
+            if sub.status != 'Completed':
+                had_partial = True
 
             # Sync RealMatches
-            result = SyncRealService.sync_real_matches(db, real_competition_id)
-            all_results['operations']['sync_real_matches'] = result
-            all_results['queries_executed'] += result.get('queries_executed', 0)
-            all_results['rows_affected'] += result.get('rows_affected', 0)
-            if result.get('status') != 'success':
-                all_results['status'] = 'partial'
+            sub = SyncRealService.sync_real_matches(db, real_competition_id)
+            task.add_subtask(sub)
+            task.inc('queries_executed', sub.info.get('queries_executed') or 0)
+            task.inc('rows_affected', sub.info.get('rows_affected') or 0)
+            if sub.status != 'Completed':
+                had_partial = True
 
         except Exception as e:
-            all_results['status'] = 'error'
-            all_results['error'] = str(e)
+            task.add_error(str(e))
 
-        return all_results
+        task.close(status='Partial' if had_partial else 'Completed')
+        return task
 
     @staticmethod
     def _load_real_competitions(db: Session, real_competition_id: int) -> dict:
@@ -110,13 +109,10 @@ class SyncRealService:
         return real_comp
 
     @staticmethod
-    def sync_real_competitions(db: Session) -> dict:
+    def sync_real_competitions(db: Session) -> Task:
         """Sync RealCompetitions and cascade to related tables."""
-        results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
-        }
+        task = Task(name='sync_real_competitions', status_on_error='Error')
+        task.init_info('queries_executed', 'rows_affected')
 
         try:
             # Query #1: Update baseID and extraID
@@ -135,8 +131,8 @@ class SyncRealService:
                 'baseRealCompetitionSYMID': RealCompetitionConstants.BASE_SYMID,
                 'extraRealCompetitionSYMID': RealCompetitionConstants.EXTRA_SYMID,
             })
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #2: Update prev and next
             q2 = text("""
@@ -151,8 +147,8 @@ class SyncRealService:
                        `c`.`nextRealCompetitionID` = `n`.`realCompetitionID`
             """)
             result = db.execute(q2)
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #3: Update RealTeams
             q3 = text("""
@@ -165,8 +161,8 @@ class SyncRealService:
                        `t`.`extraRealCompetitionID` = `c`.`extraRealCompetitionID`
             """)
             result = db.execute(q3)
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #4: Update RealMatches
             q4 = text("""
@@ -181,23 +177,20 @@ class SyncRealService:
                        `m`.`extraRealCompetitionID` = `c`.`extraRealCompetitionID`
             """)
             result = db.execute(q4)
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
         except Exception as e:
-            results['status'] = 'error'
-            results['error'] = str(e)
+            task.add_error(str(e))
 
-        return results
+        task.close(status='Completed')
+        return task
 
     @staticmethod
-    def sync_real_teams(db: Session, real_competition_id: int) -> dict:
+    def sync_real_teams(db: Session, real_competition_id: int) -> Task:
         """Sync RealTeams and populate RealTeamMembers."""
-        results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
-        }
+        task = Task(name='sync_real_teams', status_on_error='Error')
+        task.init_info('queries_executed', 'rows_affected')
 
         try:
             # Query #1: Set base fields
@@ -219,8 +212,8 @@ class SyncRealService:
                 'realCompetitionID': real_competition_id,
                 'draftPosition': DraftPositionConstants.EPL_TEAM,
             })
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #2: Update prev and next
             q2 = text("""
@@ -237,8 +230,8 @@ class SyncRealService:
                    WHERE `t`.`realCompetitionID` = :realCompetitionID
             """)
             result = db.execute(q2, {'realCompetitionID': real_competition_id})
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #3: Insert new RealTeams to RealTeamMembers
             q3 = text("""
@@ -289,8 +282,8 @@ class SyncRealService:
                 'draftPosition': DraftPositionConstants.EPL_TEAM,
                 'draftPositionOrder': 5,
             })
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #4: Update realTeamMemberID
             q4 = text("""
@@ -300,8 +293,8 @@ class SyncRealService:
                    WHERE `t`.`realCompetitionID` = :realCompetitionID
             """)
             result = db.execute(q4, {'realCompetitionID': real_competition_id})
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #5: Update old RealTeams to RealTeamMembers
             q5 = text("""
@@ -363,23 +356,20 @@ class SyncRealService:
                 'draftPosition': DraftPositionConstants.EPL_TEAM,
                 'draftPositionOrder': 5,
             })
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
         except Exception as e:
-            results['status'] = 'error'
-            results['error'] = str(e)
+            task.add_error(str(e))
 
-        return results
+        task.close(status='Completed')
+        return task
 
     @staticmethod
-    def sync_real_players(db: Session, real_competition_id: int) -> dict:
+    def sync_real_players(db: Session, real_competition_id: int) -> Task:
         """Sync RealPlayers and populate RealTeamMembers."""
-        results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
-        }
+        task = Task(name='sync_real_players', status_on_error='Error')
+        task.init_info('queries_executed', 'rows_affected')
 
         try:
             # Query #1: Set base fields
@@ -393,8 +383,8 @@ class SyncRealService:
                    WHERE `p`.`realCompetitionID` = :realCompetitionID
             """)
             result = db.execute(q1, {'realCompetitionID': real_competition_id})
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #2: Sync from RealTeams
             q2 = text("""
@@ -414,8 +404,8 @@ class SyncRealService:
                    WHERE `p`.`realCompetitionID` = :realCompetitionID
             """)
             result = db.execute(q2, {'realCompetitionID': real_competition_id})
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #3: Update prev and next
             q3 = text("""
@@ -432,8 +422,8 @@ class SyncRealService:
                    WHERE `p`.`realCompetitionID` = :realCompetitionID
             """)
             result = db.execute(q3, {'realCompetitionID': real_competition_id})
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #4: Insert new RealPlayers to RealTeamMembers
             q4 = text("""
@@ -488,8 +478,8 @@ class SyncRealService:
                 'dp_3': DraftPositionConstants.MIDFIELDER,
                 'dp_4': DraftPositionConstants.STRIKER,
             })
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #5: Update realTeamMemberID
             q5 = text("""
@@ -499,8 +489,8 @@ class SyncRealService:
                    WHERE `p`.`realCompetitionID` = :realCompetitionID
             """)
             result = db.execute(q5, {'realCompetitionID': real_competition_id})
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
             # Query #6: Update old RealPlayers to RealTeamMembers
             q6 = text("""
@@ -553,23 +543,20 @@ class SyncRealService:
                      AND `p`.`realCompetitionID` = :realCompetitionID
             """)
             result = db.execute(q6, {'realCompetitionID': real_competition_id})
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
         except Exception as e:
-            results['status'] = 'error'
-            results['error'] = str(e)
+            task.add_error(str(e))
 
-        return results
+        task.close(status='Completed')
+        return task
 
     @staticmethod
-    def sync_real_matches(db: Session, real_competition_id: int) -> dict:
+    def sync_real_matches(db: Session, real_competition_id: int) -> Task:
         """Sync RealMatchTeams with team information."""
-        results = {
-            'status': 'success',
-            'queries_executed': 0,
-            'rows_affected': 0,
-        }
+        task = Task(name='sync_real_matches', status_on_error='Error')
+        task.init_info('queries_executed', 'rows_affected')
 
         try:
             # Query #1: Sync team info to RealMatchTeams
@@ -590,11 +577,11 @@ class SyncRealService:
                    WHERE `m`.`realCompetitionID` = :realCompetitionID
             """)
             result = db.execute(q1, {'realCompetitionID': real_competition_id})
-            results['queries_executed'] += 1
-            results['rows_affected'] += result.rowcount
+            task.inc('queries_executed')
+            task.inc('rows_affected', result.rowcount)
 
         except Exception as e:
-            results['status'] = 'error'
-            results['error'] = str(e)
+            task.add_error(str(e))
 
-        return results
+        task.close(status='Completed')
+        return task

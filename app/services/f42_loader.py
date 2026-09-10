@@ -35,69 +35,62 @@ class F42Loader:
 
         # Parse the file — wrap so a parse error still stamps the Feed row
         file_path = tmp_name or feed.feedName
-        result: dict = {
-            "realCompetitionID": None,
-            "realCompetitionSYMID": None,
-            "realCompetitionSeasonId": None,
-            "teams_inserted": 0,
-            "teams_updated": 0,
-            "players_inserted": 0,
-            "players_updated": 0,
-            "matches_inserted": 0,
-            "matches_updated": 0,
-            "errors": [],
-        }
+        task = Task(
+            name=f"Load {F42Parser._FEED} file: {file_path}", status_on_error="Failure"
+        )
+        task.init_info(
+            "realCompetitionID", "realCompetitionSYMID", "realCompetitionSeasonId"
+        )
         try:
             parsed_data = F42Parser.parse_file(file_path)
-            result["realCompetitionSYMID"] = parsed_data["competition"].get(
-                "realCompetitionSYMID"
+            task.add_subtask(parsed_data["task"])
+            task.assign(
+                "realCompetitionSYMID",
+                parsed_data["competition"].get("realCompetitionSYMID"),
             )
-            result["realCompetitionSeasonId"] = parsed_data["competition"].get(
-                "realCompetitionSeasonId"
+            task.assign(
+                "realCompetitionSeasonId",
+                parsed_data["competition"].get("realCompetitionSeasonId"),
             )
         except Exception as e:
-            result["errors"].append(f"Error parsing feed [{type(e).__name__}]: {e!s}")
-            return FLoader.log_feed_end(db, feed, result=result)
+            task.add_error(f"Error parsing feed [{type(e).__name__}]: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=task)
 
         # Load competitions
         try:
-            comp_data = F42Loader._load_competition(db, parsed_data["competition"])
+            c_task, comp_data = F42Loader._load_competition(
+                db, parsed_data["competition"]
+            )
+            task.add_subtask(c_task)
             if "realCompetitionID" not in comp_data:
-                result["errors"].append("Competition not found — feed skipped")
-                return FLoader.log_feed_end(db, feed, result=result)
-            result["realCompetitionID"] = comp_data["realCompetitionID"]
+                task.add_error("Competition not found — feed skipped")
+                return FLoader.log_feed_end(db, feed, result=task)
+            task.assign("realCompetitionID", comp_data["realCompetitionID"])
         except Exception as e:
             db.rollback()
-            result["errors"].append(
-                f"Error loading competition [{type(e).__name__}]: {e!s}"
-            )
-            return FLoader.log_feed_end(db, feed, result=result)
+            task.add_error(f"Error loading competition [{type(e).__name__}]: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=task)
 
         # Load teams
         team_id_mapping = {}
         try:
-            teams_result = F42Loader._load_teams(db, parsed_data["teams"], comp_data)
-            result["teams_inserted"] += teams_result["inserted"]
-            result["teams_updated"] += teams_result["updated"]
-            team_id_mapping = teams_result.get("team_uid_mapping", {})
+            t_task, team_id_mapping = F42Loader._load_teams(db, parsed_data["teams"], comp_data)
+            task.add_subtask(t_task)
         except Exception as e:
             db.rollback()
-            result["errors"].append(f"Error loading teams [{type(e).__name__}]: {e!s}")
-            return FLoader.log_feed_end(db, feed, result=result)
+            task.add_error(f"Error loading teams [{type(e).__name__}]: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=task)
 
         # Load players
         try:
-            players_result = F42Loader._load_players(
+            p_task = F42Loader._load_players(
                 db, parsed_data["players"], comp_data, team_id_mapping
             )
-            result["players_inserted"] += players_result["inserted"]
-            result["players_updated"] += players_result["updated"]
+            task.add_subtask(p_task)
         except Exception as e:
             db.rollback()
-            result["errors"].append(
-                f"Error loading players [{type(e).__name__}]: {e!s}"
-            )
-            return FLoader.log_feed_end(db, feed, result=result)
+            task.add_error(f"Error loading players [{type(e).__name__}]: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=task)
 
         # Pre-load existing matches cache
         matches_cache = {}
@@ -105,10 +98,8 @@ class F42Loader:
             matches_cache = F42Loader._load_matches_cache(db, comp_data)
         except Exception as e:
             db.rollback()
-            result["errors"].append(
-                f"Error pre-loading matches [{type(e).__name__}]: {e!s}"
-            )
-            return FLoader.log_feed_end(db, feed, result=result)
+            task.add_error(f"Error pre-loading matches [{type(e).__name__}]: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=task)
 
         # Build teams cache from loaded teams
         teams_cache = {}
@@ -134,72 +125,80 @@ class F42Loader:
                         teams_cache[team_uid] = list(team_result)
         except Exception as e:
             db.rollback()
-            result["errors"].append(
-                f"Error building teams cache [{type(e).__name__}]: {e!s}"
-            )
-            return FLoader.log_feed_end(db, feed, result=result)
+            task.add_error(f"Error building teams cache [{type(e).__name__}]: {e!s}")
+            return FLoader.log_feed_end(db, feed, result=task)
 
         # Load matches
         try:
-            matches_result = F42Loader._load_matches(
+            m_task = F42Loader._load_matches(
                 db,
                 parsed_data["matches"],
                 matches_cache,
                 teams_cache,
                 comp_data,
             )
-            result["matches_inserted"] += matches_result["inserted"]
-            result["matches_updated"] += matches_result["updated"]
+            task.add_subtask(m_task)
         except Exception as e:
             db.rollback()
-            result["errors"].append(
-                f"Error loading matches [{type(e).__name__}]: {e!s}"
-            )
+            task.add_error(f"Error loading matches [{type(e).__name__}]: {e!s}")
 
         try:
             sync_result = F42Loader._sync(db, comp_data["realCompetitionID"])
-            result["sync"] = sync_result
+            task.add_subtask(sync_result)
         except Exception as e:
             db.rollback()
-            result["errors"].append(f"Error syncing data [{type(e).__name__}]: {e!s}")
+            task.add_error(f"Error syncing data [{type(e).__name__}]: {e!s}")
 
-        return FLoader.log_feed_end(db, feed, result=result)
+        return FLoader.log_feed_end(db, feed, result=task)
 
     @staticmethod
-    def _sync(db: Session, real_competition_id: int) -> dict:
+    def _sync(db: Session, real_competition_id: int) -> Task:
         # Each service gets its own commit+rollback so a dirty session from an
         # internal SQL failure (caught inside the service) never leaks out and
         # corrupts log_feed_end's final commit.
-        result = {}
+        task = Task(name="Sync")
 
         try:
             sync_real = SyncRealService.sync_all(db, real_competition_id)
             db.commit()
-            result["sync_real"] = sync_real
+            task.add_subtask(sync_real)
         except Exception as e:
             db.rollback()
-            result["sync_real"] = {
-                "status": "error",
-                "error": f"[{type(e).__name__}]: {e!s}",
-            }
+            sub = Task(name="sync_real", status_on_error="Error")
+            sub.add_error(f"[{type(e).__name__}]: {e!s}")
+            sub.close()
+            task.add_subtask(sub)
 
         try:
-            sync_standings = SyncStandingsService.sync_all(db, real_competition_id)
+            sync_standings_dict = SyncStandingsService.sync_all(db, real_competition_id)
             db.commit()
-            result["sync_standings"] = sync_standings
+            # SyncStandingsService still returns a dict — wrap it in a Task for consistency
+            sub = Task(name="sync_standings")
+            sub.init_info("queries_executed", "rows_affected")
+            sub.inc("queries_executed", sync_standings_dict.get("queries_executed") or 0)
+            sub.inc("rows_affected", sync_standings_dict.get("rows_affected") or 0)
+            if sync_standings_dict.get("error"):
+                sub.add_error(sync_standings_dict["error"])
+            sub.close(
+                status="Completed"
+                if sync_standings_dict.get("status") == "success"
+                else "Error"
+            )
+            task.add_subtask(sub)
         except Exception as e:  # noqa: BLE001
             db.rollback()
-            result["sync_standings"] = {
-                "status": "error",
-                "error": f"[{type(e).__name__}]: {e!s}",
-            }
+            sub = Task(name="sync_standings", status_on_error="Error")
+            sub.add_error(f"[{type(e).__name__}]: {e!s}")
+            sub.close()
+            task.add_subtask(sub)
 
-        return result
+        task.close()
+        return task
 
     @staticmethod
     def _load_competition(
         db: Session, comp_data: dict
-    ) -> dict[str, str | int | datetime | None]:
+    ) -> tuple[Task, dict[str, str | int | datetime | None]]:
         """Look up a competition in RealCompetitions and stamp lastF42Date.
 
         Competitions are managed externally — this loader does not insert.
@@ -249,12 +248,15 @@ class F42Loader:
             task.inc("updated")
             comp_data = dict(row) | comp_data
         task.close()
-        return comp_data  # No competition found; return input data for error handling
+        return (
+            task,
+            comp_data,
+        )  # No competition found; return input data for error handling
 
     @staticmethod
     def _load_teams(
         db: Session, teams_data: list, comp_data: dict[str, str | int | datetime | None]
-    ) -> dict:
+    ) -> tuple[Task, dict[str, int]]:
         """Load or update teams in RealTeams.
 
         Returns:
@@ -351,12 +353,9 @@ class F42Loader:
             # Also store existing team IDs in mapping
             if result and team_data["realTeamUID"] not in team_uid_mapping:
                 team_uid_mapping[team_data["realTeamUID"]] = result[0]
+
         task.close()
-        return {
-            "inserted": task.info.get("inserted") or 0,
-            "updated": task.info.get("updated") or 0,
-            "team_uid_mapping": team_uid_mapping,
-        }
+        return (task, team_uid_mapping)
 
     @staticmethod
     def _load_players(
@@ -364,7 +363,7 @@ class F42Loader:
         players_data: list,
         comp_data: dict,
         team_uid_mapping: dict,
-    ) -> dict:
+    ) -> Task:
         """Load or update players in RealPlayers."""
         task = Task(name="Load Players")
         task.init_info("inserted", "updated")
@@ -486,10 +485,7 @@ class F42Loader:
                 task.inc("inserted")
 
         task.close()
-        return {
-            "inserted": task.info.get("inserted") or 0,
-            "updated": task.info.get("updated") or 0,
-        }
+        return task
 
     @staticmethod
     def _load_matches_cache(db: Session, comp_data: dict) -> dict:
@@ -535,7 +531,7 @@ class F42Loader:
         matches_cache: dict,
         teams_cache: dict,
         comp_data: dict,
-    ) -> dict:
+    ) -> Task:
         """Load or update matches and match teams."""
         task = Task(name="Load Matches")
         task.init_info("inserted", "updated")
@@ -669,7 +665,4 @@ class F42Loader:
                         )
 
         task.close()
-        return {
-            "inserted": task.info.get("inserted") or 0,
-            "updated": task.info.get("updated") or 0,
-        }
+        return task
