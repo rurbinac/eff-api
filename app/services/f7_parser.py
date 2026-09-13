@@ -301,10 +301,10 @@ class F7Parser:
                     continue
 
                 lineup_data[player_ref] = {
-                    "playerRef": player_ref,
+                    "realPlayerUID": player_ref,
                     "status": match_player.get("Status"),
-                    "formation_place": match_player.get("Formation_Place"),
-                    "shirt_number": match_player.get("ShirtNumber"),
+                    "formationPlace": match_player.get("Formation_Place"),
+                    "shirtNumber": match_player.get("ShirtNumber"),
                     "position": match_player.get("Position"),
                 }
 

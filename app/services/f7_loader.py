@@ -494,12 +494,12 @@ class F7Loader:
             for player_ref, lineup_info in player_lineup.items():
                 if player_ref in players_cache:
                     status = lineup_info.get("status")
-                    shirt_number = lineup_info.get("shirt_number")
-                    formation_place = lineup_info.get("formation_place")
+                    shirt_number = lineup_info.get("shirtNumber")
+                    formation_place = lineup_info.get("formationPlace")
 
                     players_cache[player_ref]["status"] = status
-                    players_cache[player_ref]["formation_place"] = formation_place
-                    players_cache[player_ref]["shirt_number"] = shirt_number
+                    players_cache[player_ref]["formationPlace"] = formation_place
+                    players_cache[player_ref]["shirtNumber"] = shirt_number
 
                     # Initialize performance tracking fields
                     players_cache[player_ref]["assists"] = 0
