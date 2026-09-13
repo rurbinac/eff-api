@@ -4,7 +4,7 @@ from itertools import pairwise
 
 from sqlmodel import Session, select, text
 
-from app.constants import MatchDayStatusConstants
+from app.constants import MatchDayStatusConstants, RealMatchPeriod
 from app.models import MatchDaysStatus
 from app.services.query import QueryService
 from app.utils.dt import (
@@ -55,7 +55,12 @@ class SaveMDS:
                   Call ``.to_dict()`` if a serialisable result is needed.
         """
         self._task.init_info("inserted", "updated", "errors")
-        if self._valid_rc() and self._init_md() and self._init_mmd() and self._init_rm():
+        if (
+            self._valid_rc()
+            and self._init_md()
+            and self._init_mmd()
+            and self._init_rm()
+        ):
             for rc_id, div_md, div_cnt, lea_md, lea_cnt in self._combine_md():
                 self._process_mds(rc_id, div_md, div_cnt, lea_md, lea_cnt)
             self._fix_prev_mds()
@@ -87,7 +92,7 @@ class SaveMDS:
         div_md: int | None,
         div_cnt: int | None,
         lea_md: int | None,
-        lea_cnt: int | None
+        lea_cnt: int | None,
     ) -> None:
         """_summary_
 
@@ -643,12 +648,20 @@ class SaveMDS:
                            MAX(`realMatchDate`) AS `maxRealMatchDate`
                       FROM `RealMatches`
                       WHERE `realCompetitionID` IN :ids
+                        AND `realMatchPeriod` <> :realMatchPeriod
+                        AND `realMatchIgnore` <> 1
                       GROUP BY `realCompetitionID`,
                                `realCompetitionMatchDay`
                       ORDER BY `realCompetitionID`,
                                `realCompetitionMatchDay`
                    """)
-        rows = self._db.execute(sql, {"ids": ids}).mappings().all()  # type: ignore[call-overload]  # aggregate text() query
+        rows = (
+            self._db.execute(
+                sql, {"ids": ids, "realMatchPeriod": RealMatchPeriod.POSTPONED}
+            )
+            .mappings()
+            .all()
+        )  # type: ignore[call-overload]  # aggregate text() query
         self._rm = {}
         for row in rows:
             key = (row["realCompetitionID"], row["realCompetitionMatchDay"])
