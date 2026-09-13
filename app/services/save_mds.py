@@ -601,7 +601,6 @@ class SaveMDS:
                           `realCompetitionMatchDay`
                       FROM `MatchDaysMap`
                       WHERE `baseRealCompetitionID` = :baseRealCompetitionID
-                        AND `realMatchIgnore` <> 1
                         AND `realMatchPeriod` <> :postponed
                       ORDER BY `firstRealCompetitionMatchDay`,
                                `competitionType`,
