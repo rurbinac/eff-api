@@ -134,7 +134,7 @@ class F7Loader:
         # Build players cache with lineup data
         try:
             player_lineup = parsed_data["match_data"].get("player_lineup", {})
-            match_time = parsed_data["match_data"].get("match_time")
+            match_time = parsed_data["match_data"].get("realMatchTime")
             players_cache = F7Loader._build_players_cache(
                 db,
                 real_competition_id,
@@ -196,7 +196,7 @@ class F7Loader:
         # Sort events by eventKey (period, time, timestamp, class)
         events_cache.sort(key=lambda e: e.get("eventKey", ""))
 
-        match_time_str = match_data.get("match_time")
+        match_time_str = match_data.get("realMatchTime")
         try:
             match_time = int(match_time_str) if match_time_str else None
         except (ValueError, TypeError):
@@ -558,12 +558,12 @@ class F7Loader:
         now = utc_now()
 
         # Extract and normalize period data
-        period = RealMatchPeriod.normalize(match_data.get("period"))
+        period = RealMatchPeriod.normalize(match_data.get("realMatchPeriod"))
         real_match_status = RealMatchPeriod.to_match_status(period)
         real_match_ended = RealMatchPeriod.to_match_ended(period)
 
         # Parse date - extract UTC version
-        match_date = match_data.get("date")
+        match_date = match_data.get("realMatchDate")
         if match_date:
             # Convert to ISO format (YYYY-MM-DD HH:MM:SS) removing timezone info
             try:
@@ -571,7 +571,7 @@ class F7Loader:
                 if "T" in match_date:
                     date_part = match_date.split("T")[0]
                     time_part = (
-                        match_data.get("date").split("T")[1].split("+")[0].split("-")[0]
+                        match_date.split("T")[1].split("+")[0].split("-")[0]
                     )
                     match_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
             except:
@@ -579,7 +579,7 @@ class F7Loader:
 
         # Extract attendance (convert to int or None)
         attendance = None
-        attendance_str = match_data.get("attendance")
+        attendance_str = match_data.get("realMatchAttendance")
         if attendance_str:
             try:
                 attendance = int(attendance_str)
@@ -593,9 +593,9 @@ class F7Loader:
             except (ValueError, TypeError):
                 return None
 
-        match_time = safe_int(match_data.get("match_time"))
-        first_half_time = safe_int(match_data.get("first_half_time"))
-        second_half_time = safe_int(match_data.get("second_half_time"))
+        match_time = safe_int(match_data.get("realMatchTime"))
+        first_half_time = safe_int(match_data.get("realMatchFirstHalfTime"))
+        second_half_time = safe_int(match_data.get("realMatchSecondHalfTime"))
 
         # Update RealMatches
         update_query = text("""
@@ -623,13 +623,13 @@ class F7Loader:
             {
                 "match_id": match_ids["realMatchID"],
                 "status": real_match_status,
-                "match_type": match_data.get("match_type"),
+                "match_type": match_data.get("realMatchType"),
                 "period": period,
-                "real_period": match_data.get("period"),
+                "real_period": match_data.get("realMatchPeriod"),
                 "attendance": attendance,
                 "match_date": match_date,
-                "date_offset": match_data.get("date_offset"),
-                "result_type": match_data.get("result_type"),
+                "date_offset": match_data.get("realMatchDateOffset"),
+                "result_type": match_data.get("realMatchResultType"),
                 "match_time": match_time,
                 "first_half_time": first_half_time,
                 "second_half_time": second_half_time,
@@ -774,9 +774,9 @@ class F7Loader:
             pass
 
         # Get match date and status
-        match_date = match_data.get("date")
-        match_time = match_data.get("match_time")
-        match_status = RealMatchPeriod.to_match_status(match_data.get("period"))
+        match_date = match_data.get("realMatchDate")
+        match_time = match_data.get("realMatchTime")
+        match_status = RealMatchPeriod.to_match_status(match_data.get("realMatchPeriod"))
 
         # Prepare updates for both teams
         teams_to_update = [
@@ -914,9 +914,9 @@ class F7Loader:
         now = utc_now()
 
         # Get match data
-        match_date = match_data.get("date")
-        match_time = match_data.get("match_time")
-        match_status = RealMatchPeriod.to_match_status(match_data.get("period"))
+        match_date = match_data.get("realMatchDate")
+        match_time = match_data.get("realMatchTime")
+        match_status = RealMatchPeriod.to_match_status(match_data.get("realMatchPeriod"))
 
         # Build team info lookup (side -> team info)
         team_by_side = {}
