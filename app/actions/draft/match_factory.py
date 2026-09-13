@@ -12,7 +12,7 @@ from app.constants import (
     MatchCreationConstants,
     MatchStatusConstants,
 )
-from app.utils.match_day_map_keys import lea_map_days_map_key
+from app.utils.match_day_map_keys import league_map_days_map_key
 
 
 class MatchFactory(ABC):
@@ -554,7 +554,7 @@ class LeagueKOFactory(DivisionKOFactory):
                 return False
             if division["leagueMatches"] != MatchCreationConstants.READY:
                 return False
-            matchDayMapKey = lea_map_days_map_key(
+            matchDayMapKey = league_map_days_map_key(
                 self._db,
                 leaCnt=sum(d["numTeams"] for d in self._divisions),
                 key=division["matchDayMapKey"],

@@ -16,7 +16,10 @@ from app.constants import (
     DraftPositionConstants,
     MatchCreationConstants,
 )
-from app.utils.match_day_map_keys import div_map_days_map_key, split_map_days_map_key
+from app.utils.match_day_map_keys import (
+    division_map_days_map_key,
+    split_map_days_map_key,
+)
 from app.utils.member_keys import DraftTeamMembers, MKeys
 
 
@@ -134,7 +137,7 @@ class DraftMember(DraftBase):
             dict: _description_
         """
         d = self.division
-        matchDayMapKey = div_map_days_map_key(
+        matchDayMapKey = division_map_days_map_key(
             self._dh.db, d.get("numTeams"), rcID=d.get("baseRealCompetitionID")
         )
         _, firstRealCompetitionMatchDay, _, _, _ = split_map_days_map_key(

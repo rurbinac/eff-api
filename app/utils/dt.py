@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
 
 _UTC_LOWEST = datetime(2000, 1, 1, tzinfo=timezone.utc).replace(tzinfo=None)
 _UTC_LARGEST = datetime.max.replace(tzinfo=timezone.utc).replace(tzinfo=None)
+
 
 def utc_now(microsecond: bool = False) -> datetime:
     """Current UTC time as a naive datetime (DB-safe).
@@ -29,6 +30,27 @@ def utc_lowest() -> datetime:
 def utc_largest() -> datetime:
     """Return a largest reasonable UTC datetime (DB-safe)."""
     return _UTC_LARGEST
+
+
+def add_minutes(dt: datetime, minutes: int) -> datetime:
+    """Return dt shifted by the given number of minutes (negative to go back)."""
+    return dt + timedelta(minutes=minutes)
+
+
+def add_hours(dt: datetime, hours: int) -> datetime:
+    """Return dt shifted by the given number of hours (negative to go back)."""
+    return dt + timedelta(hours=hours)
+
+
+def add_days(dt: datetime, days: int) -> datetime:
+    """Return dt shifted by the given number of days (negative to go back)."""
+    return dt + timedelta(days=days)
+
+
+def next_midnight(dt: datetime) -> datetime:
+    """Return 00:00:00 of the day after dt (always moves forward at least one day)."""
+    return (dt + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
 
 class UTCDateTime(TypeDecorator):
     """

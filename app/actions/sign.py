@@ -54,7 +54,11 @@ class SignInAction:
         # Add RealCompetition context
         rc_data = QueryService.get_current_base_competition(db)
         if rc_data:
-            session_data.update(rc_data)
+            session_data.update({"baseRealCompetitionID": rc_data["realCompetitionID"],
+                                 "realCompetitionLastMatchDay": rc_data["realCompetitionLastMatchDay"],
+                                 "extraRealCompetitionID": rc_data["extraRealCompetitionID"],
+                                 "baseRealCompetitionMatchDayBeforeExtra": rc_data["realCompetitionExtraMatchDay"],
+                                 "useExtraRealCompetition": rc_data["useExtraRealCompetition"]})
 
         # Add MatchDayStatus context
         if "baseRealCompetitionID" in session_data:

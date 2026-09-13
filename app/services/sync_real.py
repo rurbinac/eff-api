@@ -174,6 +174,10 @@ class SyncRealService:
         except Exception as e:
             task.add_error(str(e))
 
+        # Invalidate the base-competition cache — RealCompetitions rows may have changed.
+        from app.services import QueryService
+        QueryService.clear_real_competition_cache()
+
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
 

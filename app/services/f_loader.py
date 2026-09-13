@@ -10,6 +10,7 @@ from app.models import Feed
 from app.services.f7_loader import F7Loader
 from app.services.f42_loader import F42Loader
 from app.utils.dt import utc_now
+from app.utils.tasks import Task
 
 
 class FeedTypes(StrEnum):
@@ -119,14 +120,16 @@ class FLoader:
         return feed if file_changed or force else None
 
     @staticmethod
-    def log_feed_end(db: Session, feed: Feed, result: dict | None = None) -> Feed:
+    def log_feed_end(
+        db: Session, feed: Feed, result: Task | dict | None = None
+    ) -> Feed:
         """Stamp endDate, duration, and results once processing is done."""
         end = utc_now()
         feed.endDate = end
         feed.duration = (end - feed.startDate).total_seconds()
         feed.updatedIn = end
         if result is not None:
-            feed.results = result
+            feed.results = result if isinstance(result, dict) else result.to_dict()
         try:
             db.commit()
         except Exception:  # noqa: BLE001
@@ -177,4 +180,3 @@ class FLoader:
             FLoader.delete_temp_file(tmp_name)
 
         return FLoader.log_feed_end(db, feed, result=result)
-

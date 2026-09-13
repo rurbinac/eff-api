@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.constants import DraftPositionConstants, RealMatchPeriod
 from app.models import Feed
 from app.services.f42_parser import F42Parser
+from app.services.save_mds import SaveMDS
 from app.services.sync_real import SyncRealService
 from app.services.sync_standings import SyncStandingsService
 from app.utils.dt import utc_now
@@ -153,8 +154,14 @@ class F42Loader:
             db.rollback()
             task.add_error(f"Error syncing data [{type(e).__name__}]: {e!s}")
 
-        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+        try:
+            mds_result = F42Loader._save_mds(db, comp_data["realCompetitionID"])
+            task.add_subtask(mds_result)
+        except Exception as e:
+            db.rollback()
+            task.add_error(f"Error saving MDS data [{type(e).__name__}]: {e!s}")
 
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return FLoader.log_feed_end(db, feed, result=task)
 
     @staticmethod
@@ -188,6 +195,19 @@ class F42Loader:
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
+
+    @staticmethod
+    def _save_mds(db: Session, real_competition_id: int) -> Task:
+        """_summary_
+
+        Args:
+            db (Session): _description_
+            real_competition_id (int): _description_
+
+        Returns:
+            Task: _description_
+        """
+        return SaveMDS(db, real_competition_id).process()
 
     @staticmethod
     def _load_competition(

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy.orm import Session
 from sqlmodel import SQLModel
@@ -22,8 +22,17 @@ from app.models import (
 class QueryService:
     """Service class for common database queries."""
 
+    # Cache for get_current_base_competition, keyed by season_id.
+    # Invalidate with clear_real_competition_cache() after updating RealCompetitions.
+    _real_competition_cache: ClassVar[dict[int, dict | None]] = {}
+
+    @classmethod
+    def clear_real_competition_cache(cls) -> None:
+        """Invalidate the cached result of get_current_base_competition."""
+        cls._real_competition_cache.clear()
+
     @staticmethod
-    def get_season_id(dt: datetime | None = None) -> int:
+    def get_season_id(dt: datetime | None = None, delta_seasons: int = 0) -> int:
         """
         Calculate current season ID based on month.
         If current month is 1-7 (Jan-Jul), season = previous year
@@ -33,34 +42,83 @@ class QueryService:
             dt = RequestContext.get_datetime()
 
         if dt.month >= RealCompetitionConstants.SEASON_START_MONTH:
-            return dt.year
+            return dt.year + delta_seasons
         else:
-            return dt.year - 1
+            return dt.year - 1 + delta_seasons
 
     @staticmethod
-    def get_current_base_competition(db: Session) -> dict | None:
-        """Get the current base RealCompetition (EN_PR)."""
-        season_id = QueryService.get_season_id()
-        rc = (
+    def get_competition(db: Session, id: int) -> dict | None:
+        """Get a RealCompetition by its ID."""
+        for rc in QueryService._real_competition_cache.values():
+            if rc and rc.get("realCompetitionID") == id:
+                return rc
+
+        return QueryService._return_competition(
+            db.query(RealCompetition)
+            .filter(RealCompetition.realCompetitionID == id)
+            .first()
+        )
+
+    @staticmethod
+    def get_current_base_competition(
+        db: Session, delta_seasons: int = 0
+    ) -> dict | None:
+        """Get the current base RealCompetition (EN_PR).
+
+        Results are cached in-process per season_id. Call
+        QueryService.clear_real_competition_cache() after updating RealCompetitions.
+        """
+        return QueryService._get_current_competition(
+            db, RealCompetitionConstants.BASE_SYMID, delta_seasons=delta_seasons
+        )
+
+    @staticmethod
+    def get_current_extra_competition(
+        db: Session, delta_seasons: int = 0
+    ) -> dict | None:
+        """Get the current base RealCompetition (EN_PR).
+
+        Results are cached in-process per season_id. Call
+        QueryService.clear_real_competition_cache() after updating RealCompetitions.
+        """
+        return QueryService._get_current_competition(
+            db, RealCompetitionConstants.EXTRA_SYMID, delta_seasons=delta_seasons
+        )
+
+    @staticmethod
+    def _get_current_competition(
+        db: Session, symid: str, delta_seasons: int = 0
+    ) -> dict | None:
+        """Get the current extra RealCompetition (EN_PR_CUP).
+
+        Results are cached in-process per season_id. Call
+        QueryService.clear_real_competition_cache() after updating RealCompetitions.
+        """
+        season_id = QueryService.get_season_id(delta_seasons=delta_seasons)
+        for rc in QueryService._real_competition_cache.values():
+            if (
+                rc
+                and rc.get("realCompetitionSYMID") == symid
+                and rc.get("realCompetitionSeasonId") == str(season_id)
+            ):
+                return rc
+
+        return QueryService._return_competition(
             db.query(RealCompetition)
             .filter(
-                RealCompetition.realCompetitionSYMID
-                == RealCompetitionConstants.BASE_SYMID,
+                RealCompetition.realCompetitionSYMID == symid,
                 RealCompetition.realCompetitionSeasonId == str(season_id),
             )
             .first()
         )
 
+    @staticmethod
+    def _return_competition(rc) -> dict | None:
         if not rc:
             return None
-
-        return {
-            "baseRealCompetitionID": rc.realCompetitionID,
-            "realCompetitionLastMatchDay": rc.realCompetitionLastMatchDay,
-            "extraRealCompetitionID": rc.extraRealCompetitionID,
-            "baseRealCompetitionMatchDayBeforeExtra": rc.realCompetitionExtraMatchDay,
-            "useExtraRealCompetition": rc.useExtraRealCompetition,
-        }
+        rc_dict = QueryService._to_dict(rc)
+        QueryService._real_competition_cache[rc.realCompetitionID] = rc_dict
+        return rc_dict
 
     @staticmethod
     def get_current_match_day_status(
