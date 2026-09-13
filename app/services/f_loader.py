@@ -2,7 +2,9 @@ import hashlib
 import os
 import re
 import tempfile
+import time
 from enum import StrEnum
+from typing import ClassVar
 
 from sqlalchemy.orm import Session
 
@@ -28,6 +30,10 @@ class FeedTypes(StrEnum):
 
 class FLoader:
     """Central dispatcher for OPTA XML feed files."""
+
+    # Tracks wall-clock start time (perf_counter) per feedID for accurate duration measurement.
+    # utc_now() truncates to seconds, so (endDate - startDate) would be 0 for sub-second runs.
+    _start_times: ClassVar[dict[int, float]] = {}
 
     # files like: srml-8-2012-results.xml  (competition 8=EPL, 1=Championship)
     _PATTERN_F1 = re.compile(r"^srml-([18])-(\d{4})-results\.xml$")
@@ -117,16 +123,25 @@ class FLoader:
             db.add(feed)
         db.commit()
         db.refresh(feed)
-        return feed if file_changed or force else None
+        if file_changed or force:
+            # Record wall-clock start for accurate millisecond duration in log_feed_end.
+            # feed.startDate loses sub-second precision after the DB round-trip.
+            FLoader._start_times[feed.feedID] = time.perf_counter()
+            return feed
+        return None
 
     @staticmethod
     def log_feed_end(
         db: Session, feed: Feed, result: Task | dict | None = None
     ) -> Feed:
-        """Stamp endDate, duration, and results once processing is done."""
+        """Stamp endDate, duration (in ms), and results once processing is done."""
         end = utc_now()
         feed.endDate = end
-        feed.duration = (end - feed.startDate).total_seconds()
+        t0 = FLoader._start_times.pop(feed.feedID, None)
+        if t0 is not None:
+            feed.duration = round((time.perf_counter() - t0) * 1000, 3)  # milliseconds
+        else:
+            feed.duration = round((end - feed.startDate).total_seconds() * 1000, 3)
         feed.updatedIn = end
         if result is not None:
             feed.results = result if isinstance(result, dict) else result.to_dict()
