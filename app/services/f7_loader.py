@@ -548,6 +548,29 @@ class F7Loader:
         return players_cache
 
     @staticmethod
+    def _fmt_date(raw: str | None) -> str | None:
+        """Convert OPTA date string to MySQL DATETIME format.
+
+        Handles the compact format used in F7 XML:
+            20260913T163000+0100  ->  2026-09-13 16:30:00
+            20260913T163000Z      ->  2026-09-13 16:30:00
+
+        The timezone offset is discarded; callers that need UTC conversion
+        should handle that separately.
+        """
+        if not raw or "T" not in raw:
+            return raw
+        try:
+            date_part = raw.split("T")[0]
+            time_part = raw.split("T")[1].split("+")[0].split("-")[0].split("Z")[0]
+            return (
+                f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
+                f" {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+            )
+        except Exception:
+            return raw
+
+    @staticmethod
     def update_match_quick_mode(db: Session, match_ids: dict, match_data: dict) -> dict:
         """Update RealMatches with F7 data in Quick mode.
 
@@ -566,20 +589,8 @@ class F7Loader:
         real_match_status = RealMatchPeriod.to_match_status(period)
         real_match_ended = RealMatchPeriod.to_match_ended(period)
 
-        # Parse date - extract UTC version
-        match_date = match_data.get("realMatchDate")
-        if match_date:
-            # Convert to ISO format (YYYY-MM-DD HH:MM:SS) removing timezone info
-            try:
-                # Format: 20250519T200000+0100 -> extract date/time part
-                if "T" in match_date:
-                    date_part = match_date.split("T")[0]
-                    time_part = (
-                        match_date.split("T")[1].split("+")[0].split("-")[0]
-                    )
-                    match_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
-            except:
-                pass
+        # Normalize date: 20260913T163000+0100 -> 2026-09-13 16:30:00
+        match_date = F7Loader._fmt_date(match_data.get("realMatchDate"))
 
         # Extract attendance (convert to int or None)
         attendance = None
@@ -778,7 +789,7 @@ class F7Loader:
             pass
 
         # Get match date and status
-        match_date = match_data.get("realMatchDate")
+        match_date = F7Loader._fmt_date(match_data.get("realMatchDate"))
         match_time = match_data.get("realMatchTime")
         match_status = RealMatchPeriod.to_match_status(match_data.get("realMatchPeriod"))
 
@@ -918,7 +929,7 @@ class F7Loader:
         now = utc_now()
 
         # Get match data
-        match_date = match_data.get("realMatchDate")
+        match_date = F7Loader._fmt_date(match_data.get("realMatchDate"))
         match_time = match_data.get("realMatchTime")
         match_status = RealMatchPeriod.to_match_status(match_data.get("realMatchPeriod"))
 
