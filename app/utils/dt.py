@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
 
-_UTC_LOWEST = datetime(2000, 1, 1, tzinfo=timezone.utc).replace(tzinfo=None)
+_UTC_LOWEST = datetime(1000, 1, 1, tzinfo=timezone.utc).replace(tzinfo=None)  # MySQL DATETIME min
 _UTC_LARGEST = datetime(9999, 12, 31, 23, 59, 59, tzinfo=timezone.utc).replace(tzinfo=None)  # MySQL DATETIME max
 
 
@@ -19,10 +19,9 @@ def utc_now(microsecond: bool = False) -> datetime:
 
 
 def utc_lowest() -> datetime:
-    """Sentinel 'never processed' datetime (2000-01-01 UTC, naive, DB-safe).
+    """Sentinel minimum datetime (1000-01-01 UTC, naive, DB-safe — MySQL DATETIME min).
 
-    Used as the default for lastF*Date columns so that any real feed date
-    compares as newer.
+    Used as the open-ended lower bound so that any real date compares as newer.
     """
     return _UTC_LOWEST
 
