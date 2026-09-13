@@ -308,35 +308,39 @@ class F7Loader:
 
         Merges the DB row (realCompetitionID, baseRealCompetitionID, etc.) into
         the parser-supplied competition dict so callers have a single source of truth.
+
+        Note: F7 feeds carry a short numeric season_id (e.g. "7") that does not
+        match the season identifier stored by F42 feeds.  We therefore look up by
+        realCompetitionSYMID alone and take the most recently updated record.
         """
         symid = competition.get("realCompetitionSYMID")
-        season_id = competition.get("realCompetitionSeasonId")
 
-        if not (symid and season_id):
-            raise ValueError("Missing realCompetitionSYMID or realCompetitionSeasonId in competition data")
+        if not symid:
+            raise ValueError("Missing realCompetitionSYMID in competition data")
 
         query = text("""
             SELECT `realCompetitionID`,
                    `baseRealCompetitionID`,
                    `extraRealCompetitionID`,
                    `realCompetitionUID`,
+                   `realCompetitionSeasonId`,
                    `realCompetitionCountry`,
                    `realCompetitionFirstMatchDay`,
                    `realCompetitionLastMatchDay`
             FROM `RealCompetitions`
             WHERE `realCompetitionSYMID` = :symid
-              AND `realCompetitionSeasonId` = :season_id
+            ORDER BY `updatedIn` DESC
             LIMIT 1
         """)
 
         row = (
-            db.execute(query, {"symid": symid, "season_id": season_id})
+            db.execute(query, {"symid": symid})
             .mappings()
             .first()
         )
 
         if not row:
-            raise ValueError(f"RealCompetition not found for {symid}/{season_id}")
+            raise ValueError(f"RealCompetition not found for symid={symid!r}")
 
         # Merge: DB data takes precedence for shared keys (e.g. realCompetitionUID)
         return dict(row) | competition
