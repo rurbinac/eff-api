@@ -2,7 +2,8 @@ from collections.abc import Generator
 from datetime import datetime
 from itertools import pairwise
 
-from sqlmodel import Session, select, text
+from sqlalchemy.orm import Session
+from sqlmodel import select, text
 
 from app.constants import MatchDayStatusConstants, RealMatchPeriod
 from app.models import MatchDaysStatus
@@ -32,10 +33,12 @@ class SaveMDS:
     BASE_MD_DAYS = 1
 
     def __init__(self, db: Session, real_competition_id: int | None = None):
-        """_summary_
+        """Initialise SaveMDS for a given competition.
 
         Args:
-            db (Session): _description_
+            db: SQLAlchemy database session.
+            real_competition_id: ID of any competition in the season to process.
+                If None, the current base competition is resolved automatically.
         """
         self._task: Task = Task(name="SaveMDS", status_on_error=Task.ERROR)
         self._db: Session = db
@@ -313,8 +316,7 @@ class SaveMDS:
             mds["finishMatchDay"] = self._finish_match_day(i)
             mds["finishBaseMatchDay"] = self._finish_base_match_day(i)
             if mds["active"]:
-                if not mds["locked"]:
-                    self._calc_mds_dates(i, prev_active, lowest_date)
+                self._calc_mds_dates(i, prev_active, lowest_date)
                 for prev, curr in pairwise(statuses):
                     mds["start" + curr] = mds["finish" + prev]
                 self._check_overlapped(i, prev_active, statuses)
@@ -342,16 +344,17 @@ class SaveMDS:
             self._mds[i]["startWaivers"] = lowest_date
             self._mds[i]["finishWaivers"] = lowest_date
             self._mds[i]["finishWaiversSettle"] = lowest_date
-        else:
+        elif not self._mds[i]["locked"]:
             # All the remaining cases
             self._mds[i]["startWaivers"] = self._mds[prev_active]["finishPostMatch"]
             self._mds[i]["finishWaivers"] = self._finish_waivers(i)
             self._mds[i]["finishWaiversSettle"] = self._finish_waivers_settle(i)
-        self._mds[i]["finishOpenWaivers"] = self._finish_open_waivers(i)
-        self._mds[i]["finishOpenWaiversSettle"] = self._mds[i]["finishOpenWaivers"]
-        self._mds[i]["finishPreMatch"] = self._mds[i]["startMatchDay"]
-        self._mds[i]["finishMatch"] = self._mds[i]["finishMatchDay"]
-        self._mds[i]["finishPostMatch"] = self._finish_post_match(i)
+        if not self._mds[i]["locked"]:
+            self._mds[i]["finishOpenWaivers"] = self._finish_open_waivers(i)
+            self._mds[i]["finishOpenWaiversSettle"] = self._mds[i]["finishOpenWaivers"]
+            self._mds[i]["finishPreMatch"] = self._mds[i]["startMatchDay"]
+            self._mds[i]["finishMatch"] = self._mds[i]["finishMatchDay"]
+            self._mds[i]["finishPostMatch"] = self._finish_post_match(i)
 
     def _check_overlapped(
         self, i: int, prev_active: int | None, statuses: tuple[str, ...]
@@ -468,21 +471,19 @@ class SaveMDS:
 
         ``matchDayStatusID`` and ``locked`` are already present in each
         mds_data entry (populated by ``_init_mds`` via ``_read_mds``).
-        New records (no ID) are inserted; existing ones go through
-        pre-update logic before their fields are written.
+        For locked records, date fields in mds_data already carry the DB
+        values preserved by ``_read_mds``, so the setattr loop writes them
+        back unchanged — no extra guard needed here.
+        New records (no ID) are inserted; existing ones are updated in full.
         """
         for mds_data in self._mds:
             try:
                 match_day_status_id = mds_data.get("matchDayStatusID")
-                locked = mds_data.get("locked", 0)  # noqa: F841  (reserved for pre-update logic)
                 if match_day_status_id is None:
                     self._db.add(MatchDaysStatus(**mds_data))
                     self._task.inc("inserted")
                 else:
                     existing = self._db.get(MatchDaysStatus, match_day_status_id)
-                    # --- pre-update logic ---
-
-                    # --- end pre-update logic ---
                     for key, value in mds_data.items():
                         setattr(existing, key, value)
                     self._task.inc("updated")
