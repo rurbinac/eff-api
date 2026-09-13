@@ -186,7 +186,14 @@ class FLoader:
                         db, feed=feed, tmp_name=tmp_name, quick_mode=True
                     )
                 case _:
-                    result = {}
+                    task = Task(
+                        name=f"Load {feed.feedType} file: {feed.feedName}",
+                        status=Task.RUNNING,
+                        status_on_error=Task.ERROR,
+                    )
+                    task.add_error(f"No loader implemented for feed type '{feed.feedType}'")
+                    task.close()
+                    result = task
 
         except Exception as e:  # noqa: BLE001
             result = {"status": "error", "error": str(e)}
