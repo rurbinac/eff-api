@@ -91,6 +91,7 @@ class F7Loader:
         # Parse the file
         try:
             parsed_data = F7Parser.parse_file(file_path)
+            task.add_subtask(parsed_data["task"])
         except Exception as e:
             task.add_error(f"Error parsing file [{type(e).__name__}]: {e!s}")
             task.close()
@@ -428,8 +429,8 @@ class F7Loader:
         db: Session,
         real_competition_id: int,
         players: dict,
-        player_lineup: dict = None,
-        match_time: int = None,
+        player_lineup: dict | None = None,
+        match_time: int | None = None,
     ) -> dict:
         """Build players cache from RealPlayers table and PlayerLineUp data."""
         # Start with player data from XML

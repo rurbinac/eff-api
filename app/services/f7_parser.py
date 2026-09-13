@@ -1,11 +1,14 @@
 """F7 OPTA XML feed parser - single match detailed results."""
 
 import xml.etree.ElementTree as ET
-from typing import Optional
+
+from app.utils.tasks import Task
 
 
 class F7Parser:
     """Parse F7 OPTA XML feeds for detailed match results."""
+
+    _FEED = "F7"
 
     @staticmethod
     def parse_file(file_path: str) -> dict:
@@ -15,12 +18,24 @@ class F7Parser:
             file_path: Path to the F7 XML file
 
         Returns:
-            Dictionary with parsed data: competition, match_id, teams, players
+            Dictionary with parsed data: task, competition, match_id, teams, players
         """
-        tree = ET.parse(file_path)
-        root = tree.getroot()
-
-        return F7Parser._parse_root(root)
+        task = Task(
+            name=f"Parse {F7Parser._FEED} file: {file_path}",
+            status_on_error=Task.ERROR,
+        )
+        try:
+            tree = ET.parse(file_path)
+            root = tree.getroot()
+            result = F7Parser._parse_root(root)
+            task.add_subtask(result["task"])
+        except Exception as e:
+            task.add_error(f"[{type(e).__name__}]: {e!s}")
+            task.close()
+            raise
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+        result["task"] = task
+        return result
 
     @staticmethod
     def parse_string(xml_string: str) -> dict:
@@ -30,16 +45,38 @@ class F7Parser:
             xml_string: XML content as string
 
         Returns:
-            Dictionary with parsed data
+            Dictionary with parsed data: task, competition, match_id, teams, players
         """
-        root = ET.fromstring(xml_string)
-        return F7Parser._parse_root(root)
+        task = Task(
+            name=f"Parse {F7Parser._FEED} string",
+            status_on_error=Task.ERROR,
+        )
+        try:
+            root = ET.fromstring(xml_string)
+            result = F7Parser._parse_root(root)
+            task.add_subtask(result["task"])
+        except Exception as e:
+            task.add_error(f"[{type(e).__name__}]: {e!s}")
+            task.close()
+            raise
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+        result["task"] = task
+        return result
 
     @staticmethod
     def _parse_root(root) -> dict:
         """Parse the root SoccerFeed element."""
+        task = Task(name="Parse F7", status_on_error=Task.ERROR)
+        task.init_info(
+            "teams", "teams (err)",
+            "players", "players (err)",
+            "lineup", "goals", "bookings", "substitutions",
+        )
+
         doc = root.find('.//SoccerDocument')
         if doc is None:
+            task.add_error("No SoccerDocument found in F7 feed")
+            task.close()
             raise ValueError("No SoccerDocument found in F7 feed")
 
         # Extract match ID from SoccerDocument uID
@@ -59,29 +96,41 @@ class F7Parser:
             team_uid = team_elem.get('uID')
             if team_uid:
                 teams_data[team_uid] = F7Parser._parse_team(team_elem)
+                task.inc("teams")
                 # Extract players from this team
                 for player_elem in team_elem.findall('Player'):
                     player = F7Parser._parse_player(player_elem, team_uid)
                     if player:
                         players_data[player['realPlayerUID']] = player
+                        task.inc("players")
+                    else:
+                        task.inc("players (err)")
+            else:
+                task.inc("teams (err)")
 
         # Parse PlayerLineUp data from MatchData
         player_lineup_data = F7Parser._parse_player_lineup(doc)
         match_data['player_lineup'] = player_lineup_data
+        task.assign("lineup", len(player_lineup_data))
 
         # Parse goals from MatchData
         goals = F7Parser._parse_goals(doc)
         match_data['goals'] = goals
+        task.assign("goals", len(goals))
 
         # Parse bookings from MatchData
         bookings = F7Parser._parse_bookings(doc)
         match_data['bookings'] = bookings
+        task.assign("bookings", len(bookings))
 
         # Parse substitutions from MatchData
         substitutions = F7Parser._parse_substitutions(doc)
         match_data['substitutions'] = substitutions
+        task.assign("substitutions", len(substitutions))
 
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return {
+            'task': task,
             'match_id': match_id,
             'competition': competition,
             'match_data': match_data,
