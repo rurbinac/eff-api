@@ -404,6 +404,6 @@ class F42Parser:
         if not raw:
             return utc_lowest()
         try:
-            return datetime.strptime(raw, "%Y%m%dT%H%M%SZ")
+            return datetime.strptime(raw, "%Y%m%dT%H%M%S%z").replace(tzinfo=None)
         except ValueError:
             return utc_lowest()
