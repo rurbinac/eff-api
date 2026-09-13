@@ -134,14 +134,14 @@ class FLoader:
     def log_feed_end(
         db: Session, feed: Feed, result: Task | dict | None = None
     ) -> Feed:
-        """Stamp endDate, duration (in ms), and results once processing is done."""
+        """Stamp endDate, duration (seconds, 3 decimal places), and results once processing is done."""
         end = utc_now()
         feed.endDate = end
         t0 = FLoader._start_times.pop(feed.feedID, None)
         if t0 is not None:
-            feed.duration = round((time.perf_counter() - t0) * 1000, 3)  # milliseconds
+            feed.duration = round(time.perf_counter() - t0, 3)  # seconds, 3 decimal places
         else:
-            feed.duration = round((end - feed.startDate).total_seconds() * 1000, 3)
+            feed.duration = round((end - feed.startDate).total_seconds(), 3)
         feed.updatedIn = end
         if result is not None:
             feed.results = result if isinstance(result, dict) else result.to_dict()
