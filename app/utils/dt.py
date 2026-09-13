@@ -4,7 +4,7 @@ from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
 
 _UTC_LOWEST = datetime(2000, 1, 1, tzinfo=timezone.utc).replace(tzinfo=None)
-_UTC_LARGEST = datetime.max.replace(tzinfo=timezone.utc).replace(tzinfo=None)
+_UTC_LARGEST = datetime(9999, 12, 31, 23, 59, 59, tzinfo=timezone.utc).replace(tzinfo=None)  # MySQL DATETIME max
 
 
 def utc_now(microsecond: bool = False) -> datetime:
