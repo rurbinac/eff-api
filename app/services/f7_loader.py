@@ -97,15 +97,17 @@ class F7Loader:
             task.close()
             return task, None
 
-        # Get RealCompetitions record
+        # Get RealCompetitions record — enriches the parser competition dict with DB data
         try:
-            real_competition_id = F7Loader._get_real_competition(
+            competition = F7Loader._get_real_competition(
                 db, parsed_data["competition"]
             )
         except Exception as e:
             task.add_error(f"Failed to get RealCompetitions [{type(e).__name__}]: {e!s}")
             task.close()
             return task, None
+
+        real_competition_id = competition["realCompetitionID"]
 
         # Build teams cache
         try:
@@ -148,8 +150,7 @@ class F7Loader:
         task.close(status=Task.COMPLETED)
         return task, {
             "parsed_data": parsed_data,
-            "competition": parsed_data["competition"],
-            "real_competition_id": real_competition_id,
+            "competition": competition,
             "match_ids": match_ids,
             "teams_cache": teams_cache,
             "players_cache": players_cache,
@@ -261,7 +262,7 @@ class F7Loader:
                     match_ids,
                     match_data,
                     foundation["teams_cache"],
-                    foundation["real_competition_id"],
+                    foundation["competition"]["realCompetitionID"],
                     real_match_day,
                 )
                 task.assign(
@@ -279,7 +280,7 @@ class F7Loader:
                     match_data,
                     foundation["teams_cache"],
                     processed_data["standings_data"],
-                    foundation["real_competition_id"],
+                    foundation["competition"]["realCompetitionID"],
                     real_match_day,
                 )
                 task.assign(
@@ -302,8 +303,12 @@ class F7Loader:
         return task
 
     @staticmethod
-    def _get_real_competition(db: Session, competition: dict) -> int:
-        """Get RealCompetitions record ID."""
+    def _get_real_competition(db: Session, competition: dict) -> dict:
+        """Look up RealCompetitions and return the competition dict enriched with DB data.
+
+        Merges the DB row (realCompetitionID, baseRealCompetitionID, etc.) into
+        the parser-supplied competition dict so callers have a single source of truth.
+        """
         symid = competition.get("realCompetitionSYMID")
         season_id = competition.get("realCompetitionSeasonId")
 
@@ -311,25 +316,30 @@ class F7Loader:
             raise ValueError("Missing realCompetitionSYMID or realCompetitionSeasonId in competition data")
 
         query = text("""
-            SELECT realCompetitionID
+            SELECT `realCompetitionID`,
+                   `baseRealCompetitionID`,
+                   `extraRealCompetitionID`,
+                   `realCompetitionUID`,
+                   `realCompetitionCountry`,
+                   `realCompetitionFirstMatchDay`,
+                   `realCompetitionLastMatchDay`
             FROM `RealCompetitions`
-            WHERE realCompetitionSYMID = :symid
-              AND realCompetitionSeasonId = :season_id
+            WHERE `realCompetitionSYMID` = :symid
+              AND `realCompetitionSeasonId` = :season_id
             LIMIT 1
         """)
 
-        result = db.execute(
-            query,
-            {
-                "symid": symid,
-                "season_id": season_id,
-            },
-        ).first()
+        row = (
+            db.execute(query, {"symid": symid, "season_id": season_id})
+            .mappings()
+            .first()
+        )
 
-        if not result:
+        if not row:
             raise ValueError(f"RealCompetition not found for {symid}/{season_id}")
 
-        return result[0]
+        # Merge: DB data takes precedence for shared keys (e.g. realCompetitionUID)
+        return dict(row) | competition
 
     @staticmethod
     def _build_teams_cache(
