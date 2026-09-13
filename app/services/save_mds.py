@@ -4,7 +4,7 @@ from itertools import pairwise
 
 from sqlmodel import Session, select, text
 
-from app.constants import MatchDayStatusConstants, RealMatchPeriod
+from app.constants import MatchDayStatusConstants
 from app.models import MatchDaysStatus
 from app.services.query import QueryService
 from app.utils.dt import (
@@ -601,7 +601,6 @@ class SaveMDS:
                           `realCompetitionMatchDay`
                       FROM `MatchDaysMap`
                       WHERE `baseRealCompetitionID` = :baseRealCompetitionID
-                        AND `realMatchPeriod` <> :postponed
                       ORDER BY `firstRealCompetitionMatchDay`,
                                `competitionType`,
                                `maxNumTeams`,
@@ -610,10 +609,7 @@ class SaveMDS:
         rows = (
             self._db.execute(  # type: ignore[call-overload]  # raw text() query needs .mappings()
                 sql,
-                {
-                    "baseRealCompetitionID": self._base_rc_id,
-                    "postponed": RealMatchPeriod.POSTPONED,
-                },
+                {"baseRealCompetitionID": self._base_rc_id},
             )
             .mappings()
             .all()
