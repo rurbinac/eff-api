@@ -221,7 +221,7 @@ class SaveMDS:
             preserved through the ``_init_mds`` merge.
             Returns ``{"locked": 0}`` when no row exists yet.
         """
-        row = self._db.exec(
+        row = self._db.execute(
             select(
                 MatchDaysStatus.matchDayStatusID,
                 MatchDaysStatus.locked,
