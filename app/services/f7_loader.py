@@ -250,7 +250,7 @@ class F7Loader:
         # Parse match day once for both standings updates
         real_match_day = None
         try:
-            real_match_day = int(foundation["competition"].get("matchday"))
+            real_match_day = int(foundation["competition"].get("realCompetitionMatchDay"))
         except (ValueError, TypeError):
             pass
 
@@ -304,11 +304,11 @@ class F7Loader:
     @staticmethod
     def _get_real_competition(db: Session, competition: dict) -> int:
         """Get RealCompetitions record ID."""
-        symid = competition.get("symid")
-        season_id = competition.get("season_id")
+        symid = competition.get("realCompetitionSYMID")
+        season_id = competition.get("realCompetitionSeasonId")
 
         if not (symid and season_id):
-            raise ValueError("Missing symid or season_id in competition data")
+            raise ValueError("Missing realCompetitionSYMID or realCompetitionSeasonId in competition data")
 
         query = text("""
             SELECT realCompetitionID

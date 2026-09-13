@@ -146,7 +146,7 @@ class F7Parser:
             return {}
 
         competition = {
-            'uID': comp_elem.get('uID'),
+            'realCompetitionUID': comp_elem.get('uID'),
         }
 
         # Extract stats
@@ -154,11 +154,11 @@ class F7Parser:
             stat_type = stat.get('Type')
             stat_value = stat.text
             if stat_type == 'symid':
-                competition['symid'] = stat_value
+                competition['realCompetitionSYMID'] = stat_value
             elif stat_type == 'season_id':
-                competition['season_id'] = stat_value
+                competition['realCompetitionSeasonId'] = stat_value
             elif stat_type == 'matchday':
-                competition['matchday'] = stat_value
+                competition['realCompetitionMatchDay'] = stat_value
 
         return competition
 
