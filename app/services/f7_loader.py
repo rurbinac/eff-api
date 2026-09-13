@@ -1,3 +1,4 @@
+# ruff: noqa: BLE001  – broad except blocks are intentional diagnostic catches
 """F7 OPTA feed loader - loads single match detailed results."""
 
 from sqlalchemy import text
@@ -9,6 +10,7 @@ from app.services.f7_events import load_booking, load_goal, load_substitution
 from app.services.f7_parser import F7Parser
 from app.services.f7_standings import calculate_player_points, process_events
 from app.utils.dt import utc_now
+from app.utils.tasks import Task
 
 
 class F7Loader:
@@ -27,46 +29,72 @@ class F7Loader:
             quick_mode: True for quick mode, False for full mode
 
         Returns:
-            Dictionary with processing result status
+            Feed row stamped with processing results.
         """
         from app.services.f_loader import FLoader  # lazy — avoids circular import
 
-        # Phase 1: Foundation layer (get caches)
         file_path = tmp_name or feed.feedName
-        foundation = F7Loader._get_foundation(db, file_path)
-        if foundation["status"] != "ready":
-            return FLoader.log_feed_end(db, feed, result=foundation)
+        task = Task(
+            name=f"Load F7 file: {file_path}",
+            status=Task.RUNNING,
+            status_on_error=Task.ERROR,
+        )
 
-        # Phase 2: Process F7 data into in-memory structures
+        # Phase 1: Foundation layer (parse + build caches)
+        foundation = None
         try:
-            processed_data = F7Loader._process_f7_data(
-                foundation["parsed_data"],
-                foundation["real_competition_id"],
-                foundation["teams_cache"],
-                foundation["players_cache"],
-            )
+            f_task, foundation = F7Loader._get_foundation(db, file_path)
+            task.add_subtask(f_task)
         except Exception as e:
-            result = {
-                "status": "error",
-                "error": f"Failed to process F7 data: {str(e)}",
-                "match_id": foundation["parsed_data"].get("match_id"),
-            }
-            return FLoader.log_feed_end(db, feed, result=result)
+            task.add_error(f"Error in foundation [{type(e).__name__}]: {e!s}")
         finally:
             FLoader.delete_temp_file(tmp_name)
 
+        if foundation is None or task.errors:
+            task.close()
+            return FLoader.log_feed_end(db, feed, result=task)
+
+        # Phase 2: Process F7 data into in-memory structures
+        processed_data = None
+        try:
+            p_task, processed_data = F7Loader._process_f7_data(
+                foundation["parsed_data"],
+                foundation["players_cache"],
+            )
+            task.add_subtask(p_task)
+        except Exception as e:
+            task.add_error(f"Error processing F7 data [{type(e).__name__}]: {e!s}")
+
+        if processed_data is None or task.errors:
+            task.close()
+            return FLoader.log_feed_end(db, feed, result=task)
+
         # Phase 3: Persist based on mode
         if quick_mode:
-            result = F7Loader._save_quick_mode(db, foundation, processed_data)
+            s_task = F7Loader._save_quick_mode(db, foundation, processed_data)
         else:
-            result = F7Loader._save_full_mode(db, foundation, processed_data)
-        return FLoader.log_feed_end(db, feed, result=result)
+            s_task = F7Loader._save_full_mode(db, foundation, processed_data)
+        task.add_subtask(s_task)
+
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+        return FLoader.log_feed_end(db, feed, result=task)
 
     @staticmethod
-    def _get_foundation(db: Session, file_path: str) -> dict:
-        """Get foundation layer data (caches and match IDs)."""
+    def _get_foundation(db: Session, file_path: str) -> tuple[Task, dict | None]:
+        """Get foundation layer data (parse file + build caches).
+
+        Returns:
+            (task, foundation_dict) or (task, None) if a critical step failed.
+        """
+        task = Task(name="Foundation", status=Task.RUNNING, status_on_error=Task.ERROR)
+
         # Parse the file
-        parsed_data = F7Parser.parse_file(file_path)
+        try:
+            parsed_data = F7Parser.parse_file(file_path)
+        except Exception as e:
+            task.add_error(f"Error parsing file [{type(e).__name__}]: {e!s}")
+            task.close()
+            return task, None
 
         # Get RealCompetitions record
         try:
@@ -74,11 +102,9 @@ class F7Loader:
                 db, parsed_data["competition"]
             )
         except Exception as e:
-            return {
-                "status": "error",
-                "error": f"Failed to get RealCompetitions: {str(e)}",
-                "match_id": parsed_data.get("match_id"),
-            }
+            task.add_error(f"Failed to get RealCompetitions [{type(e).__name__}]: {e!s}")
+            task.close()
+            return task, None
 
         # Build teams cache
         try:
@@ -86,27 +112,21 @@ class F7Loader:
                 db, real_competition_id, parsed_data["match_data"]
             )
         except Exception as e:
-            return {
-                "status": "error",
-                "error": f"Failed to build teams cache: {str(e)}",
-                "match_id": parsed_data.get("match_id"),
-            }
+            task.add_error(f"Failed to build teams cache [{type(e).__name__}]: {e!s}")
+            task.close()
+            return task, None
 
         # Get match IDs
         try:
             match_ids = F7Loader._get_match_ids(db, real_competition_id, teams_cache)
             if not match_ids:
-                return {
-                    "status": "no_match",
-                    "message": "Match not found in database",
-                    "match_id": parsed_data.get("match_id"),
-                }
+                task.add_error("Match not found in database")
+                task.close()
+                return task, None
         except Exception as e:
-            return {
-                "status": "error",
-                "error": f"Failed to get match IDs: {str(e)}",
-                "match_id": parsed_data.get("match_id"),
-            }
+            task.add_error(f"Failed to get match IDs [{type(e).__name__}]: {e!s}")
+            task.close()
+            return task, None
 
         # Build players cache with lineup data
         try:
@@ -120,14 +140,12 @@ class F7Loader:
                 match_time,
             )
         except Exception as e:
-            return {
-                "status": "error",
-                "error": f"Failed to build players cache: {str(e)}",
-                "match_id": parsed_data.get("match_id"),
-            }
+            task.add_error(f"Failed to build players cache [{type(e).__name__}]: {e!s}")
+            task.close()
+            return task, None
 
-        return {
-            "status": "ready",
+        task.close(status=Task.COMPLETED)
+        return task, {
             "parsed_data": parsed_data,
             "competition": parsed_data["competition"],
             "real_competition_id": real_competition_id,
@@ -139,48 +157,43 @@ class F7Loader:
     @staticmethod
     def _process_f7_data(
         parsed_data: dict,
-        real_competition_id: int,
-        teams_cache: dict,
         players_cache: dict,
-    ) -> dict:
+    ) -> tuple[Task, dict]:
         """Process F7 data into in-memory structures.
 
         Returns:
-            Dictionary with processed data:
-            - match_events: List of match events with eventKey for deduplication
-            - standings_data: Player standings/performance data
+            (task, processed_data) where processed_data contains:
+            - match_data: raw match data from parser
+            - match_events: sorted list of events with eventKey for deduplication
+            - standings_data: player standings/performance data
         """
-        # Extract match data
-        match_data = parsed_data.get("match_data", {})
+        task = Task(name="Process F7 Data", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task.init_info("goals", "bookings", "substitutions")
 
-        # Initialize events cache for processing
+        match_data = parsed_data.get("match_data", {})
         events_cache = []
 
-        # Process goals from parsed data
-        goals = match_data.get("goals", [])
-        for goal_data in goals:
+        for goal_data in match_data.get("goals", []):
             events_cache = load_goal(
                 events_cache, goal_data["element"], goal_data["team_uid"]
             )
+            task.inc("goals")
 
-        # Process bookings from parsed data
-        bookings = match_data.get("bookings", [])
-        for booking_data in bookings:
+        for booking_data in match_data.get("bookings", []):
             events_cache = load_booking(
                 events_cache, booking_data["element"], booking_data["team_uid"]
             )
+            task.inc("bookings")
 
-        # Process substitutions from parsed data
-        substitutions = match_data.get("substitutions", [])
-        for sub_data in substitutions:
+        for sub_data in match_data.get("substitutions", []):
             events_cache = load_substitution(
                 events_cache, sub_data["element"], sub_data["team_uid"]
             )
+            task.inc("substitutions")
 
         # Sort events by eventKey (period, time, timestamp, class)
         events_cache.sort(key=lambda e: e.get("eventKey", ""))
 
-        # Process events to calculate player statistics
         match_time_str = match_data.get("match_time")
         try:
             match_time = int(match_time_str) if match_time_str else None
@@ -190,122 +203,102 @@ class F7Loader:
         if match_time:
             players_cache = process_events(players_cache, events_cache, match_time)
 
-        # Calculate fantasy points for all players
         players_cache = calculate_player_points(players_cache)
 
-        # Prepare standings data (player statistics for persistence)
-        standings_data = players_cache
-
-        return {
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+        return task, {
             "match_data": match_data,
             "match_events": events_cache,
-            "standings_data": standings_data,
+            "standings_data": players_cache,
         }
 
     @staticmethod
-    def _save_quick_mode(db: Session, foundation: dict, processed_data: dict) -> dict:
+    def _save_quick_mode(db: Session, foundation: dict, processed_data: dict) -> Task:
         """Save data in Quick mode (updates only).
 
         Quick mode updates:
         - RealMatches
         - RealMatchTeams
-        - RealMatchEvents (insert/update)
-        - RealStandings (to be implemented)
+        - RealStandings (teams and players)
         """
+        task = Task(name="Save Quick Mode", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task.init_info(
+            "matches_updated",
+            "match_teams_updated",
+            "standings_updated",
+            "players_standings_updated",
+        )
+
         match_ids = foundation["match_ids"]
         match_data = processed_data["match_data"]
-        match_events = processed_data["match_events"]
-
-        results = {
-            "status": "success",
-            "match_id": foundation["parsed_data"].get("match_id"),
-            "matches_updated": 0,
-            "match_teams_updated": 0,
-            "match_events_processed": 0,
-            "standings_updated": 0,
-        }
 
         try:
-            # Update RealMatches
             F7Loader.update_match_quick_mode(db, match_ids, match_data)
-            results["matches_updated"] = 1
+            task.inc("matches_updated")
         except Exception as e:
-            results["errors"] = results.get("errors", [])
-            results["errors"].append(f"RealMatches update failed: {str(e)}")
+            task.add_error(f"RealMatches update failed [{type(e).__name__}]: {e!s}")
 
         try:
-            # Update RealMatchTeams
             teams_result = F7Loader.update_match_teams_quick_mode(
                 db, match_ids, match_data, foundation["teams_cache"]
             )
-            results["match_teams_updated"] = teams_result.get("teams_updated", 0)
+            task.assign("match_teams_updated", teams_result.get("teams_updated", 0))
         except Exception as e:
-            results["errors"] = results.get("errors", [])
-            results["errors"].append(f"RealMatchTeams update failed: {str(e)}")
+            task.add_error(f"RealMatchTeams update failed [{type(e).__name__}]: {e!s}")
 
-        # Update RealStandings with match results (teams)
+        # Parse match day once for both standings updates
+        real_match_day = None
         try:
-            real_match_day = foundation["competition"].get("matchday")
-            if real_match_day:
-                try:
-                    real_match_day = int(real_match_day)
-                    standings_result = F7Loader.update_standings_quick_mode(
-                        db,
-                        match_ids,
-                        match_data,
-                        foundation["teams_cache"],
-                        foundation["real_competition_id"],
-                        real_match_day,
-                    )
-                    results["standings_updated"] = standings_result.get(
-                        "standings_updated", 0
-                    )
-                except (ValueError, TypeError):
-                    pass
-        except Exception as e:
-            results["errors"] = results.get("errors", [])
-            results["errors"].append(f"RealStandings team update failed: {str(e)}")
+            real_match_day = int(foundation["competition"].get("matchday"))
+        except (ValueError, TypeError):
+            pass
 
-        # Update RealStandings with player performance
-        try:
-            real_match_day = foundation["competition"].get("matchday")
-            if real_match_day:
-                try:
-                    real_match_day = int(real_match_day)
-                    player_result = F7Loader.update_player_standings_quick_mode(
-                        db,
-                        match_ids,
-                        match_data,
-                        foundation["teams_cache"],
-                        processed_data["standings_data"],
-                        foundation["real_competition_id"],
-                        real_match_day,
-                    )
-                    results["players_standings_updated"] = player_result.get(
-                        "players_updated", 0
-                    )
-                except (ValueError, TypeError):
-                    pass
-        except Exception as e:
-            results["errors"] = results.get("errors", [])
-            results["errors"].append(f"RealStandings player update failed: {str(e)}")
+        if real_match_day:
+            try:
+                standings_result = F7Loader.update_standings_quick_mode(
+                    db,
+                    match_ids,
+                    match_data,
+                    foundation["teams_cache"],
+                    foundation["real_competition_id"],
+                    real_match_day,
+                )
+                task.assign(
+                    "standings_updated", standings_result.get("standings_updated", 0)
+                )
+            except Exception as e:
+                task.add_error(
+                    f"RealStandings team update failed [{type(e).__name__}]: {e!s}"
+                )
 
-        # TODO: Process RealMatchEvents (insert/update)
+            try:
+                player_result = F7Loader.update_player_standings_quick_mode(
+                    db,
+                    match_ids,
+                    match_data,
+                    foundation["teams_cache"],
+                    processed_data["standings_data"],
+                    foundation["real_competition_id"],
+                    real_match_day,
+                )
+                task.assign(
+                    "players_standings_updated", player_result.get("players_updated", 0)
+                )
+            except Exception as e:
+                task.add_error(
+                    f"RealStandings player update failed [{type(e).__name__}]: {e!s}"
+                )
 
-        return results
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+        return task
 
     @staticmethod
-    def _save_full_mode(db: Session, foundation: dict, processed_data: dict) -> dict:
-        """Save data in Full mode (complete updates).
-
-        Full mode updates: All tables with complete data
-        """
-        # TODO: Implement full mode persistence
-        return {
-            "status": "not_implemented",
-            "message": "Full mode implementation pending",
-            "match_id": foundation["parsed_data"].get("match_id"),
-        }
+    def _save_full_mode(db: Session, _foundation: dict, _processed_data: dict) -> Task:
+        """Save data in Full mode (complete updates). Not yet implemented."""
+        task = Task(name="Save Full Mode", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task.add_error("Full mode implementation pending")
+        task.close()
+        return task
 
     @staticmethod
     def _get_real_competition(db: Session, competition: dict) -> int:
@@ -390,7 +383,6 @@ class F7Loader:
         db: Session, real_competition_id: int, teams_cache: dict
     ) -> dict | None:
         """Get RealMatch and RealMatchTeam IDs."""
-        # Get one team UID from each side
         team_uids = list(teams_cache.keys())
         if len(team_uids) < 2:
             return None
