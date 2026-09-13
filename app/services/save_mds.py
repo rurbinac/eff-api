@@ -554,7 +554,7 @@ class SaveMDS:
         return isinstance(self._base_rc_id, int) and isinstance(self._extra_rc_id, int)
 
     def _init_md(self) -> bool:
-        """Initilizes the list of match days.
+        """Initializes the list of match days.
 
         Returns:
             bool: True on success
