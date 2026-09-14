@@ -8,6 +8,7 @@ Moves files from:
 To:
     feeds/<type>/<filename>.xml   e.g. feeds/f7/srml-8-2026-f2645232-matchresults.xml
 
+ZIP files are extracted to feeds/ first, then the zip is moved to feeds/zip/.
 Unknown XML files go to feeds/unknown/.
 Non-XML files are left in place.
 """
@@ -16,6 +17,7 @@ import argparse
 import hashlib
 import re
 import shutil
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -67,9 +69,9 @@ PATTERNS = [
     ("f42",     re.compile(r"^f42-([18])-(\d{4})-results\.xml$")),
     ("f1",      re.compile(r"^srml-([18])-(\d{4})-results\.xml$")),
     ("f2",      re.compile(r"^opta-(\d+)-matchpreview\.xml$")),
-    ("f3",      re.compile(r"^srml-([18])-(\d{1,2})-standings\.xml$")),
+    ("f3",      re.compile(r"^srml-([18])-(\d{4})-standings\.xml$")),
     ("f26",     re.compile(r"^football_results\.([18])\.(\d{8})\.(\d{6})\.xml$")),
-    ("f40",     re.compile(r"^srml-([18])-(\d{1,2})-squads\.xml$")),
+    ("f40",     re.compile(r"^srml-([18])-(\d{4})-squads\.xml$")),
     ("f45",     re.compile(r"^f45-([18])-(\d{4})-venues\.xml$")),
 ]
 
@@ -81,28 +83,99 @@ def get_feed_type(filename: str) -> str:
     return "unknown"
 
 
+_F7_SEASON_RE = re.compile(r"^srml-[18]-(\w+)-f\d+-matchresults\.xml$")
+
+
 def get_dest_dir(feeds_dir: Path, filename: str, feed_type: str) -> Path:
     """Return the destination directory for a file, applying per-type sub-grouping.
+
+    F26: year < 2025  → f26/{yyyy}/
+         year >= 2025 → f26/{yyyymm}/
+    F7:  season ID from filename → f7/{season_id}/   (e.g. f7/2026/ or f7/7/)
 
     If feeds_dir is already the type folder (e.g. feeds/f26), the type prefix
     is not added again — sub-grouping goes directly under feeds_dir.
     """
     # If we're already inside the type folder, don't add it again
     base = feeds_dir if feeds_dir.name == feed_type else feeds_dir / feed_type
+
     if feed_type == "f26":
-        # football_results.8.20060917.235959.xml → year = first 4 chars of 3rd segment
+        # football_results.8.20250815.205249.xml → date segment = parts[2]
         parts = filename.split(".")
-        if len(parts) >= 3 and len(parts[2]) >= 4:
-            year = parts[2][:4]
-            return base / year
+        if len(parts) >= 3 and len(parts[2]) >= 6:
+            return base / parts[2][:6]   # yyyymm  e.g. "202508", "200609"
+
+    elif feed_type == "f2":
+        # opta-2210471-matchpreview.xml → first 4 digits of the match ID
+        m = re.match(r"^opta-(\d{4})", filename)
+        if m:
+            return base / m.group(1)   # e.g. "2210"
+
+    elif feed_type == "f7":
+        # srml-8-2026-f2645226-matchresults.xml  → season "2026"
+        # srml-8-7-f44373-matchresults.xml        → season "7"
+        m = _F7_SEASON_RE.match(filename)
+        if m:
+            return base / m.group(1)
+
     return base
 
 
+def extract_zips(feeds_dir: Path, dry_run: bool = False) -> int:
+    """Extract any zip files in feeds_dir to feeds_dir, then move the zip to feeds/zip/.
+
+    Returns the number of zips processed.
+    """
+    zip_files = [f for f in feeds_dir.iterdir() if f.is_file() and f.suffix.lower() == ".zip"]
+    if not zip_files:
+        return 0
+
+    zip_dir = feeds_dir / "zip"
+    processed = 0
+
+    for zf_path in sorted(zip_files):
+        print(f"\n  ZIP  {zf_path.name}")
+        try:
+            with zipfile.ZipFile(zf_path, "r") as zf:
+                members = zf.namelist()
+                for member in members:
+                    dest = feeds_dir / Path(member).name  # flatten — no subdirs from zip
+                    if dest.exists():
+                        print(f"       skip {member}  (already exists in feeds/)")
+                    else:
+                        print(f"       {'DRY ' if dry_run else ''}extract  {member}")
+                        if not dry_run:
+                            zf.extract(member, feeds_dir)
+                            # If the zip stored it in a subdir, move it up to feeds_dir
+                            extracted = feeds_dir / member
+                            if extracted != dest:
+                                shutil.move(str(extracted), str(dest))
+
+            # Move the zip itself to feeds/zip/
+            zip_dest = zip_dir / zf_path.name
+            print(f"       {'DRY ' if dry_run else ''}move zip → zip/{zf_path.name}")
+            if not dry_run:
+                zip_dir.mkdir(exist_ok=True)
+                shutil.move(str(zf_path), str(zip_dest))
+            processed += 1
+
+        except (zipfile.BadZipFile, PermissionError) as e:
+            print(f"       ERROR: {e} — skipped")
+
+    return processed
+
+
 def sort_feeds(feeds_dir: Path, dry_run: bool = False) -> None:
+    # Step 1 — unpack any zips first so their contents get sorted below
+    n_zips = extract_zips(feeds_dir, dry_run=dry_run)
+    if n_zips:
+        print()
+
     xml_files = [f for f in feeds_dir.iterdir() if f.is_file() and f.suffix.lower() == ".xml"]
 
     if not xml_files:
-        print("No XML files found directly in", feeds_dir)
+        if not n_zips:
+            print("No XML or ZIP files found directly in", feeds_dir)
         return
 
     moved = 0
@@ -112,6 +185,14 @@ def sort_feeds(feeds_dir: Path, dry_run: bool = False) -> None:
     locked: list[str] = []
 
     for src in sorted(xml_files):
+        # Empty file — delete immediately, nothing to sort
+        if src.stat().st_size == 0:
+            print(f"  {'DRY ' if dry_run else ''}DEL   {src.name}  (empty file, deleted)")
+            if not dry_run:
+                src.unlink()
+            deleted += 1
+            continue
+
         feed_type = get_feed_type(src.name)
         dest_dir = get_dest_dir(feeds_dir, src.name, feed_type)
         dest = dest_dir / src.name
