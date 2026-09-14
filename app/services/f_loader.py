@@ -40,13 +40,13 @@ class FLoader:
     # files like: opta-2561896-matchpreview.xml
     _PATTERN_F2 = re.compile(r"^opta-(\d+)-matchpreview\.xml$")
     # files like: srml-8-1-standings.xml
-    _PATTERN_F3 = re.compile(r"^srml-([18])-(\d{1,2})-standings\.xml$")
+    _PATTERN_F3 = re.compile(r"^srml-([18])-(\d{4})-standings\.xml$")
     # files like: srml-8-7-f44348-matchresults.xml  or  srml-8-2026-f2645232-matchresults.xml
     _PATTERN_F7 = re.compile(r"^srml-([18])-(\d+)-f\d+-matchresults\.xml$")
     # files like: football_results.8.20060917.235959.xml
     _PATTERN_F26 = re.compile(r"^football_results\.([18])\.(\d{8})\.(\d{6})\.xml$")
     # files like: srml-8-10-squads.xml
-    _PATTERN_F40 = re.compile(r"^srml-([18])-(\d{1,2})-squads\.xml$")
+    _PATTERN_F40 = re.compile(r"^srml-([18])-(\d{4})-squads\.xml$")
     # files like: f42-8-2026-results.xml  (competition 8=EPL, 1=Championship)
     _PATTERN_F42 = re.compile(r"^f42-([18])-(\d{4})-results\.xml$")
     # files like: f45-8-2024-venues.xml  (competition 8=EPL, 1=Championship)
