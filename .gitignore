@@ -11,3 +11,5 @@ dist/
 lt3cil7v_eff_new.sql
 # Credentials — never commit
 infra/SFTP_ACCESS.md
+# Feed files — local only, not tracked in git
+feeds/
