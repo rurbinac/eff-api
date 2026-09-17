@@ -47,8 +47,10 @@ class QueryService:
             return dt.year - 1 + delta_seasons
 
     @staticmethod
-    def get_competition(db: Session, id: int) -> dict | None:
+    def get_competition(db: Session, id: int | None = None) -> dict | None:
         """Get a RealCompetition by its ID."""
+        if id is None:
+            return QueryService.get_current_base_competition(db)
         for rc in QueryService._real_competition_cache.values():
             if rc and rc.get("realCompetitionID") == id:
                 return rc
@@ -58,6 +60,26 @@ class QueryService:
             .filter(RealCompetition.realCompetitionID == id)
             .first()
         )
+
+    @staticmethod
+    def get_base_competition(db: Session, id: int | None = None) -> dict | None:
+        """Get the base RealCompetition for the given competition ID."""
+        rc = QueryService.get_competition(db, id)
+        if not rc:
+            return None
+        if rc["realCompetitionID"] == rc["baseRealCompetitionID"]:
+            return rc
+        return QueryService.get_competition(db, rc["baseRealCompetitionID"])
+
+    @staticmethod
+    def get_extra_competition(db: Session, id: int | None = None) -> dict | None:
+        """Get the extra RealCompetition for the given competition ID."""
+        rc = QueryService.get_competition(db, id)
+        if not rc:
+            return None
+        if rc["realCompetitionID"] == rc["extraRealCompetitionID"]:
+            return rc
+        return QueryService.get_competition(db, rc["extraRealCompetitionID"])
 
     @staticmethod
     def get_current_base_competition(
@@ -76,7 +98,7 @@ class QueryService:
     def get_current_extra_competition(
         db: Session, delta_seasons: int = 0
     ) -> dict | None:
-        """Get the current base RealCompetition (EN_PR).
+        """Get the current extra RealCompetition (EN_PR_CUP).
 
         Results are cached in-process per season_id. Call
         QueryService.clear_real_competition_cache() after updating RealCompetitions.
@@ -86,10 +108,26 @@ class QueryService:
         )
 
     @staticmethod
+    def get_competition_id(db: Session, id: int | None = None) -> int | None:
+        rc = QueryService.get_competition(db, id)
+        return rc["realCompetitionID"] if rc else None
+
+    @staticmethod
+    def get_base_competition_id(db: Session, id: int | None = None) -> int | None:
+        rc = QueryService.get_base_competition(db, id)
+        return rc["realCompetitionID"] if rc else None
+
+    @staticmethod
+    def get_extra_competition_id(db: Session, id: int | None = None) -> int | None:
+        rc = QueryService.get_extra_competition(db, id)
+        return rc["realCompetitionID"] if rc else None
+
+
+    @staticmethod
     def _get_current_competition(
         db: Session, symid: str, delta_seasons: int = 0
     ) -> dict | None:
-        """Get the current extra RealCompetition (EN_PR_CUP).
+        """Get the current RealCompetition for the given SYMID and season.
 
         Results are cached in-process per season_id. Call
         QueryService.clear_real_competition_cache() after updating RealCompetitions.

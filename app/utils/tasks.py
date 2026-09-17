@@ -8,7 +8,6 @@ from app.utils.dt import utc_now
 
 @dataclass
 class Task:
-
     # These are the possible status values for a task. They are defined as class variables
     #    to provide a clear and consistent way to represent the state of a task.
     RUNNING = "running"
@@ -82,16 +81,21 @@ class Task:
         """
         if self.is_closed or not self.is_paused:
             return False
-        self._paused_secs += (utc_now(microsecond=True) - self._stopped_time).total_seconds()
+        self._paused_secs += (
+            utc_now(microsecond=True) - self._stopped_time
+        ).total_seconds()
         self._stopped_time = None
         return True
 
     @property
     def duration(self) -> float:
-        """Get the duration of the task.
+        """Get the elapsed duration of the task in seconds.
+
+        For a closed task returns the total active time (end − start − paused).
+        For an open task returns the time elapsed so far, excluding any paused interval.
 
         Returns:
-            float | None: The duration of the task in seconds, or None if the task is not closed.
+            float: Elapsed seconds, excluding paused time.
         """
         if self.is_closed:
             return (self.end - self.start).total_seconds() - self._paused_secs
@@ -110,9 +114,13 @@ class Task:
         if subtask is self:
             raise ValueError("Cannot add a task as a subtask of itself.")
         if self.contains_task(subtask):
-            raise ValueError("Cannot add a subtask that is already in the task's subtree.")
+            raise ValueError(
+                "Cannot add a subtask that is already in the task's subtree."
+            )
         if subtask.contains_task(self):
-            raise ValueError("Cannot add a subtask that contains this task in its subtree.")
+            raise ValueError(
+                "Cannot add a subtask that contains this task in its subtree."
+            )
         self.tasks.append(subtask)
 
     def contains_task(self, task: Task) -> bool:
@@ -132,18 +140,17 @@ class Task:
             stack.extend(current.tasks)
         return False
 
-
-
-    def init_info(self, *names: str) -> None:
-        """Initialize info keys with None values.
+    def init_info(self, *names: str, default: str | int | None = None) -> None:
+        """Initialize info keys with a default value.
 
         Args:
-            *names (str): the names of the info keys to initialize
+            *names (str): the names of the info keys to initialize.
+            default (str | int | None, optional): value to assign to each key. Defaults to None.
         """
         for name in names:
-            self.info[name] = None
+            self.info[name] = default
 
-    def assign(self, name: str, value: str | int | None) -> None:
+    def assign(self, name: str, value: str | int | None) -> str | int | None:
         """Assign a value to an info key.
 
         Args:
@@ -151,8 +158,9 @@ class Task:
             value (str | int | None): the value to assign to the info key
         """
         self.info[name] = value
+        return value
 
-    def inc(self, name: str, amount: int = 1) -> None:
+    def inc(self, name: str, amount: int = 1) -> int:
         """Increment the value of an info key in the task's info dictionary.
 
         Args:
@@ -165,16 +173,25 @@ class Task:
         elif current is None or name not in self.info:
             self.info[name] = amount
         else:
-            raise TypeError(f"Cannot increment non-integer value for '{name}': {current!r}")
+            raise TypeError(
+                f"Cannot increment non-integer value for '{name}': {current!r}"
+            )
+        return self.info[name]
 
-    def remove(self, name: str) -> None:
+    def remove(self, name: str) -> str | int | None:
         """Remove an info key from the task's info dictionary.
 
         Args:
-            name (str): the name of the info key to remove from the task's info dictionary
+            name (str): the name of the info key to remove.
+
+        Returns:
+            str | int | None: the value that was removed, or None if the key did not exist.
         """
         if name in self.info:
+            value = self.info[name]
             del self.info[name]
+            return value
+        return None
 
     def close(self, status: str | None = None) -> dict:
         """Close the task by setting its end time and optionally updating its status.

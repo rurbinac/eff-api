@@ -10,8 +10,8 @@ from app.constants import DraftPositionConstants, RealMatchPeriod
 from app.models import Feed
 from app.services.f42_parser import F42Parser
 from app.services.save_mds import SaveMDS
+from app.services.sync_fantasy import SyncFantasyService
 from app.services.sync_real import SyncRealService
-from app.services.sync_standings import SyncStandingsService
 from app.utils.dt import utc_now
 from app.utils.sql_text import sql_insert, sql_update
 from app.utils.tasks import Task
@@ -148,18 +148,18 @@ class F42Loader:
             task.add_error(f"Error loading matches [{type(e).__name__}]: {e!s}")
 
         try:
-            sync_result = F42Loader._sync(db, comp_data["realCompetitionID"])
-            task.add_subtask(sync_result)
-        except Exception as e:
-            db.rollback()
-            task.add_error(f"Error syncing data [{type(e).__name__}]: {e!s}")
-
-        try:
             mds_result = F42Loader._save_mds(db, comp_data["realCompetitionID"])
             task.add_subtask(mds_result)
         except Exception as e:
             db.rollback()
             task.add_error(f"Error saving MDS data [{type(e).__name__}]: {e!s}")
+
+        try:
+            sync_result = F42Loader._sync(db, comp_data["realCompetitionID"])
+            task.add_subtask(sync_result)
+        except Exception as e:
+            db.rollback()
+            task.add_error(f"Error syncing data [{type(e).__name__}]: {e!s}")
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return FLoader.log_feed_end(db, feed, result=task)
@@ -183,12 +183,12 @@ class F42Loader:
             task.add_subtask(sub)
 
         try:
-            sync_standings = SyncStandingsService.sync_all(db, real_competition_id)
+            sync_fantasy = SyncFantasyService.sync_all(db, real_competition_id)
             db.commit()
-            task.add_subtask(sync_standings)
-        except Exception as e:  # noqa: BLE001
+            task.add_subtask(sync_fantasy)
+        except Exception as e:
             db.rollback()
-            sub = Task(name="sync_standings", status=Task.RUNNING, status_on_error=Task.ERROR)
+            sub = Task(name="sync_fantasy", status=Task.RUNNING, status_on_error=Task.ERROR)
             sub.add_error(f"[{type(e).__name__}]: {e!s}")
             sub.close()
             task.add_subtask(sub)
