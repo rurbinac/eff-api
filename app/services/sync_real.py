@@ -21,16 +21,21 @@ class SyncRealService:
     """Synchronize Real* table data."""
 
     @staticmethod
-    def sync_all(db: Session, real_competition_id: int | None = None) -> Task:
+    def sync_all(db: Session, real_competition_id: int | None = None, include_rtm: bool = False) -> Task:
         """Sync all Real* data for a competition season.
 
         Runs in order: RealCompetitions → RealTeams (+ RealTeamMembers teams) →
-        RealPlayers (+ RealTeamMembers players) → RealMatchTeams.
+        RealPlayers (+ RealTeamMembers players) → optionally RealTeamMembers standings
+        and the copy-back to RealTeamMembers.
 
         Args:
-            db: Database session
+            db: Database session.
             real_competition_id: RealCompetitionID to sync. If None, derived from
                 the current base competition via QueryService.
+            include_rtm: When True, also runs _sync_real_team_members (recalculates
+                RealStandings) and _sync_real_standings (copies final standings back
+                to RealTeamMembers). Expensive — intended for the weekly end-of-match-day
+                run, not every F42 load. Defaults to False.
 
         Returns:
             Task with aggregated queries_executed and rows_affected across all sub-tasks.
@@ -77,7 +82,7 @@ class SyncRealService:
                 ok = len(sub.errors) == 0
 
             # Sync RealTeamMembers
-            if ok:
+            if ok and include_rtm:
                 sub = SyncRealService._sync_real_team_members(db, real_competition_id)
                 task.add_subtask(sub)
                 task.inc("queries_executed", sub.info.get("queries_executed") or 0)
@@ -85,7 +90,7 @@ class SyncRealService:
                 ok = len(sub.errors) == 0
 
             # Sync standings back to RealTeamMembers
-            if ok:
+            if ok and include_rtm:
                 sub = SyncRealService._sync_real_standings(db, real_competition_id)
                 task.add_subtask(sub)
                 task.inc("queries_executed", sub.info.get("queries_executed") or 0)

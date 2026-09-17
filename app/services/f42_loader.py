@@ -155,7 +155,7 @@ class F42Loader:
             task.add_error(f"Error saving MDS data [{type(e).__name__}]: {e!s}")
 
         try:
-            sync_result = F42Loader._sync(db, comp_data["realCompetitionID"])
+            sync_result = F42Loader._sync(db, comp_data["realCompetitionID"], include_rtm=False)
             task.add_subtask(sync_result)
         except Exception as e:
             db.rollback()
@@ -165,14 +165,14 @@ class F42Loader:
         return FLoader.log_feed_end(db, feed, result=task)
 
     @staticmethod
-    def _sync(db: Session, real_competition_id: int) -> Task:
+    def _sync(db: Session, real_competition_id: int, include_rtm: bool = False) -> Task:
         # Each service gets its own commit+rollback so a dirty session from an
         # internal SQL failure (caught inside the service) never leaks out and
         # corrupts log_feed_end's final commit.
         task = Task(name="Sync", status=Task.RUNNING, status_on_error=Task.ERROR)
 
         try:
-            sync_real = SyncRealService.sync_all(db, real_competition_id)
+            sync_real = SyncRealService.sync_all(db, real_competition_id, include_rtm=include_rtm)
             db.commit()
             task.add_subtask(sync_real)
         except Exception as e:
