@@ -1291,32 +1291,32 @@ class SyncRealService:
         member["matchPointsL1Goals"] = stand["matchPointsL1Goals"]
         member["matchPointsL1Assists"] = stand["matchPointsL1Assists"]
         member["matchPointsL1OwnGoals"] = stand["matchPointsL1OwnGoals"]
-        member["timePlayed"] += stand["matchTimePlayed"]
-        member["gamePlayed"] += stand["matchGamePlayed"]
-        member["goals"] += stand["matchGoals"]
-        member["assists"] += stand["matchAssists"]
-        member["yellowCards"] += stand["matchYellowCards"]
-        member["redCards"] += stand["matchRedCards"]
-        member["goalsConceded"] += stand["matchGoalsConceded"]
-        member["cleanSheet"] += stand["matchCleanSheet"]
+        member["timePlayed"] += stand["matchTimePlayed"] or 0
+        member["gamePlayed"] += stand["matchGamePlayed"] or 0
+        member["goals"] += stand["matchGoals"] or 0
+        member["assists"] += stand["matchAssists"] or 0
+        member["yellowCards"] += stand["matchYellowCards"] or 0
+        member["redCards"] += stand["matchRedCards"] or 0
+        member["goalsConceded"] += stand["matchGoalsConceded"] or 0
+        member["cleanSheet"] += stand["matchCleanSheet"] or 0
 
         # Aggregate points breakdown
         member["matchPointsL1"] = (
-            stand["matchPointsL1Played"]
-            + stand["matchPointsL1GoalsAllowed"]
-            + stand["matchPointsL1CleanSheet"]
-            + stand["matchPointsL1Cards"]
-            + stand["matchPointsL1Goals"]
-            + stand["matchPointsL1Assists"]
-            + stand["matchPointsL1OwnGoals"]
+            (stand["matchPointsL1Played"] or 0)
+            + (stand["matchPointsL1GoalsAllowed"] or 0)
+            + (stand["matchPointsL1CleanSheet"] or 0)
+            + (stand["matchPointsL1Cards"] or 0)
+            + (stand["matchPointsL1Goals"] or 0)
+            + (stand["matchPointsL1Assists"] or 0)
+            + (stand["matchPointsL1OwnGoals"] or 0)
         )
-        member["pointsL1Played"] += stand["matchPointsL1Played"]
-        member["pointsL1GoalsAllowed"] += stand["matchPointsL1GoalsAllowed"]
-        member["pointsL1CleanSheet"] += stand["matchPointsL1CleanSheet"]
-        member["pointsL1Cards"] += stand["matchPointsL1Cards"]
-        member["pointsL1Goals"] += stand["matchPointsL1Goals"]
-        member["pointsL1Assists"] += stand["matchPointsL1Assists"]
-        member["pointsL1OwnGoals"] += stand["matchPointsL1OwnGoals"]
+        member["pointsL1Played"] += stand["matchPointsL1Played"] or 0
+        member["pointsL1GoalsAllowed"] += stand["matchPointsL1GoalsAllowed"] or 0
+        member["pointsL1CleanSheet"] += stand["matchPointsL1CleanSheet"] or 0
+        member["pointsL1Cards"] += stand["matchPointsL1Cards"] or 0
+        member["pointsL1Goals"] += stand["matchPointsL1Goals"] or 0
+        member["pointsL1Assists"] += stand["matchPointsL1Assists"] or 0
+        member["pointsL1OwnGoals"] += stand["matchPointsL1OwnGoals"] or 0
         member["pointsL1"] += member["matchPointsL1"]
         return member
 
