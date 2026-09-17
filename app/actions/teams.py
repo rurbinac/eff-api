@@ -1,3 +1,5 @@
+import re
+
 from fastapi import HTTPException, status
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
@@ -7,6 +9,23 @@ from app.guards import require_team
 from app.models import Team
 from app.utils import MKeys
 from app.utils.dt import utc_now
+
+
+def _normalize_mkeys_str(raw: str | None) -> str:
+    """Convert legacy concatenated-key format to MKeys dot-separated format.
+
+    Legacy stored keys without separators (e.g. 'P123P456T7'), while MKeys
+    expects 'P123.P456.T7.'. Strings already in MKeys format pass through.
+    """
+    if not raw:
+        return ""
+    s = raw.strip()
+    if not s:
+        return ""
+    if s.endswith("."):
+        return s
+    keys = re.findall(r"[PT]\d+", s)
+    return "".join(f"{k}." for k in keys)
 
 
 class TeamsGetCurrentMembersAction:
@@ -282,10 +301,14 @@ class TeamsGetRealMembersRankingAction:
         target_team = dict(team_row)
         base_competition_id = target_team["baseRealCompetitionID"]
         division_id = target_team["divisionID"]
-        members_ranking_str = target_team["membersRanking"] or ""
+        members_ranking_str = _normalize_mkeys_str(target_team["membersRanking"])
         team_members_str = target_team["teamMembers"] or ""
 
-        # Get other teams in division to build division roster
+        # Collect team member keys for the target team
+        team_mkeys = MKeys.build(team_members_str, size=1)
+        team_set: set[str] = set(team_mkeys.get_group(0)) if team_mkeys else set()
+
+        # Collect division member keys from all other teams in the same division
         division_teams_stmt = text("""
             SELECT `teamMembers`
             FROM `Teams`
@@ -296,27 +319,18 @@ class TeamsGetRealMembersRankingAction:
             division_teams_stmt,
             {"divisionID": division_id, "teamID": team_id}
         )
-        division_teams = [dict(row) for row in division_teams_result.mappings()]
+        division_set: set[str] = set()
+        for div_row in division_teams_result.mappings():
+            div_mkeys = MKeys.build(_normalize_mkeys_str(div_row.get("teamMembers")), size=1)
+            if div_mkeys:
+                division_set.update(div_mkeys.get_group(0))
 
-        # Build division roster by concatenating all team members
-        team_members_div_parts = [row.get("teamMembers") or "" for row in division_teams]
-        team_members_div = ":".join([p for p in team_members_div_parts if p])
+        # Parse ranking order (may be empty if no ranking set yet)
+        ranking_mkeys = MKeys.build(members_ranking_str, size=1)
+        ranking_order: list[str] = ranking_mkeys.get_group(0) if ranking_mkeys else []
+        ranking_set: set[str] = set(ranking_order)
 
-        # Parse ranking using MKeys
-        ranking_keys = MKeys.build(members_ranking_str, size=1)
-        if not ranking_keys:
-            return []
-
-        keys = ranking_keys.get_group(0)
-
-        # Create dict with ranking keys mapped to None initially
-        my_dict = dict.fromkeys(keys, None)
-
-        # Create MKeys for team and division membership
-        team_mkeys = MKeys.build(team_members_str, size=1)
-        division_mkeys = MKeys.build(team_members_div, size=1) if team_members_div else MKeys.build(None, size=1)
-
-        # Query real team members ordered by ranking and name
+        # Load all enabled members for this competition into an in-memory dict
         members_stmt = text("""
             SELECT *
             FROM `RealTeamMembers`
@@ -329,24 +343,26 @@ class TeamsGetRealMembersRankingAction:
             {"baseRealCompetitionID": base_competition_id}
         )
 
-        # Process each member
+        all_members: dict[str, dict] = {}
         for row in members_result.mappings():
             member_dict = dict(row)
             member_key = member_dict.get("realTeamMemberKey")
+            if member_key is None:
+                continue
+            member_dict["inTeam"] = 1 if member_key in team_set else 0
+            member_dict["inDivision"] = 1 if member_key in division_set else 0
+            member_dict["inRanking"] = 1 if member_key in ranking_set else 0
+            all_members[member_key] = member_dict
 
-            # Add membership flags
-            team_group = team_mkeys.get_group(0) if team_mkeys else []
-            division_group = division_mkeys.get_group(0) if division_mkeys else []
-            member_dict["inTeam"] = 1 if member_key in team_group else 0
-            member_dict["inDivision"] = 1 if member_key in division_group else 0
-            member_dict["inRanking"] = 1 if member_key in my_dict else 0
+        # Ranked members first (preserving ranking order), then unranked remainder
+        result: list[dict] = []
+        for key in ranking_order:
+            if key in all_members:
+                result.append(all_members[key])
+        for key, member in all_members.items():
+            if key not in ranking_set:
+                result.append(member)
 
-            # Populate dict if member is in ranking
-            if member_key in my_dict:
-                my_dict[member_key] = member_dict
-
-        # Return non-None values, preserving ranking order
-        result = [v for v in my_dict.values() if v is not None]
         return result
 
 
