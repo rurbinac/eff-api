@@ -15,6 +15,7 @@ from app.routers import (
     lookups,
     match_teams,
     matches,
+    pusher_auth,
     real_matches,
     real_standings,
     real_team_standings,
@@ -53,6 +54,7 @@ app.include_router(real_team_standings.router)
 app.include_router(gaming_api.router)
 app.include_router(team_member_transfers.router)
 app.include_router(xml_feeds.router)
+app.include_router(pusher_auth.router)
 
 
 @app.get("/health")

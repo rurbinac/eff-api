@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     db_password: str
     db_host: str = ""  # Local dev only; when set, bypasses Cloud SQL Connector
     app_env: str = "production"
+    pusher_app_id: str = ""
+    pusher_key: str = ""
+    pusher_secret: str = ""
+    pusher_cluster: str = "mt1"
 
 
 settings = Settings()
