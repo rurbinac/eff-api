@@ -30,15 +30,14 @@ from app.models import Division, League, Team
 
 def user_owns_team(
     db: Session,
-    user_id: int | None,
-    team_id: int | None,
-    team: RowMapping | None = None,
+    user_id: int,
+    *,
+    team_id: int | None = None,
+    team: Team | RowMapping | dict | None = None,
 ) -> bool:
     """True if the user is the owner of the given team."""
-    if user_id is None:
-        return False
-    if isinstance(team, RowMapping):
-        return team.get("userID") == user_id
+    if team is not None:
+        return (team["userID"] if isinstance(team, dict) else team.userID) == user_id
     if team_id is None:
         return False
     return (
@@ -49,11 +48,11 @@ def user_owns_team(
 def user_in_division(
     db: Session,
     user_id: int,
-    division_id: int | None = None,
     *,
+    division_id: int | None = None,
+    division: Division | RowMapping | dict | None = None,
     team_id: int | None = None,
-    division: RowMapping | None = None,
-    team: RowMapping | None = None,
+    team: Team | RowMapping | dict | None = None,
 ) -> bool:
     """True if the user has a team in the given division.
 
@@ -61,19 +60,22 @@ def user_in_division(
     (the division that team belongs to).  Raises ``ValueError`` if
     neither is provided.
     """
-    if isinstance(team, RowMapping):
-        division_id = team.get("divisionID")
-    elif isinstance(division, RowMapping):
-        division_id = division.get("divisionID")
-    elif team_id is not None:
-        row = db.query(Team.divisionID).filter(Team.teamID == team_id).first()
-        if row is None:
+    if division is not None:
+        division_id = division["divisionID"] if isinstance(division, dict) else division.divisionID
+    if team is not None:
+        if division_id is not None and division_id != (team["divisionID"] if isinstance(team, dict) else team.divisionID):
             return False
-        division_id = row[0]
-
+        return user_owns_team(db, user_id, team=team)
+    if team_id is not None:
+        if division_id is not None:
+            return (
+                db.query(Team)
+                .filter(Team.teamID == team_id, Team.divisionID == division_id, Team.userID == user_id)
+                .first()
+            ) is not None
+        return user_owns_team(db, user_id, team_id=team_id)
     if division_id is None:
-        raise ValueError("user_in_division requires division_id or team_id")
-
+        raise ValueError("user_in_division requires division_id, or team_id")
     return (
         db.query(Team)
         .filter(Team.divisionID == division_id, Team.userID == user_id)
@@ -84,10 +86,13 @@ def user_in_division(
 def user_in_league(
     db: Session,
     user_id: int,
-    league_id: int | None = None,
     *,
+    league_id: int | None = None,
+    league: League | RowMapping | dict | None = None,
     division_id: int | None = None,
+    division: Division | RowMapping | dict | None = None,
     team_id: int | None = None,
+    team: Team | RowMapping | dict | None = None,
 ) -> bool:
     """True if the user has a team in the given league.
 
@@ -95,24 +100,20 @@ def user_in_league(
     ``team_id`` — first non-None wins.  Raises ``ValueError`` if none
     of the three is provided.
     """
-    if team_id is not None:
-        row = db.query(Team.leagueID).filter(Team.teamID == team_id).first()
-        if row is None:
+    if league is not None:
+        league_id = league["leagueID"] if isinstance(league, dict) else league.leagueID
+    if team is not None:
+        if league_id is not None and league_id != (team["leagueID"] if isinstance(team, dict) else team.leagueID):
             return False
-        league_id = row[0]
-    elif division_id is not None:
-        row = (
-            db.query(Division.leagueID)
-            .filter(Division.divisionID == division_id)
-            .first()
-        )
-        if row is None:
+        return user_owns_team(db, user_id, team=team)
+    if division is not None:
+        if league_id is not None and league_id != (division["leagueID"] if isinstance(division, dict) else division.leagueID):
             return False
-        league_id = row[0]
-
+        division_id = division["divisionID"] if isinstance(division, dict) else division.divisionID
+    if team_id is not None or division_id is not None:
+        return user_in_division(db, user_id, division_id=division_id, team_id=team_id)
     if league_id is None:
         raise ValueError("user_in_league requires league_id, division_id, or team_id")
-
     return (
         db.query(Team)
         .filter(Team.leagueID == league_id, Team.userID == user_id)
@@ -123,52 +124,54 @@ def user_in_league(
 def user_is_division_commissioner(
     db: Session,
     user_id: int,
-    division_id: int | None = None,
     *,
-    league_id: int | None = None,
+    division_id: int | None = None,
+    division: Division | RowMapping | dict | None = None,
     team_id: int | None = None,
+    team: Team | RowMapping | dict | None = None,
 ) -> bool:
-    """True if the user is a division commissioner.
+    """True if the user is a commissioner of the given division.
 
-    Three ways to identify the scope — first non-None wins:
+    A user qualifies if they are the league commissioner (Division.commissionerID)
+    or if they have a team in the division with isCommissioner set to True.
 
-    * ``division_id`` — commissioner of that specific division.
-    * ``team_id``     — commissioner of the division that team belongs to.
-    * ``league_id``   — commissioner of *any* division in that league.
-
+    The division can be identified by ``division_id``, ``team_id`` (resolves to
+    that team's division), or ``league_id`` (any division in that league).
     Raises ``ValueError`` if none of the three is provided.
-
-    Checked via the Teams table (``isCommissioner == 1``).
-    ``Division.commissionerID`` is a denormalised copy from Leagues and
-    should not be used for this check.
     """
+    if team is not None:
+        t = team
+        commissioner_id = t["commissionerID"] if isinstance(t, dict) else t.commissionerID
+        is_commissioner = t["isCommissioner"] if isinstance(t, dict) else t.isCommissioner
+        team_user_id = t["userID"] if isinstance(t, dict) else t.userID
+        team_division_id = t["divisionID"] if isinstance(t, dict) else t.divisionID
+        if commissioner_id == user_id or (is_commissioner and team_user_id == user_id):
+            return True
+        return user_is_division_commissioner(db, user_id, division_id=team_division_id)
     if team_id is not None:
-        row = db.query(Team.divisionID).filter(Team.teamID == team_id).first()
-        if row is None:
-            return False
-        division_id = row[0]
-
+        row = (
+            db.query(Team)
+            .filter(Team.teamID == team_id, Team.userID == user_id)
+            .first()
+        )
+        return (
+            False
+            if row is None
+            else row.isCommissioner or row.commissionerID == user_id
+        )
+    if division is not None:
+        division_id = division["divisionID"] if isinstance(division, dict) else division.divisionID
     if division_id is not None:
-        return (
+        row = (
             db.query(Team)
-            .filter(
-                Team.divisionID == division_id,
-                Team.userID == user_id,
-                Team.isCommissioner == 1,
-            )
+            .filter(Team.divisionID == division_id, Team.userID == user_id)
             .first()
-        ) is not None
-
-    if league_id is not None:
+        )
         return (
-            db.query(Team)
-            .filter(
-                Team.leagueID == league_id,
-                Team.userID == user_id,
-                Team.isCommissioner == 1,
-            )
-            .first()
-        ) is not None
+            False
+            if row is None
+            else row.isCommissioner or row.commissionerID == user_id
+        )
 
     raise ValueError(
         "user_is_division_commissioner requires division_id, team_id, or league_id"
@@ -178,88 +181,53 @@ def user_is_division_commissioner(
 def user_is_league_commissioner(
     db: Session,
     user_id: int,
-    league_id: int | None = None,
     *,
+    league_id: int | None = None,
+    league: League | RowMapping | dict | None = None,
     division_id: int | None = None,
+    division: Division | RowMapping | dict | None = None,
     team_id: int | None = None,
+    team: Team | RowMapping | dict | None = None,
 ) -> bool:
     """True if the user is the commissioner of the given league.
 
-    The league can be identified by ``league_id``, ``division_id``, or
-    ``team_id`` — first non-None wins.  Raises ``ValueError`` if none
-    of the three is provided.
+    The league can be identified by a pre-fetched object or its id:
+    ``team`` / ``team_id``, ``division`` / ``division_id``, or
+    ``league`` / ``league_id`` — checked in that order, first non-None wins.
+    Raises ``ValueError`` if none is provided.
+
+    Because commissionerID is propagated from League down to Division and Team,
+    any of these records answers the question without an extra join.
     """
+    if team is not None:
+        return (team["commissionerID"] if isinstance(team, dict) else team.commissionerID) == user_id
     if team_id is not None:
-        row = db.query(Team.leagueID).filter(Team.teamID == team_id).first()
-        if row is None:
-            return False
-        league_id = row[0]
-    elif division_id is not None:
-        row = (
-            db.query(Division.leagueID)
-            .filter(Division.divisionID == division_id)
+        return (
+            db.query(Team)
+            .filter(Team.teamID == team_id, Team.commissionerID == user_id)
             .first()
-        )
-        if row is None:
-            return False
-        league_id = row[0]
-
-    if league_id is None:
-        raise ValueError(
-            "user_is_league_commissioner requires league_id, division_id, or team_id"
-        )
-
-    return (
-        db.query(League)
-        .filter(League.leagueID == league_id, League.commissionerID == user_id)
-        .first()
-    ) is not None
-
-
-def user_is_commissioner(
-    db: Session,
-    user_id: int,
-    league_id: int | None = None,
-    *,
-    division_id: int | None = None,
-    team_id: int | None = None,
-) -> bool:
-    """True if the user is the league commissioner OR a division commissioner.
-
-    Accepts the same ``league_id`` / ``division_id`` / ``team_id`` options as
-    :func:`user_is_league_commissioner` and :func:`user_is_division_commissioner`.
-    Raises ``ValueError`` if none of the three is provided.
-
-    Identifiers are resolved once here so the two sub-checks each do at most
-    one query.
-    """
-    if team_id is not None:
-        row = (
-            db.query(Team.leagueID, Team.divisionID)
-            .filter(Team.teamID == team_id)
+        ) is not None
+    if division is not None:
+        return (division["commissionerID"] if isinstance(division, dict) else division.commissionerID) == user_id
+    if division_id is not None:
+        return (
+            db.query(Division)
+            .filter(
+                Division.divisionID == division_id, Division.commissionerID == user_id
+            )
             .first()
-        )
-        if row is None:
-            return False
-        league_id, division_id = row[0], row[1]
-    elif division_id is not None and league_id is None:
-        row = (
-            db.query(Division.leagueID)
-            .filter(Division.divisionID == division_id)
+        ) is not None
+    if league is not None:
+        return (league["commissionerID"] if isinstance(league, dict) else league.commissionerID) == user_id
+    if league_id is not None:
+        return (
+            db.query(League)
+            .filter(League.leagueID == league_id, League.commissionerID == user_id)
             .first()
-        )
-        if row is None:
-            return False
-        league_id = row[0]
-
-    if league_id is None and division_id is None:
-        raise ValueError(
-            "user_is_commissioner requires league_id, division_id, or team_id"
-        )
-
-    return user_is_league_commissioner(
-        db, user_id, league_id
-    ) or user_is_division_commissioner(db, user_id, division_id, league_id=league_id)
+        ) is not None
+    raise ValueError(
+        "user_is_league_commissioner requires league_id, division_id or team_id"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -267,117 +235,124 @@ def user_is_commissioner(
 # ---------------------------------------------------------------------------
 
 
-def require_team(
-    db: Session, user_id: int | None = None, team: RowMapping | None = None
-) -> None:
-    """Raise 404 if the team doesn't exist, 403 if the user doesn't own it."""
-    if not team:
-        raise NotFoundException(object_name="Team")
-    require_team_owner(db, user_id, team=team)
+def require_team(db: Session, team_id: int | None) -> Team:
+    row = db.query(Team).filter(Team.teamID == team_id).first() if team_id else None
+    if row:
+        return row
+    raise NotFoundException(object_name="Team", object_id=team_id)
 
 
-def require_team_owner(
-    db: Session,
-    user_id: int | None,
-    team_id: int | None = None,
-    team: RowMapping | None = None,
-) -> None:
-    """Raise HTTP 403 if the user does not own the team."""
-    if not user_owns_team(db, user_id, team_id=team_id, team=team):
+def require_division(db: Session, division_id: int | None) -> Division:
+    row = (
+        db.query(Division).filter(Division.divisionID == division_id).first()
+        if division_id
+        else None
+    )
+    if row:
+        return row
+    raise NotFoundException(object_name="Division", object_id=division_id)
+
+
+def require_league(db: Session, league_id: int | None) -> League:
+    row = (
+        db.query(League).filter(League.leagueID == league_id).first()
+        if league_id
+        else None
+    )
+    if row:
+        return row
+    raise NotFoundException(object_name="League", object_id=league_id)
+
+
+def require_team_owner(db: Session, user_id: int, team_id: int | None) -> None:
+    row = require_team(db, team_id)
+    if not user_owns_team(db, user_id, team=row):
         raise NotYourTeamException()
 
 
 def require_division_member(
     db: Session,
-    user_id: int | None,
-    division_id: int | None = None,
+    user_id: int,
     *,
+    division_id: int | None = None,
+    division: Division | RowMapping | dict | None = None,
     team_id: int | None = None,
-    division: RowMapping | None = None,
-    team: RowMapping | None = None,
+    team: Team | RowMapping | dict | None = None,
 ) -> None:
-    """Raise HTTP 403 if the user has no team in the division.
-
-    Accepts the same ``division_id`` / ``team_id`` options as
-    :func:`user_in_division`.
-    """
-    if user_id is None or not user_in_division(
-        db, user_id, division_id, team_id=team_id, team=team, division=division
+    if not user_in_division(
+        db,
+        user_id,
+        division_id=division_id,
+        division=division,
+        team_id=team_id,
+        team=team,
     ):
-        raise NotAMemberException(object_name="division")
+        raise NotAMemberException(object_name="Division")
 
 
 def require_league_member(
     db: Session,
-    user_id: int | None,
-    league_id: int | None = None,
+    user_id: int,
     *,
+    league_id: int | None = None,
+    league: League | RowMapping | dict | None = None,
     division_id: int | None = None,
+    division: Division | RowMapping | dict | None = None,
     team_id: int | None = None,
+    team: Team | RowMapping | dict | None = None,
 ) -> None:
-    """Raise HTTP 403 if the user has no team in the league.
-
-    Accepts the same ``league_id`` / ``division_id`` / ``team_id`` options
-    as :func:`user_in_league`.
-    """
-    if user_id is None or not user_in_league(
-        db, user_id, league_id, division_id=division_id, team_id=team_id
+    if not user_in_league(
+        db,
+        user_id,
+        league_id=league_id,
+        league=league,
+        division_id=division_id,
+        division=division,
+        team_id=team_id,
+        team=team,
     ):
-        raise NotAMemberException(object_name="league")
+        raise NotAMemberException(object_name="League")
 
 
 def require_division_commissioner(
     db: Session,
-    user_id: int | None,
-    division_id: int | None = None,
+    user_id: int,
     *,
-    league_id: int | None = None,
+    division_id: int | None = None,
+    division: Division | RowMapping | dict | None = None,
     team_id: int | None = None,
+    team: Team | RowMapping | dict | None = None,
 ) -> None:
-    """Raise HTTP 403 if the user is not a division commissioner.
-
-    Accepts the same ``division_id`` / ``team_id`` / ``league_id`` options as
-    :func:`user_is_division_commissioner`.
-    """
-    if user_id is None or not user_is_division_commissioner(
-        db, user_id, division_id, league_id=league_id, team_id=team_id
+    if not user_is_division_commissioner(
+        db,
+        user_id,
+        division_id=division_id,
+        division=division,
+        team_id=team_id,
+        team=team,
     ):
-        raise NotACommissionerException(object_name="division")
+        raise NotACommissionerException(object_name="Division")
 
 
 def require_league_commissioner(
     db: Session,
-    user_id: int | None,
-    league_id: int | None = None,
+    user_id: int,
     *,
-    division_id: int | None = None,
-    team_id: int | None = None,
-) -> None:
-    """Raise HTTP 403 if the user is not the league commissioner.
-
-    Accepts the same ``league_id`` / ``division_id`` / ``team_id`` options as
-    :func:`user_is_league_commissioner`.
-    """
-    if user_id is None or not user_is_league_commissioner(
-        db, user_id, league_id, division_id=division_id, team_id=team_id
-    ):
-        raise NotACommissionerException(object_name="league")
-
-
-def require_commissioner(
-    db: Session,
-    user_id: int | None,
     league_id: int | None = None,
-    *,
+    league: League | RowMapping | dict | None = None,
     division_id: int | None = None,
+    division: Division | RowMapping | dict | None = None,
     team_id: int | None = None,
+    team: Team | RowMapping | dict | None = None,
 ) -> None:
-    """Raise HTTP 403 if the user is neither league nor division commissioner.
-
-    Accepts the same ``league_id`` / ``division_id`` / ``team_id`` options as
-    :func:`user_is_commissioner`.
-    """
-    if user_id is None or not user_is_commissioner(
-        db, user_id, league_id, division_id=division_id, team_id=team_id
+    if not user_is_league_commissioner(
+        db,
+        user_id,
+        league_id=league_id,
+        league=league,
+        division_id=division_id,
+        division=division,
+        team_id=team_id,
+        team=team,
     ):
-        raise NotACommissionerException(object_name=None)
+        raise NotACommissionerException(object_name="League")

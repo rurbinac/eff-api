@@ -67,6 +67,7 @@ class DraftConstants:
             DraftConstants.DRAFT_STATUS_DRAFTED,
         )
 
+
 class DraftEvents:
     """Draft real-time event name constants."""
 
@@ -102,7 +103,6 @@ class DraftEvents:
 
 
 class MatchDayStatusConstants:
-
     WAIVERS: Final[str] = "Waivers"
     WAIVERS_SETTLE: Final[str] = "WaiversSettle"
     OPEN_WAIVERS: Final[str] = "OpenWaivers"
@@ -138,6 +138,11 @@ class MatchDayStatusConstants:
             MatchDayStatusConstants.MATCH,
             MatchDayStatusConstants.POST_MATCH,
         )
+
+    @staticmethod
+    def valid_status_dates() -> tuple[str]:
+        values = MatchDayStatusConstants.valid_values()
+        return (f"{prefix}{s}" for s in values for prefix in ("start", "finish"))
 
     @staticmethod
     def boundaries() -> Iterator[tuple[str, tuple[str, str]]]:
@@ -292,6 +297,34 @@ class DraftPositionConstants:
             if order >= 1 and order <= 5
             else None
         )
+
+    @staticmethod
+    def check_bounds(dp: str, cnt: int) -> int | None:
+        """Check whether a position count is within its draft limits.
+
+        Args:
+            dp: Draft position string (e.g. GOALKEEPER, DEFENDER).
+            cnt: Current count of members at that position.
+
+        Returns:
+            None  — dp is not a recognised position.
+             1    — surplus: cnt exceeds the maximum allowed.
+             0    — ok: cnt is within bounds (>= min and <= max).
+            -1    — deficit: cnt is below the required minimum but at or
+                    above the auto-draft lowest target.
+            -2    — critical deficit: cnt is below the auto-draft lowest
+                    target (highest drafting priority).
+        """
+        if dp not in DraftPositionConstants.LIMITS:
+            return None
+        limits = DraftPositionConstants.LIMITS[dp]
+        if cnt > limits["max"]:
+            return 1
+        if cnt < limits["lowest"]:
+            return -2
+        if cnt < limits["min"]:
+            return -1
+        return 0
 
 
 class RealMatchStatus:
@@ -510,15 +543,12 @@ DraftPositionConstants.LIMITS = {
 }
 
 
-def _verify_int(value: Any, values: tuple[int], default: int | None = None) -> int | None:
-    """_summary_
+def _verify_int(
+    value: Any, values: tuple[int], default: int | None = None
+) -> int | None:
+    """Return the int value if it is in the allowed set, otherwise default.
 
-    Args:
-        value (Any): _description_
-        values (tuple[int]): _description_
-
-    Returns:
-        int | None: _description_
+    Accepts string representations of integers (e.g. "2" → 2).
     """
     if isinstance(value, str):
         try:
@@ -533,15 +563,7 @@ def _verify_int(value: Any, values: tuple[int], default: int | None = None) -> i
 def _verify_str(
     value: Any, values: tuple[str], default: str | None = None
 ) -> str | None:
-    """_summary_
-
-    Args:
-        value (Any): _description_
-        values (tuple[str]): _description_
-
-    Returns:
-        str | None: _description_
-    """
+    """Return the canonical string from values that matches value (case-insensitive), otherwise default."""
     try:
         value = str(value).strip().lower()
         for v in values:

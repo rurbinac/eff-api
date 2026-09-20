@@ -1114,7 +1114,7 @@ class SyncRealService:
         Args:
             members: Dict of member dicts keyed by realTeamMemberKey (modified in place).
         """
-        for key in members:
+        for key in members:  # noqa: PLC0206
             members[key].pop("realStandingID", None)
             members[key]["ranking"] = None
             members[key]["place"] = None

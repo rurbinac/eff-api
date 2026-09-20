@@ -1,4 +1,4 @@
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 
 
 class EFFException(HTTPException):
@@ -20,38 +20,54 @@ class CannotSaveException(EFFException):
         message = f"Cannot save {object_name}"
         if reason:
             message += f": {reason} "
-        super().__init__(message, status_code=409, legacy_code=115)
+        super().__init__(message, status_code=status.HTTP_409_CONFLICT, legacy_code=115)
 
 class NotYourTeamException(EFFException):
     """Exception raised when a user cannot draft."""
 
     def __init__(self):
         message = "You are not the owner of this team."
-        super().__init__(message, status_code=403, legacy_code=104)
+        super().__init__(message, status_code=status.HTTP_403_FORBIDDEN, legacy_code=104)
 
 class NotAMemberException(EFFException):
     """Exception raised when a user cannot draft."""
 
     def __init__(self, object_name: str):
         message = f"You are not a member of this {object_name}."
-        super().__init__(message, status_code=403, legacy_code=104)
+        super().__init__(message, status_code=status.HTTP_403_FORBIDDEN, legacy_code=104)
 
 class NotACommissionerException(EFFException):
     """Exception raised when a user cannot draft."""
 
-    def __init__(self, object_name: str = None):
+    def __init__(self, object_name: str | None = None, object_id: int | None = None):
+        message = "You are not a commissioner"
         if object_name is None:
-            message = "You are not a commissioner."
+            message = f"{message}."
+        elif object_id is None:
+            message = f"{message} of this {object_name}."
         else:
-            message = f"You are not a commissioner of this {object_name}."
-        super().__init__(message, status_code=403, legacy_code=104)
+            message = f"{message} of this {object_name} (id={object_id})."
+        super().__init__(message, status_code=status.HTTP_403_FORBIDDEN, legacy_code=104)
+
+
+class ForbiddenException(EFFException):
+    """Exception raised when a requested resource is not found."""
+
+    def __init__(self, txt: str | None = None):
+        if txt is None:
+            message = "Not authorised."
+        else:
+            message = f"Not authorised ({txt})."
+        super().__init__(message, status_code=status.HTTP_403_FORBIDDEN, legacy_code=104)
 
 class NotFoundException(EFFException):
     """Exception raised when a requested resource is not found."""
 
-    def __init__(self, object_name: str | None = None):
+    def __init__(self, object_name: str | None = None, object_id: int | None = None):
         if object_name is None:
             message = "Resource not found."
-        else:
+        elif object_id is None:
             message = f"{object_name} not found."
-        super().__init__(message, status_code=404, legacy_code=404)
+        else:
+            message = f"{object_name} (id={object_id}) not found."
+        super().__init__(message, status_code=status.HTTP_404_NOT_FOUND, legacy_code=404)

@@ -1,7 +1,9 @@
 from __future__ import annotations
-from collections.abc import Callable
+
+from collections import UserList
+from collections.abc import Callable, Iterator
 from functools import cache
-from typing import Any, Final, Iterator, TypeAlias, overload
+from typing import Any, Final, TypeAlias, overload
 
 from app.constants import DraftPositionConstants
 
@@ -46,6 +48,431 @@ GroupData: TypeAlias = list[str]
 PackedData: TypeAlias = list[GroupData]
 GetKeyData: TypeAlias = Callable[[str], dict[str, Any]]
 
+class Keys(UserList):
+    """Validated list of member keys (e.g. 'P123', 'T7').
+
+    Behaves like a regular list but rejects any item that is not a valid
+    member key (must start with 'P' or 'T' followed by a positive integer).
+    Duplicate handling is controlled by the allow_dups constructor parameter —
+    the same three-mode semantics as MKeys (False=error, None=skip, True=allow).
+    Also provides static helpers for parsing, building, and serialising keys.
+    """
+
+    SUFFIX: Final[str] = "."
+    PLAYER: Final[str] = "P"
+    TEAM: Final[str] = "T"
+
+    @staticmethod
+    def is_valid(key: str) -> bool:
+        """Return True if key is a valid member key ('P' or 'T' followed by a positive integer)."""
+        return Keys.split(key)[0] is not None
+
+    @staticmethod
+    def is_player(key: str) -> bool:
+        """Return True if key is a valid player key (starts with 'P')."""
+        return Keys.split(key)[0] == Keys.PLAYER
+
+    @staticmethod
+    def is_team(key: str) -> bool:
+        """Return True if key is a valid team key (starts with 'T')."""
+        return Keys.split(key)[0] == Keys.TEAM
+
+    @staticmethod
+    def split(key: str) -> tuple[str | None, int | None]:
+        """Split a key into its prefix ('P'/'T') and numeric id.
+
+        Returns (prefix, id) on success, (None, None) if the key is invalid.
+        """
+        k = key.strip()
+        if len(k) > 1 and k.startswith((Keys.PLAYER, Keys.TEAM)):
+            try:
+                num = int(k[1:])
+                if num > 0:
+                    return (k[0:1], num)
+            except ValueError:
+                pass
+        return (None, None)
+
+    @staticmethod
+    def build_keys(suffix: str, id: int) -> str | None:
+        """Build a single key string from a prefix ('P'/'T') and a positive integer id.
+
+        Returns None if suffix is not 'P'/'T' or id is not positive.
+        """
+        return suffix + str(id) if suffix in (Keys.PLAYER, Keys.TEAM) and id > 0 else None
+
+    @staticmethod
+    def build_player_keys(ids: int | list[int]) -> str | list[str] | None:
+        """Build one or more player key strings from an id or list of ids.
+
+        Returns a single string for a scalar id, a list for a list of ids,
+        or None if any id is invalid.
+        """
+        return Keys._build_member_keys(ids, Keys.PLAYER)
+
+    @staticmethod
+    def build_team_keys(ids: int | list[int]) -> str | list[str] | None:
+        """Build one or more team key strings from an id or list of ids.
+
+        Returns a single string for a scalar id, a list for a list of ids,
+        or None if any id is invalid.
+        """
+        return Keys._build_member_keys(ids, Keys.TEAM)
+
+    @staticmethod
+    def to_str(keys: str | list[str] | Keys | None) -> str | None:
+        """Serialise keys to a packed dot-separated string (e.g. 'P1.P2.T3.').
+
+        Accepts a Keys instance, a list of key strings, a single key string,
+        or None. Returns an empty string for None or an empty collection,
+        and None if any key is invalid.
+        """
+        if keys is None:
+            return ""
+        elif isinstance(keys, Keys):
+            return  Keys.SUFFIX.join(keys.data) + Keys.SUFFIX if len(keys) > 0 else ""
+        elif isinstance(keys, str):
+            keys = keys.strip()
+            return keys + Keys.SUFFIX if Keys.is_valid(keys) else None
+        elif not isinstance(keys, list):
+            return None
+        if len(keys) > 0:
+            for key in keys:
+                if not Keys.is_valid(key):
+                    return None
+            return Keys.SUFFIX.join(keys) + Keys.SUFFIX
+        else:
+            return ""
+
+    @staticmethod
+    def to_list(keys: str | list[str] | Keys | None) -> list[str] | None:
+        """Parse keys into a flat list of key strings.
+
+        Accepts a packed string (e.g. 'P1.P2.T3.'), a list of key strings,
+        a Keys instance, or None. Returns an empty list for None or an empty
+        input, and None if any key is invalid or the string format is wrong.
+        Always returns a copy — mutating the result does not affect the source.
+        """
+        if keys is None:
+            return []
+        elif isinstance(keys, Keys):
+            return keys.data.copy()
+        elif isinstance(keys, list):
+            for k in keys:
+                if not Keys.is_valid(k):
+                    return None
+            return keys.copy()
+        elif not isinstance(keys, str):
+            return None
+        keys = keys.strip()
+        if len(keys) == 0:
+            return []
+        elif not keys.endswith(Keys.SUFFIX):
+            return None
+        result = []
+        for k in keys[:-1].split(Keys.SUFFIX):
+            if not Keys.is_valid(k):
+                return None
+            result.append(k)
+        return result
+
+    @staticmethod
+    def _build_member_keys(ids: int | list[int], suffix: str) -> str | list[str] | None:
+        """Build key string(s) from one or more ids using the given prefix."""
+        if isinstance(ids, int):
+            return suffix + str(ids) if ids > 0 else None
+        elif isinstance(ids, list):
+            keys = []
+            for i in ids:
+                key = Keys._build_member_keys(i, suffix)
+                if key is None:
+                    return None
+                keys.append(key)
+            return keys
+        return None
+
+    def __init__(self, initlist=None, allow_dups: bool | None = False):
+        """Create a validated list of member keys.
+
+        Args:
+            initlist: Optional initial keys (list or iterable).
+            allow_dups: Duplicate-key policy (checked globally across the list):
+                False — duplicate raises ValueError (default).
+                None  — duplicate is silently skipped; first occurrence kept.
+                True  — duplicates are allowed.
+        """
+        self._allow_dups = allow_dups
+        self.data = []
+        if initlist is not None:
+            # Route through extend so validation and dup-checking apply.
+            raw, initlist = initlist, Keys.to_list(initlist)
+            if initlist is None:
+                raise ValueError(f"Invalid member keys: {raw!r}")
+            elif len(initlist) > 0:
+                self.extend(initlist)
+
+    @property
+    def dups(self) -> bool | None:
+        """Duplicate-key policy: True=allowed, False=error, None=silently skipped."""
+        return self._allow_dups
+
+    def unpack(self, data: str | list[str] | None) -> bool:
+        """Replace the current keys with those parsed from data.
+
+        Args:
+            data: A packed string (e.g. 'P1.P2.T3.'), a list of key strings,
+                or None to clear the list.
+
+        Returns:
+            True on success, False if data contains invalid keys or violates
+            the duplicate policy.
+        """
+        try:
+            keys = Keys(data, allow_dups=self._allow_dups)
+        except ValueError:
+            return False
+        self.data = keys.data
+        return True
+
+    def pack(self) -> str:
+        """Serialise the current keys to a packed string (e.g. 'P1.P2.T3.').
+
+        Returns an empty string if the list is empty.
+        """
+        return self.to_str(self.data) or ""
+
+    def check(self) -> None:
+        """Re-validate all keys and enforce the duplicate policy.
+
+        Raises ValueError if any key is invalid or if the current allow_dups
+        policy is violated. Useful after direct mutation of self.data.
+        """
+        Keys(self.data, allow_dups=self._allow_dups)
+
+    def append(self, item) -> None:
+        self._validate(item)
+        if not self._check_dup(item):
+            self.data.append(item)
+
+    def insert(self, i, item) -> None:
+        self._validate(item)
+        if not self._check_dup(item):
+            self.data.insert(i, item)
+
+    def extend(self, other) -> None:
+        self.data.extend(self._validate_all(other))
+
+    def __setitem__(self, i, item) -> None:
+        if isinstance(i, slice):
+            self.data[i] = self._validate_all(item)
+        else:
+            self._validate(item)
+            if not self._check_dup(item):
+                self.data[i] = item
+
+    def __iadd__(self, other):
+        self.extend(other)
+        return self
+
+    def __add__(self, other):
+        result = self.__class__(allow_dups=self._allow_dups)
+        result.data = self.data.copy()
+        result.extend(other)
+        return result
+
+    def _validate(self, item) -> None:
+        """Raise ValueError if item is not a valid member key."""
+        if not Keys.is_valid(item):
+            raise ValueError(f"Invalid member key: {item!r}")
+
+    def _check_dup(self, item) -> bool:
+        """Check whether item is a duplicate of an existing key.
+
+        Returns True if the item should be skipped (allow_dups is None).
+        Raises ValueError if duplicates are not allowed (allow_dups is False).
+        Returns False if the item is not a duplicate or duplicates are allowed.
+        """
+        if self._allow_dups is True or item not in self.data:
+            return False
+        if self._allow_dups is False:
+            raise ValueError(f"Duplicate key: {item!r}")
+        return True  # allow_dups is None → skip silently
+
+    def _validate_all(self, iterable) -> list:
+        """Validate all items and apply duplicate policy, returning the filtered list."""
+        items = list(iterable)
+        for item in items:
+            self._validate(item)
+        if self._allow_dups is True:
+            return items
+        seen: set[str] = set(self.data)
+        result = []
+        for item in items:
+            if item in seen:
+                if self._allow_dups is False:
+                    raise ValueError(f"Duplicate key: {item!r}")
+                # allow_dups is None → skip
+            else:
+                seen.add(item)
+                result.append(item)
+        return result
+
+
+class KeyGroups(UserList):
+    """List of Keys groups serialised as groups joined by ':' (e.g. 'P1.P2.:T3.T4.').
+
+    Each item in the list is a Keys instance. Duplicate-key policy (allow_dups)
+    applies across all groups — the same key may not appear in more than one
+    group unless allow_dups is True.
+    """
+
+    DELIM: Final[str] = ":"
+
+    @staticmethod
+    def _to_keys(item, allow_dups: bool | None = False) -> Keys | None:
+        """Convert item to a Keys instance, raising ValueError if invalid."""
+        if item is None or isinstance(item, (str, list, Keys)):
+            return Keys(item, allow_dups=allow_dups)
+        return None
+
+    def __init__(self, initlist=None, allow_dups: bool | None = False):
+        """Create a KeyGroups instance.
+
+        Args:
+            initlist: Optional initial data — a packed string, a list of Keys
+                instances, or a list of lists/strings that each coerce to Keys.
+            allow_dups: Cross-group duplicate policy:
+                False — same key in two groups raises ValueError (default).
+                None  — duplicate in a later group is silently skipped.
+                True  — duplicates across groups are allowed.
+        """
+        self._allow_dups = allow_dups
+        self.data: list[Keys] = []
+        if initlist is not None:
+            if isinstance(initlist, str):
+                raw = initlist
+                if not self.unpack(initlist):
+                    raise ValueError(f"Invalid KeyGroups data: {raw!r}")
+            else:
+                for item in initlist:
+                    self.append(item)
+
+    @property
+    def dups(self) -> bool | None:
+        """Cross-group duplicate-key policy: True=allowed, False=error, None=skip."""
+        return self._allow_dups
+
+    @staticmethod
+    def to_str(groups: KeyGroups | list | str | None) -> str | None:
+        """Serialise groups to a packed string (e.g. 'P1.P2.:T3.T4.').
+
+        Accepts a KeyGroups instance, a list of Keys/lists/strings, a packed
+        string, or None. Returns an empty string for None or empty input, and
+        None if any group or key is invalid.
+        """
+        if groups is None:
+            return ""
+        if isinstance(groups, KeyGroups):
+            return groups.pack()
+        if isinstance(groups, str):
+            kg = KeyGroups()
+            return groups if kg.unpack(groups) else None
+        if isinstance(groups, list):
+            parts = []
+            for g in groups:
+                s = Keys.to_str(g if isinstance(g, list) else (list(g) if isinstance(g, Keys) else g))
+                if s is None:
+                    return None
+                parts.append(s)
+            return KeyGroups.DELIM.join(parts)
+        return None
+
+    @staticmethod
+    def to_list(groups: KeyGroups | list | str | None) -> list[list[str]] | None:
+        """Parse groups into a list of key lists (e.g. [['P1','P2'],['T3','T4']]).
+
+        Accepts a KeyGroups instance, a list of Keys/lists/strings, a packed
+        string, or None. Returns an empty list for None or empty input, and
+        None if any group or key is invalid. Always returns copies.
+        """
+        if groups is None:
+            return []
+        if isinstance(groups, KeyGroups):
+            return [list(g) for g in groups.data]
+        if isinstance(groups, str):
+            kg = KeyGroups()
+            return [list(g) for g in kg.data] if kg.unpack(groups) else None
+        if isinstance(groups, list):
+            result = []
+            for g in groups:
+                parsed = Keys.to_list(g if isinstance(g, (str, list, Keys)) else None)
+                if parsed is None:
+                    return None
+                result.append(parsed)
+            return result
+        return None
+
+    def pack(self) -> str:
+        """Serialise to a packed string (e.g. 'P1.P2.:T3.T4.').
+
+        Returns an empty string if there are no groups.
+        """
+        return KeyGroups.DELIM.join(g.pack() for g in self.data)
+
+    def unpack(self, data: str | list | None) -> bool:
+        """Replace the current groups with those parsed from data.
+
+        Args:
+            data: A packed string, a list of Keys/lists/strings, or None to clear.
+
+        Returns:
+            True on success, False if any group or key is invalid.
+        """
+        if data is None:
+            self.data = []
+            return True
+        if isinstance(data, str):
+            self.data = []
+            parts = data.strip().split(KeyGroups.DELIM) if data.strip() else []
+            for part in parts:
+                keys = Keys.to_list(part) if part else []
+                if keys is None:
+                    self.data = []
+                    return False
+                self.data.append(KeyGroups._to_keys(keys, self._allow_dups))
+            return True
+        if isinstance(data, list):
+            self.data = []
+            for item in data:
+                try:
+                    self.append(item)
+                except ValueError:
+                    self.data = []
+                    return False
+            return True
+        return False
+
+    def _coerce(self, item) -> Keys:
+        """Convert item to a Keys instance, raising ValueError if invalid."""
+        keys = KeyGroups._to_keys(item, self._allow_dups)
+        if keys is None:
+            raise ValueError(f"Invalid group: {item!r}")
+        return keys
+
+    def append(self, item) -> None:
+        """Append a group. Accepts a Keys instance, a list of key strings, or a packed string."""
+        self.data.append(self._coerce(item))
+
+    def insert(self, i, item) -> None:
+        """Insert a group at index i."""
+        self.data.insert(i, self._coerce(item))
+
+    def __setitem__(self, i, item) -> None:
+        if isinstance(i, slice):
+            self.data[i] = [self._coerce(x) for x in item]
+        else:
+            self.data[i] = self._coerce(item)
+
 
 class MKeys:
     """Manages hierarchical keys with group separation.
@@ -69,11 +496,12 @@ class MKeys:
         """Transforms different inputs to a packed str of keys or None on error
 
         Args:
-            keys (MKeys | PackedData | list | str | None): a representation of keys
-            one_level (bool, optional): _description_. Defaults to False.
+            keys: Source in any accepted format (MKeys, packed string, list, or None).
+            one_level: When True, treat keys as a single flat group and join with '.';
+                when False, treat as multiple groups joined with ':'.
 
         Returns:
-            str | None: _description_
+            Packed string or empty string on success, None if the input is invalid.
         """
         if keys is None:
             return ""
@@ -113,6 +541,17 @@ class MKeys:
     def to_list(
         keys: MKeys | list | str | None, one_level: bool = False
     ) -> PackedData | GroupData | None:
+        """Unpack keys into list form.
+
+        Args:
+            keys: Source in any accepted format (MKeys, packed string, list, or None).
+            one_level: When True, return a flat GroupData list for a single group;
+                when False, return a PackedData list of groups.
+
+        Returns:
+            GroupData (flat list) when one_level is True, PackedData (list of lists)
+            otherwise, or None if the input is invalid.
+        """
         if keys is None:
             return []
 
@@ -153,14 +592,13 @@ class MKeys:
         Returns (type, number) if valid, (None, None) if invalid."""
         if isinstance(key, str):
             k = key.strip()
-            if len(k) > 1:
-                if k.startswith("T") or k.startswith("P"):
-                    try:
-                        num = int(k[1:])
-                        if num > 0:
-                            return (k[0:1], num)
-                    except ValueError:
-                        pass
+            if len(k) > 1 and k.startswith(("T", "P")):
+                try:
+                    num = int(k[1:])
+                    if num > 0:
+                        return (k[0:1], num)
+                except ValueError:
+                    pass
         return (None, None)
 
     @staticmethod
@@ -170,20 +608,22 @@ class MKeys:
 
     @staticmethod
     def valid_player_key(key: Any) -> bool:
-        """Returns True if the key is valid, False otherwise."""
+        """Returns True if the key is a valid player key (starts with 'P')."""
         return MKeys.split_key(key)[0] == MKeys.PLAYER
 
     @staticmethod
     def valid_team_key(key: Any) -> bool:
-        """Returns True if the key is valid, False otherwise."""
+        """Returns True if the key is a valid team key (starts with 'T')."""
         return MKeys.split_key(key)[0] == MKeys.TEAM
 
     @staticmethod
     def from_player_ids(ids: int | list[int] | None) -> str | None:
+        """Build a packed player-key string from one or more player IDs (e.g. 1 → 'P1.')."""
         return MKeys._from_ids(MKeys.PLAYER, ids)
 
     @staticmethod
     def from_team_ids(ids: int | list[int] | None) -> str | None:
+        """Build a packed team-key string from one or more team IDs (e.g. 7 → 'T7.')."""
         return MKeys._from_ids(MKeys.TEAM, ids)
 
     @staticmethod
@@ -382,6 +822,7 @@ class MKeys:
         return len(self._groups[group]) if self.has_group(group) else None
 
     def count_all(self) -> int:
+        """Return the total number of keys across all groups."""
         return 0 if self.size == 0 else sum(len(g) for g in self._groups)
 
     def find_group(self, key: str) -> int:
@@ -431,11 +872,14 @@ class MKeys:
         - True if successful
         - False if invalid or if duplicates are not allowed (allow_dups=False|None)
           and the key already exists in ANY group."""
-        if self.has_group(group) and self.valid_key(key):
-            if self._allow_dups is True or self.find_group(key) < 0:
-                # Append if duplicates are allowed or the key does not exist in any group
-                self._groups[group].append(key)
-                return True
+        if (
+            self.has_group(group)
+            and self.valid_key(key)
+            and (self._allow_dups is True or self.find_group(key) < 0)
+        ):
+            # Append if duplicates are allowed or the key does not exist in any group
+            self._groups[group].append(key)
+            return True
         return False
 
     def remove_key(self, key: str, group: int | None = None) -> bool:
@@ -631,11 +1075,24 @@ class BaseMembers:
 
     @cache
     def get_dp(self, key: str) -> str | None:
+        """Return the draft position for a member key, or None if unknown."""
         return self._get_dp(key)
 
     def collect_by_dp(
         self, keys: str | list[str] | None = None, allow_unknown: bool = False
     ) -> dict[str, list[str]] | None:
+        """Group keys by their draft position.
+
+        Args:
+            keys: One or more member keys to classify. None/empty returns {}.
+            allow_unknown: When True, unrecognised keys are grouped under DP_UNKNOWN
+                instead of causing a None return.
+
+        Returns:
+            Dict mapping each draft position to its list of keys, or None if any
+            key is unrecognised (and allow_unknown is False) or if a duplicate is
+            found and duplicates are not ignored.
+        """
         keys = self._to_keys_list(keys)
         if keys is None:
             return None
@@ -658,6 +1115,7 @@ class BaseMembers:
 
     @property
     def dp_cnt(self) -> dict[str, int]:
+        """Count of members at each draft position (Goalkeeper, Defender, …, Player, Member)."""
         by_dp = self.collect_by_dp([key for _, key in self._mkeys.keys()])
         if by_dp is None:
             by_dp = {}
@@ -679,6 +1137,7 @@ class BaseMembers:
 
     @property
     def is_valid(self) -> bool:
+        """True when the roster has no deficit and no surplus across all positions."""
         dp_stats = self.dp_stats
         return not dp_stats[MEMBER]["deficit"] and not dp_stats[MEMBER]["surplus"]
 
@@ -749,7 +1208,12 @@ class TeamMembers(BaseMembers):
         to_add: str | list[str] | None = None,
         to_remove: str | list[str] | None = None,
     ) -> bool:
-        """"""
+        """Apply member changes if valid, returning True on success.
+
+        Validates the proposed add/remove combination against draft-position
+        constraints before mutating internal state. Returns False without
+        making any changes if the combination is invalid.
+        """
         # Check if the change can be done
         keys_to_add, keys_to_remove = self._can_change(
             to_add=to_add, to_remove=to_remove
@@ -838,9 +1302,21 @@ class TeamMembers(BaseMembers):
 
 class DraftTeamMembers(BaseMembers):
     def draft(self) -> bool:
-        pass
+        """Execute a single draft pick. Not yet implemented."""
 
     def available_dp(self, draft_lowest: bool) -> set[str]:
+        """Return the set of draft positions that may be picked next.
+
+        Args:
+            draft_lowest: When True, positions still below their auto-draft
+                lowest target are returned first (highest priority). Only
+                once all lowest targets are met does it fall back to checking
+                must_add and can_add positions.
+
+        Returns:
+            Set of position strings (e.g. {"Defender", "Midfielder"}) that
+            are eligible for the next pick given the current roster state.
+        """
         dp_cnt = self.dp_cnt
         available = set()
         if draft_lowest:

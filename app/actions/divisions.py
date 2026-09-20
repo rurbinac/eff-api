@@ -1,29 +1,135 @@
 from datetime import datetime
 
-from fastapi import HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.models import Division, League
+from app.guards import require_division, require_league_commissioner, require_league_member
 from app.services import QueryService
-from app.utils import MKeys
 from app.utils.dt import utc_now
+from app.utils.member_keys import Keys
 
 
 class DivisionsReadListAction:
     """Get all divisions for a league."""
 
     @staticmethod
-    def execute(db: Session, league_id: int) -> list[dict]:
+    def execute(db: Session, league_id: int, user_id: int) -> list[dict]:
         """Get divisions for a league (pure data, no wrapper)."""
-        # Query all divisions for league
+        require_league_member(db, user_id, league_id=league_id)
         rows = QueryService.get_divisions_by_league(db, league_id)
         # Return pure data (no response wrapper)
         return rows
 
 
+class DivisionsUpdateAction:
+    """Update editable division settings (commissioner only)."""
+
+    @staticmethod
+    def execute(
+        db: Session,
+        division_id: int,
+        user_id: int,
+        draft_type: str | None = None,
+        draft_date: datetime | None = None,
+        draft_complete_date: datetime | None = None,
+    ) -> dict:
+
+        division = require_division(db, division_id)
+        require_league_commissioner(db, user_id, division=division)
+
+        if draft_type is not None:
+            division.draftType = draft_type
+        if draft_date is not None:
+            division.draftDate = draft_date
+        if draft_complete_date is not None:
+            division.draftCompleteDate = draft_complete_date
+
+        division.updatedBy = user_id
+        division.updatedIn = utc_now()
+        db.commit()
+        db.refresh(division)
+
+        return {
+            "divisionID": division.divisionID,
+            "draftType": division.draftType,
+            "draftDate": division.draftDate.isoformat() if division.draftDate else None,
+            "draftCompleteDate": division.draftCompleteDate.isoformat() if division.draftCompleteDate else None,
+            "updatedBy": division.updatedBy,
+            "updatedIn": division.updatedIn.isoformat() if division.updatedIn else None,
+        }
+
 class DivisionsTransactionsDetailAction:
     """Get transaction details for a division (last 14 days)."""
+
+    @staticmethod
+    def execute(db: Session, division_id: int, user_id: int) -> list[dict]:
+        """Get transaction details for division in last 14 days (pure data, no wrapper)."""
+        require_league_member(db, user_id, division_id=division_id)
+        # Query transaction logs with database-agnostic date calculation
+        stmt = text("""
+            SELECT `t1`.`baseRealCompetitionID` AS `realCompetitionID`,
+                   `tml1`.`teamMemberLogID`,
+                   `tml1`.`teamMemberTransferID`,
+                   `tml1`.`leagueID`,
+                   `tml1`.`divisionID`,
+                   `tml1`.`teamID`,
+                   `tml1`.`userID`,
+                   `t1`.`teamName`,
+                   `tml1`.`requester`,
+                   `tml1`.`transactionType`,
+                   `tml1`.`membersBefore`,
+                   `tml1`.`membersAfter`,
+                   `tml2`.`teamID` AS `otherTeamID`,
+                   `tml2`.`userID` AS `otherUserID`,
+                   `t2`.`teamName` AS `otherTeamName`,
+                   `tml2`.`membersBefore` AS `otherMembersBefore`,
+                   `tml2`.`membersAfter` AS `otherMembersAfter`,
+                   `tml1`.`createdIn` AS `processDate`,
+                   `tmt`.`createdIn` AS `requestDate`
+            FROM `TeamMemberLog` `tml1`
+            LEFT OUTER JOIN `Teams` `t1` ON `tml1`.`teamID` = `t1`.`teamID`
+            LEFT OUTER JOIN `TeamMemberTransfers` `tmt` ON `tml1`.`teamMemberTransferID` = `tmt`.`teamMemberTransferID`
+            LEFT OUTER JOIN `TeamMemberLog` `tml2` ON `tml2`.`teamMemberTransferID` = `tmt`.`teamMemberTransferID`
+            LEFT OUTER JOIN `Teams` `t2` ON `tml2`.`teamID` = `t2`.`teamID`
+            WHERE `tml1`.`divisionID` = :divisionID
+              AND `tml1`.`createdIn` >= NOW() - INTERVAL 14 DAY
+            ORDER BY `tml1`.`createdIn` DESC
+        """)
+
+        results = db.execute(stmt, {"divisionID": division_id})
+        rows = [dict(row) for row in results.mappings()]
+
+        members = []
+        for row in rows:
+            # Split members by transaction type (must read before popping)
+            splitted = DivisionsTransactionsDetailAction._split_members(row)
+
+            # Remove member string fields
+            row.pop("membersBefore", None)
+            row.pop("membersAfter", None)
+            row.pop("otherMembersBefore", None)
+            row.pop("otherMembersAfter", None)
+
+            # For each transaction type and member
+            for transaction_type, keys in splitted.items():
+                for key in keys:
+                    # Get member stats from RealStandings
+                    member_stats = DivisionsTransactionsDetailAction._get_member_stats(
+                        db, key, row.get("realCompetitionID")
+                    )
+
+                    # Create member transaction record
+                    member_record = row.copy()
+                    member_record["type"] = transaction_type
+                    member_record["realTeamMemberKey"] = key
+
+                    # Merge in member stats if found
+                    if member_stats:
+                        member_record.update(member_stats)
+
+                    members.append(member_record)
+
+        return members
 
     @staticmethod
     def _get_added_dropped(row: dict, before_key: str, after_key: str) -> tuple[list[str], list[str]]:
@@ -31,12 +137,8 @@ class DivisionsTransactionsDetailAction:
         members_before_str = row.get(before_key) or ""
         members_after_str = row.get(after_key) or ""
 
-        # Parse using MKeys
-        before_keys = MKeys.build(members_before_str, size=1)
-        after_keys = MKeys.build(members_after_str, size=1)
-
-        before_list = before_keys.get_group(0) if before_keys else []
-        after_list = after_keys.get_group(0) if after_keys else []
+        before_list = Keys.to_list(members_before_str) or []
+        after_list = Keys.to_list(members_after_str) or []
 
         # Calculate added and dropped
         added = list(set(after_list) - set(before_list))
@@ -84,7 +186,8 @@ class DivisionsTransactionsDetailAction:
                 SELECT * FROM `RealStandings`
                 WHERE `realTeamMemberKey` = :key
                   AND `realCompetitionID` = :realCompetitionID
-                  AND `realCompetitionMatchDay` = 38
+                  AND `realCompetitionID` = `baseRealCompetitionID`
+                  AND `realCompetitionMatchDay` = `realCompetitionLastMatchDay`
                 LIMIT 1
             """)
             result = db.execute(stmt, {"key": key, "realCompetitionID": real_competition_id})
@@ -93,116 +196,5 @@ class DivisionsTransactionsDetailAction:
         except Exception:
             return None
 
-    @staticmethod
-    def execute(db: Session, division_id: int) -> list[dict]:
-        """Get transaction details for division in last 14 days (pure data, no wrapper)."""
-        # Query transaction logs with database-agnostic date calculation
-        stmt = text("""
-            SELECT `t1`.`baseRealCompetitionID` AS `realCompetitionID`,
-                   `tml1`.`teamMemberLogID`,
-                   `tml1`.`teamMemberTransferID`,
-                   `tml1`.`leagueID`,
-                   `tml1`.`divisionID`,
-                   `tml1`.`teamID`,
-                   `tml1`.`userID`,
-                   `t1`.`teamName`,
-                   `tml1`.`requester`,
-                   `tml1`.`transactionType`,
-                   `tml1`.`membersBefore`,
-                   `tml1`.`membersAfter`,
-                   `tml2`.`teamID` AS `otherTeamID`,
-                   `tml2`.`userID` AS `otherUserID`,
-                   `t2`.`teamName` AS `otherTeamName`,
-                   `tml2`.`membersBefore` AS `otherMembersBefore`,
-                   `tml2`.`membersAfter` AS `otherMembersAfter`,
-                   `tml1`.`createdIn` AS `processDate`,
-                   `tmt`.`createdIn` AS `requestDate`
-            FROM `TeamMemberLog` `tml1`
-            LEFT OUTER JOIN `Teams` `t1` ON `tml1`.`teamID` = `t1`.`teamID`
-            LEFT OUTER JOIN `TeamMemberTransfers` `tmt` ON `tml1`.`teamMemberTransferID` = `tmt`.`teamMemberTransferID`
-            LEFT OUTER JOIN `TeamMemberLog` `tml2` ON `tml2`.`teamMemberTransferID` = `tmt`.`teamMemberTransferID`
-            LEFT OUTER JOIN `Teams` `t2` ON `tml2`.`teamID` = `t2`.`teamID`
-            WHERE `tml1`.`divisionID` = :divisionID
-              AND `tml1`.`createdIn` >= NOW() - INTERVAL 14 DAY
-            ORDER BY `tml1`.`createdIn` DESC
-        """)
-
-        results = db.execute(stmt, {"divisionID": division_id})
-        rows = [dict(row) for row in results.mappings()]
-
-        members = []
-        for row in rows:
-            # Remove member string fields
-            row.pop("membersBefore", None)
-            row.pop("membersAfter", None)
-            row.pop("otherMembersBefore", None)
-            row.pop("otherMembersAfter", None)
-
-            # Split members by transaction type
-            splitted = DivisionsTransactionsDetailAction._split_members(row)
-
-            # For each transaction type and member
-            for transaction_type, keys in splitted.items():
-                for key in keys:
-                    # Get member stats from RealStandings
-                    member_stats = DivisionsTransactionsDetailAction._get_member_stats(
-                        db, key, row.get("realCompetitionID")
-                    )
-
-                    # Create member transaction record
-                    member_record = row.copy()
-                    member_record["type"] = transaction_type
-                    member_record["realTeamMemberKey"] = key
-
-                    # Merge in member stats if found
-                    if member_stats:
-                        member_record.update(member_stats)
-
-                    members.append(member_record)
-
-        return members
 
 
-class DivisionsUpdateAction:
-    """Update editable division settings (commissioner only)."""
-
-    @staticmethod
-    def execute(
-        db: Session,
-        division_id: int,
-        user_id: int,
-        draft_type: str | None = None,
-        draft_date: datetime | None = None,
-        draft_complete_date: datetime | None = None,
-    ) -> dict:
-        division = db.get(Division, division_id)
-        if division is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Division not found")
-
-        # Auth: division commissioner OR league commissioner
-        league = db.get(League, division.leagueID)
-        is_division_commissioner = division.commissionerID == user_id
-        is_league_commissioner = league is not None and league.commissionerID == user_id
-        if not is_division_commissioner and not is_league_commissioner:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
-
-        if draft_type is not None:
-            division.draftType = draft_type
-        if draft_date is not None:
-            division.draftDate = draft_date
-        if draft_complete_date is not None:
-            division.draftCompleteDate = draft_complete_date
-
-        division.updatedBy = user_id
-        division.updatedIn = utc_now()
-        db.commit()
-        db.refresh(division)
-
-        return {
-            "divisionID": division.divisionID,
-            "draftType": division.draftType,
-            "draftDate": division.draftDate.isoformat() if division.draftDate else None,
-            "draftCompleteDate": division.draftCompleteDate.isoformat() if division.draftCompleteDate else None,
-            "updatedBy": division.updatedBy,
-            "updatedIn": division.updatedIn.isoformat() if division.updatedIn else None,
-        }
