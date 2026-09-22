@@ -176,21 +176,15 @@ class F7Loader:
         events_cache = []
 
         for goal_data in match_data.get("goals", []):
-            events_cache = load_goal(
-                events_cache, goal_data["element"], goal_data["team_uid"]
-            )
+            load_goal(events_cache, goal_data["element"], goal_data["team_uid"])
             task.inc("goals")
 
         for booking_data in match_data.get("bookings", []):
-            events_cache = load_booking(
-                events_cache, booking_data["element"], booking_data["team_uid"]
-            )
+            load_booking(events_cache, booking_data["element"], booking_data["team_uid"])
             task.inc("bookings")
 
         for sub_data in match_data.get("substitutions", []):
-            events_cache = load_substitution(
-                events_cache, sub_data["element"], sub_data["team_uid"]
-            )
+            load_substitution(events_cache, sub_data["element"], sub_data["team_uid"])
             task.inc("substitutions")
 
         # Sort events by eventKey (period, time, timestamp, class)
@@ -505,45 +499,49 @@ class F7Loader:
                     players_cache[player_ref]["formationPlace"] = formation_place
                     players_cache[player_ref]["shirtNumber"] = shirt_number
 
-                    # Initialize performance tracking fields
-                    players_cache[player_ref]["assists"] = 0
-                    players_cache[player_ref]["goals"] = 0
-                    players_cache[player_ref]["goalsConceded"] = 0
-                    players_cache[player_ref]["ownGoals"] = 0
-                    players_cache[player_ref]["position"] = 0
-                    players_cache[player_ref]["redCards"] = 0
-                    players_cache[player_ref]["secondYellowCards"] = 0
-                    players_cache[player_ref]["straightRedCards"] = 0
-                    players_cache[player_ref]["yellowCards"] = 0
-                    players_cache[player_ref]["pointsAssists"] = 0
-                    players_cache[player_ref]["pointsCards"] = 0
-                    players_cache[player_ref]["pointsCleanSheet"] = 0
-                    players_cache[player_ref]["pointsGoals"] = 0
-                    players_cache[player_ref]["pointsGoalsAllowed"] = 0
-                    players_cache[player_ref]["pointsOwnGoals"] = 0
-                    players_cache[player_ref]["pointsPlayed"] = 0
+                    # Initialize performance tracking fields that are in RealStandings
+                    players_cache[player_ref]["matchTimePlayed"] = 0
+                    players_cache[player_ref]["matchGamePlayed"] = 0
+                    players_cache[player_ref]["matchGoals"] = 0
+                    players_cache[player_ref]["matchAssists"] = 0
+                    players_cache[player_ref]["matchYellowCards"] = 0
+                    players_cache[player_ref]["matchRedCards"] = 0
+                    players_cache[player_ref]["matchGoalsConceded"] = 0
+                    players_cache[player_ref]["matchCleanSheet"] = 0
+                    players_cache[player_ref]["matchPointsL1Played"] = 0
+                    players_cache[player_ref]["matchPointsL1GoalsAllowed"] = 0
+                    players_cache[player_ref]["matchPointsL1CleanSheet"] = 0
+                    players_cache[player_ref]["matchPointsL1Cards"] = 0
+                    players_cache[player_ref]["matchPointsL1Goals"] = 0
+                    players_cache[player_ref]["matchPointsL1Assists"] = 0
+                    players_cache[player_ref]["matchPointsL1OwnGoals"] = 0
+
+                    # Initialize other performance tracking fields
+                    players_cache[player_ref]["_ownGoals"] = 0
+                    players_cache[player_ref]["_secondYellowCards"] = 0
+                    players_cache[player_ref]["_straightRedCards"] = 0
 
                     # Calculate playing time and flags based on status
                     if status == "Start":
                         # Player started the match
-                        players_cache[player_ref]["timeIn"] = 0
-                        players_cache[player_ref]["timeOut"] = match_time
-                        players_cache[player_ref]["timePlayed"] = match_time
-                        players_cache[player_ref]["startedGame"] = 1
-                        players_cache[player_ref]["finishedGame"] = 1
-                        players_cache[player_ref]["fullGame"] = 1
-                        players_cache[player_ref]["gamePlayed"] = 1
-                        players_cache[player_ref]["cleanSheet"] = 1
+                        # - Adjust RealStandings fields
+                        players_cache[player_ref]["matchTimePlayed"] = match_time
+                        players_cache[player_ref]["matchGamePlayed"] = 1
+                        players_cache[player_ref]["matchCleanSheet"] = 1
+                        # - Create the other fields
+                        players_cache[player_ref]["_timeIn"] = 0
+                        players_cache[player_ref]["_timeOut"] = match_time
+                        players_cache[player_ref]["_startedGame"] = 1
+                        players_cache[player_ref]["_finishedGame"] = 1
+                        players_cache[player_ref]["_fullGame"] = 1
                     else:
                         # Player is a substitute
-                        players_cache[player_ref]["timeIn"] = None
-                        players_cache[player_ref]["timeOut"] = None
-                        players_cache[player_ref]["timePlayed"] = 0
-                        players_cache[player_ref]["startedGame"] = 0
-                        players_cache[player_ref]["finishedGame"] = 0
-                        players_cache[player_ref]["fullGame"] = 0
-                        players_cache[player_ref]["gamePlayed"] = 0
-                        players_cache[player_ref]["cleanSheet"] = 0
+                        # - Create the other fields
+                        players_cache[player_ref]["_timeIn"] = None
+                        players_cache[player_ref]["_timeOut"] = None
+                        players_cache[player_ref]["_startedGame"] = 0
+                        players_cache[player_ref]["_finishedGame"] = 0
+                        players_cache[player_ref]["_fullGame"] = 0
 
         return players_cache
 
@@ -983,13 +981,13 @@ class F7Loader:
 
             # Calculate total points
             total_points = (
-                player.get("pointsPlayed", 0)
-                + player.get("pointsGoalsAllowed", 0)
-                + player.get("pointsCleanSheet", 0)
-                + player.get("pointsCards", 0)
-                + player.get("pointsGoals", 0)
-                + player.get("pointsAssists", 0)
-                + player.get("pointsOwnGoals", 0)
+                player.get("matchPointsL1Played", 0)
+                + player.get("matchPointsL1GoalsAllowed", 0)
+                + player.get("matchPointsL1CleanSheet", 0)
+                + player.get("matchPointsL1Cards", 0)
+                + player.get("matchPointsL1Goals", 0)
+                + player.get("matchPointsL1Assists", 0)
+                + player.get("matchPointsL1OwnGoals", 0)
             )
 
             # Update RealStandings for player
@@ -1021,7 +1019,7 @@ class F7Loader:
                     matchTimePlayed = :time_played,
                     matchGamePlayed = :game_played,
                     matchGoals = :goals,
-                    matchAssists = :assists,
+                    matchAssists = :matchAssists,
                     matchYellowCards = :yellow_cards,
                     matchRedCards = :red_cards,
                     matchGoalsConceded = :goals_conceded,
@@ -1032,7 +1030,7 @@ class F7Loader:
                     matchPointsL1CleanSheet = :points_clean_sheet,
                     matchPointsL1Cards = :points_cards,
                     matchPointsL1Goals = :points_goals,
-                    matchPointsL1Assists = :points_assists,
+                    matchPointsL1Assists = :points_matchAssists,
                     matchPointsL1OwnGoals = :points_own_goals,
                     matchPointsL1 = :total_points,
                     livePointsL1 = :total_points,
@@ -1069,22 +1067,22 @@ class F7Loader:
                     "known_name": known_name,
                     "name": name,
                     "sort_name": sort_name,
-                    "time_played": player.get("timePlayed", 0),
-                    "game_played": player.get("gamePlayed", 0),
-                    "goals": player.get("goals", 0),
-                    "assists": player.get("assists", 0),
-                    "yellow_cards": player.get("yellowCards", 0),
-                    "red_cards": player.get("redCards", 0),
-                    "goals_conceded": player.get("goalsConceded", 0),
-                    "clean_sheet": player.get("cleanSheet", 0),
-                    "day_played": player.get("gamePlayed", 0),
-                    "points_played": player.get("pointsPlayed", 0),
-                    "points_goals_allowed": player.get("pointsGoalsAllowed", 0),
-                    "points_clean_sheet": player.get("pointsCleanSheet", 0),
-                    "points_cards": player.get("pointsCards", 0),
-                    "points_goals": player.get("pointsGoals", 0),
-                    "points_assists": player.get("pointsAssists", 0),
-                    "points_own_goals": player.get("pointsOwnGoals", 0),
+                    "time_played": player.get("matchTimePlayed", 0),
+                    "game_played": player.get("matchGamePlayed", 0),
+                    "goals": player.get("matchGoals", 0),
+                    "matchAssists": player.get("matchAssists", 0),
+                    "yellow_cards": player.get("matchYellowCards", 0),
+                    "red_cards": player.get("matchRedCards", 0),
+                    "goals_conceded": player.get("matchGoalsConceded", 0),
+                    "clean_sheet": player.get("matchCleanSheet", 0),
+                    "day_played": player.get("matchGamePlayed", 0),
+                    "points_played": player.get("matchPointsL1Played", 0),
+                    "points_goals_allowed": player.get("matchPointsL1GoalsAllowed", 0),
+                    "points_clean_sheet": player.get("matchPointsL1CleanSheet", 0),
+                    "points_cards": player.get("matchPointsL1Cards", 0),
+                    "points_goals": player.get("matchPointsL1Goals", 0),
+                    "points_matchAssists": player.get("matchPointsL1Assists", 0),
+                    "points_own_goals": player.get("matchPointsL1OwnGoals", 0),
                     "total_points": total_points,
                     "comp_id": real_competition_id,
                     "match_day": real_match_day,

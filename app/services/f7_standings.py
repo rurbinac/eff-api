@@ -22,119 +22,16 @@ def process_events(
         event_class = event.get("eventClass")
 
         if event_class == "Goal":
-            players_cache = process_goal(players_cache, event)
+            _process_goal(players_cache, event)
         elif event_class == "Assist":
-            players_cache = process_assist(players_cache, event)
+            _process_assist(players_cache, event)
         elif event_class == "SubOff":
-            players_cache = process_sub_off(players_cache, event)
+            _process_sub_off(players_cache, event)
         elif event_class == "SubOn":
-            players_cache = process_sub_on(players_cache, event, real_match_time)
+            _process_sub_on(players_cache, event, real_match_time)
         elif event_class == "Booking":
-            players_cache = process_booking(players_cache, event)
+            _process_booking(players_cache, event)
         # Unknown event type - ignore
-
-    return players_cache
-
-
-def process_goal(players_cache: dict, event: dict) -> dict:
-    """Process a goal event."""
-    real_player_uid = event["realPlayerUID"]
-
-    if event.get("eventType") != "Own":
-        # Regular goal
-        players_cache[real_player_uid]["goals"] += 1
-        # Update clean sheet for defending team
-        opposite_team_uid = players_cache[real_player_uid].get("oppositeRealTeamUID")
-        if opposite_team_uid:
-            players_cache = process_match_clean_sheet(players_cache, opposite_team_uid)
-    else:
-        # Own goal
-        players_cache[real_player_uid]["ownGoals"] += 1
-        # Update clean sheet for own team
-        own_team_uid = players_cache[real_player_uid]["realTeamUID"]
-        players_cache = process_match_clean_sheet(players_cache, own_team_uid)
-
-    return players_cache
-
-
-def process_match_clean_sheet(players_cache: dict, real_team_uid: str) -> dict:
-    """Process clean sheet updates when a goal is conceded."""
-    for real_player_uid, player_data in players_cache.items():
-        if (
-            player_data.get("finishedGame")
-            and player_data.get("realTeamUID") == real_team_uid
-        ):
-            players_cache[real_player_uid]["cleanSheet"] = 0
-            players_cache[real_player_uid]["goalsConceded"] += 1
-
-    return players_cache
-
-
-def process_assist(players_cache: dict, event: dict) -> dict:
-    """Process an assist event."""
-    real_player_uid = event["realPlayerUID"]
-    players_cache[real_player_uid]["assists"] += 1
-    return players_cache
-
-
-def process_sub_off(players_cache: dict, event: dict) -> dict:
-    """Process a substitution off event."""
-    real_player_uid = event["realPlayerUID"]
-    event_time = event.get("eventTime")
-
-    if real_player_uid in players_cache and event_time:
-        try:
-            event_time = int(event_time)
-            players_cache[real_player_uid]["finishedGame"] = 0
-            players_cache[real_player_uid]["fullGame"] = 0
-            players_cache[real_player_uid]["timeOut"] = event_time
-            time_in = players_cache[real_player_uid].get("timeIn", 0)
-            players_cache[real_player_uid]["timePlayed"] = event_time - time_in
-        except (ValueError, TypeError):
-            pass
-
-    return players_cache
-
-
-def process_sub_on(players_cache: dict, event: dict, real_match_time: int) -> dict:
-    """Process a substitution on event."""
-    real_player_uid = event["realPlayerUID"]
-    event_time = event.get("eventTime")
-
-    if real_player_uid in players_cache and event_time:
-        try:
-            event_time = int(event_time)
-            players_cache[real_player_uid]["finishedGame"] = 1
-            players_cache[real_player_uid]["gamePlayed"] = 1
-            players_cache[real_player_uid]["timeIn"] = event_time
-            players_cache[real_player_uid]["timeOut"] = real_match_time
-            players_cache[real_player_uid]["timePlayed"] = real_match_time - event_time
-            players_cache[real_player_uid]["cleanSheet"] = 1
-        except (ValueError, TypeError):
-            pass
-
-    return players_cache
-
-
-def process_booking(players_cache: dict, event: dict) -> dict:
-    """Process a booking event (yellow/red cards)."""
-    real_player_uid = event["realPlayerUID"]
-    event_type = event.get("eventType")
-
-    if real_player_uid in players_cache:
-        if event_type == "Yellow":
-            players_cache[real_player_uid]["yellowCards"] += 1
-        elif event_type == "SecondYellow":
-            players_cache[real_player_uid]["secondYellowCards"] += 1
-            players_cache[real_player_uid]["redCards"] += 1
-            # Player sent off
-            players_cache = process_sub_off(players_cache, event)
-        elif event_type == "StraightRed":
-            players_cache[real_player_uid]["straightRedCards"] += 1
-            players_cache[real_player_uid]["redCards"] += 1
-            # Player sent off
-            players_cache = process_sub_off(players_cache, event)
-        # Unknown booking type - ignore
 
     return players_cache
 
@@ -149,133 +46,217 @@ def calc_player_points(players_cache: dict, split_minutes: int = 45) -> dict:
     Returns:
         Updated players_cache with calculated points
     """
-    for player_uid, player in players_cache.items():
-        players_cache[player_uid] = calc_points(player, split_minutes)
+    for player in players_cache.values():
+        _calc_points(player, split_minutes)
 
     return players_cache
 
 
-def calc_points(player: dict, split_minutes: int) -> dict:
+def _process_goal(players_cache: dict, event: dict) -> None:
+    """Process a goal event."""
+    real_player_uid = event["realPlayerUID"]
+
+    if event.get("eventType") != "Own":
+        players_cache[real_player_uid]["matchGoals"] += 1
+        opposite_team_uid = players_cache[real_player_uid].get("oppositeRealTeamUID")
+        if opposite_team_uid:
+            _process_match_clean_sheet(players_cache, opposite_team_uid)
+    else:
+        players_cache[real_player_uid]["_ownGoals"] += 1
+        own_team_uid = players_cache[real_player_uid]["realTeamUID"]
+        _process_match_clean_sheet(players_cache, own_team_uid)
+
+
+def _process_match_clean_sheet(players_cache: dict, real_team_uid: str) -> None:
+    """Process clean sheet updates when a goal is conceded."""
+    for real_player_uid, player_data in players_cache.items():
+        if (
+            player_data.get("_finishedGame")
+            and player_data.get("realTeamUID") == real_team_uid
+        ):
+            players_cache[real_player_uid]["matchCleanSheet"] = 0
+            players_cache[real_player_uid]["matchGoalsConceded"] += 1
+
+
+def _process_assist(players_cache: dict, event: dict) -> None:
+    """Process an assist event."""
+    real_player_uid = event["realPlayerUID"]
+    players_cache[real_player_uid]["matchAssists"] += 1
+
+
+def _process_sub_off(players_cache: dict, event: dict) -> None:
+    """Process a substitution off event."""
+    real_player_uid = event["realPlayerUID"]
+    event_time = event.get("eventTime")
+
+    if real_player_uid in players_cache and event_time:
+        try:
+            event_time = int(event_time)
+            players_cache[real_player_uid]["_finishedGame"] = 0
+            players_cache[real_player_uid]["_fullGame"] = 0
+            players_cache[real_player_uid]["_timeOut"] = event_time
+            time_in = players_cache[real_player_uid].get("_timeIn", 0)
+            players_cache[real_player_uid]["matchTimePlayed"] = event_time - time_in
+        except (ValueError, TypeError):
+            pass
+
+
+def _process_sub_on(players_cache: dict, event: dict, real_match_time: int) -> None:
+    """Process a substitution on event."""
+    real_player_uid = event["realPlayerUID"]
+    event_time = event.get("eventTime")
+
+    if real_player_uid in players_cache and event_time:
+        try:
+            event_time = int(event_time)
+            players_cache[real_player_uid]["_finishedGame"] = 1
+            players_cache[real_player_uid]["matchGamePlayed"] = 1
+            players_cache[real_player_uid]["_timeIn"] = event_time
+            players_cache[real_player_uid]["_timeOut"] = real_match_time
+            players_cache[real_player_uid]["matchTimePlayed"] = real_match_time - event_time
+            players_cache[real_player_uid]["matchCleanSheet"] = 1
+        except (ValueError, TypeError):
+            pass
+
+
+def _process_booking(players_cache: dict, event: dict) -> None:
+    """Process a booking event (yellow/red cards)."""
+    real_player_uid = event["realPlayerUID"]
+    event_type = event.get("eventType")
+
+    if real_player_uid in players_cache:
+        if event_type == "Yellow":
+            players_cache[real_player_uid]["matchYellowCards"] += 1
+        elif event_type == "SecondYellow":
+            players_cache[real_player_uid]["_secondYellowCards"] += 1
+            players_cache[real_player_uid]["matchRedCards"] += 1
+            _process_sub_off(players_cache, event)
+        elif event_type == "StraightRed":
+            players_cache[real_player_uid]["_straightRedCards"] += 1
+            players_cache[real_player_uid]["matchRedCards"] += 1
+            _process_sub_off(players_cache, event)
+        # Unknown booking type - ignore
+
+
+def _calc_points(player: dict, split_minutes: int) -> None:
     """Calculate position-specific points for a player."""
-    player["pointsPlayed"] = calc_played_points(player, split_minutes)
+    player["matchPointsL1Played"] = _calc_played_points(player, split_minutes)
 
     match player.get("draftPosition"):
         case DraftPositionConstants.GOALKEEPER:
-            player["pointsGoalsAllowed"] = calc_goals_allowed_points(player, 1)
-            player["pointsCleanSheet"] = calc_clean_sheet_points(
+            player["matchPointsL1GoalsAllowed"] = _calc_goals_allowed_points(player, 1)
+            player["matchPointsL1CleanSheet"] = _calc_clean_sheet_points(
                 player, split_minutes, 3, 2, 0
             )
-            player["pointsCards"] = calc_cards_points(player, -1, -3, -4)
-            player["pointsGoals"] = calc_goals_points(player, 8)
-            player["pointsAssists"] = calc_assists_points(player, 2)
-            player["pointsOwnGoals"] = calc_own_goals_points(player, -3)
+            player["matchPointsL1Cards"] = _calc_cards_points(player, -1, -3, -4)
+            player["matchPointsL1Goals"] = _calc_goals_points(player, 8)
+            player["matchPointsL1Assists"] = _calc_matchAssists_points(player, 2)
+            player["matchPointsL1OwnGoals"] = _calc_own_goals_points(player, -3)
 
         case DraftPositionConstants.DEFENDER:
-            player["pointsGoalsAllowed"] = calc_goals_allowed_points(player, 1)
-            player["pointsCleanSheet"] = calc_clean_sheet_points(
+            player["matchPointsL1GoalsAllowed"] = _calc_goals_allowed_points(player, 1)
+            player["matchPointsL1CleanSheet"] = _calc_clean_sheet_points(
                 player, split_minutes, 3, 2, 0
             )
-            player["pointsCards"] = calc_cards_points(player, -1, -3, -4)
-            player["pointsGoals"] = calc_goals_points(player, 7)
-            player["pointsAssists"] = calc_assists_points(player, 2)
-            player["pointsOwnGoals"] = calc_own_goals_points(player, -3)
+            player["matchPointsL1Cards"] = _calc_cards_points(player, -1, -3, -4)
+            player["matchPointsL1Goals"] = _calc_goals_points(player, 7)
+            player["matchPointsL1Assists"] = _calc_matchAssists_points(player, 2)
+            player["matchPointsL1OwnGoals"] = _calc_own_goals_points(player, -3)
 
         case DraftPositionConstants.MIDFIELDER:
-            player["pointsGoalsAllowed"] = calc_goals_allowed_points(player, 0.5)
-            player["pointsCleanSheet"] = calc_clean_sheet_points(
+            player["matchPointsL1GoalsAllowed"] = _calc_goals_allowed_points(player, 0.5)
+            player["matchPointsL1CleanSheet"] = _calc_clean_sheet_points(
                 player, split_minutes, 2, 1, 0
             )
-            player["pointsCards"] = calc_cards_points(player, -1, -3, -4)
-            player["pointsGoals"] = calc_goals_points(player, 6)
-            player["pointsAssists"] = calc_assists_points(player, 2)
-            player["pointsOwnGoals"] = calc_own_goals_points(player, -3)
+            player["matchPointsL1Cards"] = _calc_cards_points(player, -1, -3, -4)
+            player["matchPointsL1Goals"] = _calc_goals_points(player, 6)
+            player["matchPointsL1Assists"] = _calc_matchAssists_points(player, 2)
+            player["matchPointsL1OwnGoals"] = _calc_own_goals_points(player, -3)
 
         case DraftPositionConstants.STRIKER:
-            player["pointsGoalsAllowed"] = calc_goals_allowed_points(player, 0)
-            player["pointsCleanSheet"] = calc_clean_sheet_points(
+            player["matchPointsL1GoalsAllowed"] = _calc_goals_allowed_points(player, 0)
+            player["matchPointsL1CleanSheet"] = _calc_clean_sheet_points(
                 player, split_minutes, 0, 0, 0
             )
-            player["pointsCards"] = calc_cards_points(player, -1, -3, -4)
-            player["pointsGoals"] = calc_goals_points(player, 5)
-            player["pointsAssists"] = calc_assists_points(player, 2)
-            player["pointsOwnGoals"] = calc_own_goals_points(player, -3)
+            player["matchPointsL1Cards"] = _calc_cards_points(player, -1, -3, -4)
+            player["matchPointsL1Goals"] = _calc_goals_points(player, 5)
+            player["matchPointsL1Assists"] = _calc_matchAssists_points(player, 2)
+            player["matchPointsL1OwnGoals"] = _calc_own_goals_points(player, -3)
 
         case _:
-            player["pointsGoalsAllowed"] = 0
-            player["pointsCleanSheet"] = 0
-            player["pointsCards"] = 0
-            player["pointsGoals"] = 0
-            player["pointsAssists"] = 0
-            player["pointsOwnGoals"] = 0
-
-    return player
+            player["matchPointsL1GoalsAllowed"] = 0
+            player["matchPointsL1CleanSheet"] = 0
+            player["matchPointsL1Cards"] = 0
+            player["matchPointsL1Goals"] = 0
+            player["matchPointsL1Assists"] = 0
+            player["matchPointsL1OwnGoals"] = 0
 
 
-def calc_played_points(player: dict, split_minutes: int) -> int:
+def _calc_played_points(player: dict, split_minutes: int) -> int:
     """Calculate points for time played."""
-    return split_points(player, split_minutes, 3, 2, 1)
+    return _split_points(player, split_minutes, 3, 2, 1)
 
 
-def calc_goals_allowed_points(player: dict, factor: float) -> int:
+def _calc_goals_allowed_points(player: dict, factor: float) -> int:
     """Calculate negative points for goals conceded."""
-    return -math.floor(factor * player.get("goalsConceded", 0))
+    return -math.floor(factor * player.get("matchGoalsConceded", 0))
 
 
-def calc_clean_sheet_points(
+def _calc_clean_sheet_points(
     player: dict, split_minutes: int, full_game: int, high: int, low: int
 ) -> int:
     """Calculate clean sheet points based on playing time."""
-    if player.get("cleanSheet"):
-        return split_points(player, split_minutes, full_game, high, low)
+    if player.get("matchCleanSheet"):
+        return _split_points(player, split_minutes, full_game, high, low)
     else:
         return 0
 
 
-def calc_cards_points(
+def _calc_cards_points(
     player: dict,
     yellow_points: int,
     second_yellow_points: int,
     straight_red_points: int,
 ) -> int:
     """Calculate points based on card offenses."""
-    if player.get("straightRedCards", 0) > 0:
+    if player.get("_straightRedCards", 0) > 0:
         return straight_red_points
-    elif player.get("secondYellowCards", 0) > 0:
+    elif player.get("_secondYellowCards", 0) > 0:
         return second_yellow_points
-    elif player.get("yellowCards", 0) > 0:
+    elif player.get("matchYellowCards", 0) > 0:
         return yellow_points
     else:
         return 0
 
 
-def calc_goals_points(player: dict, factor: int) -> int:
+def _calc_goals_points(player: dict, factor: int) -> int:
     """Calculate points for goals scored."""
-    return factor * player.get("goals", 0)
+    return factor * player.get("matchGoals", 0)
 
 
-def calc_assists_points(player: dict, factor: int) -> int:
-    """Calculate points for assists."""
-    return factor * player.get("assists", 0)
+def _calc_matchAssists_points(player: dict, factor: int) -> int:
+    """Calculate points for matchAssists."""
+    return factor * player.get("matchAssists", 0)
 
 
-def calc_own_goals_points(player: dict, factor: int) -> int:
+def _calc_own_goals_points(player: dict, factor: int) -> int:
     """Calculate negative points for own goals."""
-    return factor * player.get("ownGoals", 0)
+    return factor * player.get("_ownGoals", 0)
 
 
-def split_points(
+def _split_points(
     player: dict, split_minutes: int, full_game: int, high: int, low: int
 ) -> int:
     """Calculate split points based on playing time."""
-    if player.get("fullGame"):
+    if player.get("_fullGame"):
         return full_game
-    elif player.get("timePlayed", 0) >= split_minutes:
-        time_in = player.get("timeIn", 0)
+    elif player.get("matchTimePlayed", 0) >= split_minutes:
+        time_in = player.get("_timeIn", 0)
         if (90 - time_in) >= split_minutes:
             return high
         else:
             return low
-    elif player.get("timePlayed", 0) >= 1:
+    elif player.get("matchTimePlayed", 0) >= 1:
         return low
     else:
         return 0

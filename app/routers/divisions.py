@@ -84,7 +84,7 @@ async def legacy_divisions(
             if type == "byLeagueID":
                 require_pos_int(leagueID, "leagueID", f"{f}({type})")
                 require_league_member(db, current_user, league_id=leagueID)
-                items = DivisionsReadListAction.execute(db, leagueID, current_user)
+                items = DivisionsReadListAction.execute(db, leagueID)
             else:
                 raise UnknownActionException(f, type)
             return return_many_legacy("Divisions", items)
