@@ -155,7 +155,7 @@ class F42Loader:
             task.add_error(f"Error saving MDS data [{type(e).__name__}]: {e!s}")
 
         try:
-            sync_result = F42Loader._sync(db, comp_data["realCompetitionID"], include_rtm=False)
+            sync_result = F42Loader._sync(db, comp_data["realCompetitionID"], include_rtm=True)
             task.add_subtask(sync_result)
         except Exception as e:
             db.rollback()
