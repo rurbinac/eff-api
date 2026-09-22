@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Form, HTTPException, Query
+from fastapi import APIRouter, Form, Query
 
 from app.actions.lookups import LookupsReadListAction
 from app.actions.top_epl import TopEPLAction
 from app.context import RequestContext
 from app.database import DbSession
+from app.exceptions import UnknownActionException
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["lookups"])
@@ -22,11 +23,11 @@ async def legacy_lookups(
             items = LookupsReadListAction.execute(db, lookup_num=lookupNum)
             return {
                 "table": "Lookups",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "items": [{"values": item} for item in items]
             }
         else:
-            raise HTTPException(status_code=400, detail=f"Unknown function: {f}")
+            raise UnknownActionException(f)
     finally:
         RequestContext.reset()
 

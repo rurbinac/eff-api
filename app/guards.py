@@ -20,6 +20,7 @@ from app.exceptions import (
     NotAMemberException,
     NotFoundException,
     NotYourTeamException,
+    RequiredValueException,
 )
 from app.models import Division, League, Team
 
@@ -61,16 +62,26 @@ def user_in_division(
     neither is provided.
     """
     if division is not None:
-        division_id = division["divisionID"] if isinstance(division, dict) else division.divisionID
+        division_id = (
+            division["divisionID"]
+            if isinstance(division, dict)
+            else division.divisionID
+        )
     if team is not None:
-        if division_id is not None and division_id != (team["divisionID"] if isinstance(team, dict) else team.divisionID):
+        if division_id is not None and division_id != (
+            team["divisionID"] if isinstance(team, dict) else team.divisionID
+        ):
             return False
         return user_owns_team(db, user_id, team=team)
     if team_id is not None:
         if division_id is not None:
             return (
                 db.query(Team)
-                .filter(Team.teamID == team_id, Team.divisionID == division_id, Team.userID == user_id)
+                .filter(
+                    Team.teamID == team_id,
+                    Team.divisionID == division_id,
+                    Team.userID == user_id,
+                )
                 .first()
             ) is not None
         return user_owns_team(db, user_id, team_id=team_id)
@@ -103,13 +114,21 @@ def user_in_league(
     if league is not None:
         league_id = league["leagueID"] if isinstance(league, dict) else league.leagueID
     if team is not None:
-        if league_id is not None and league_id != (team["leagueID"] if isinstance(team, dict) else team.leagueID):
+        if league_id is not None and league_id != (
+            team["leagueID"] if isinstance(team, dict) else team.leagueID
+        ):
             return False
         return user_owns_team(db, user_id, team=team)
     if division is not None:
-        if league_id is not None and league_id != (division["leagueID"] if isinstance(division, dict) else division.leagueID):
+        if league_id is not None and league_id != (
+            division["leagueID"] if isinstance(division, dict) else division.leagueID
+        ):
             return False
-        division_id = division["divisionID"] if isinstance(division, dict) else division.divisionID
+        division_id = (
+            division["divisionID"]
+            if isinstance(division, dict)
+            else division.divisionID
+        )
     if team_id is not None or division_id is not None:
         return user_in_division(db, user_id, division_id=division_id, team_id=team_id)
     if league_id is None:
@@ -141,8 +160,12 @@ def user_is_division_commissioner(
     """
     if team is not None:
         t = team
-        commissioner_id = t["commissionerID"] if isinstance(t, dict) else t.commissionerID
-        is_commissioner = t["isCommissioner"] if isinstance(t, dict) else t.isCommissioner
+        commissioner_id = (
+            t["commissionerID"] if isinstance(t, dict) else t.commissionerID
+        )
+        is_commissioner = (
+            t["isCommissioner"] if isinstance(t, dict) else t.isCommissioner
+        )
         team_user_id = t["userID"] if isinstance(t, dict) else t.userID
         team_division_id = t["divisionID"] if isinstance(t, dict) else t.divisionID
         if commissioner_id == user_id or (is_commissioner and team_user_id == user_id):
@@ -160,7 +183,11 @@ def user_is_division_commissioner(
             else row.isCommissioner or row.commissionerID == user_id
         )
     if division is not None:
-        division_id = division["divisionID"] if isinstance(division, dict) else division.divisionID
+        division_id = (
+            division["divisionID"]
+            if isinstance(division, dict)
+            else division.divisionID
+        )
     if division_id is not None:
         row = (
             db.query(Team)
@@ -200,7 +227,9 @@ def user_is_league_commissioner(
     any of these records answers the question without an extra join.
     """
     if team is not None:
-        return (team["commissionerID"] if isinstance(team, dict) else team.commissionerID) == user_id
+        return (
+            team["commissionerID"] if isinstance(team, dict) else team.commissionerID
+        ) == user_id
     if team_id is not None:
         return (
             db.query(Team)
@@ -208,7 +237,11 @@ def user_is_league_commissioner(
             .first()
         ) is not None
     if division is not None:
-        return (division["commissionerID"] if isinstance(division, dict) else division.commissionerID) == user_id
+        return (
+            division["commissionerID"]
+            if isinstance(division, dict)
+            else division.commissionerID
+        ) == user_id
     if division_id is not None:
         return (
             db.query(Division)
@@ -218,7 +251,11 @@ def user_is_league_commissioner(
             .first()
         ) is not None
     if league is not None:
-        return (league["commissionerID"] if isinstance(league, dict) else league.commissionerID) == user_id
+        return (
+            league["commissionerID"]
+            if isinstance(league, dict)
+            else league.commissionerID
+        ) == user_id
     if league_id is not None:
         return (
             db.query(League)
@@ -234,6 +271,45 @@ def user_is_league_commissioner(
 # Raising variants — accept int | None so callers skip the None check
 # ---------------------------------------------------------------------------
 
+
+def require_value(
+    value, value_name: str | None = None, context: str | None = None
+) -> None:
+    if value is None or str(value).strip() == "":
+        raise RequiredValueException(value_name, context)
+
+def require_int(
+    value, value_name: str | None = None, context: str | None = None
+) -> int:
+    require_value(value, value_name, context)
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        raise RequiredValueException(value_name, context)
+
+def require_pos_int(
+    value, value_name: str | None = None, context: str | None = None
+) -> int:
+    val = require_int(value, value_name, context)
+    if val <= 0:
+        raise RequiredValueException(value_name, context)
+    return val
+
+def require_ints(
+    value, value_name: str | None = None, context: str | None = None
+) -> list[int]:
+    if value is None:
+        raise RequiredValueException(value_name, context)
+    parts = str(value).split(",")
+    return [require_int(v.strip(), value_name, context) for v in parts]
+
+def require_pos_ints(
+    value, value_name: str | None = None, context: str | None = None
+) -> list[int]:
+    if value is None:
+        raise RequiredValueException(value_name, context)
+    parts = str(value).split(",")
+    return [require_pos_int(v.strip(), value_name, context) for v in parts]
 
 def require_team(db: Session, team_id: int | None) -> Team:
     row = db.query(Team).filter(Team.teamID == team_id).first() if team_id else None

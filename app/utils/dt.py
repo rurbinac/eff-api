@@ -46,6 +46,15 @@ def add_days(dt: datetime, days: int) -> datetime:
     return dt + timedelta(days=days)
 
 
+def to_iso(val: datetime | str | None) -> str | None:
+    """Return an ISO 8601 string for a datetime, pass strings through, and map None to None."""
+    if val is None:
+        return None
+    if isinstance(val, str):
+        return val
+    return val.isoformat()
+
+
 def next_midnight(dt: datetime) -> datetime:
     """Return 00:00:00 of the day after dt (always moves forward at least one day)."""
     return (dt + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)

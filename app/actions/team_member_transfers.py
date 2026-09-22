@@ -1,7 +1,8 @@
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.utils import MKeys
+from app.guards import require_team_owner
+from app.utils.member_keys import KeyGroups
 
 
 class TeamMemberTransfersGetPendingByTeamIDAction:
@@ -10,7 +11,7 @@ class TeamMemberTransfersGetPendingByTeamIDAction:
     STATUS_REQUESTED = 1
 
     @staticmethod
-    def execute(db: Session, team_id: int) -> list[dict]:
+    def execute(db: Session, team_id: int, user_id: int) -> list[dict]:
         """
         Get pending member transfers for a team (as requester or recipient).
         Returns transfer details with member stats and transfer type.
@@ -22,6 +23,7 @@ class TeamMemberTransfersGetPendingByTeamIDAction:
         Returns:
             List of transfer records with member details and memberType field
         """
+        require_team_owner(db, user_id, team_id=team_id)
         # Query TeamMemberTransfers for pending transfers
         tmt_stmt = text("""
             SELECT *
@@ -39,28 +41,19 @@ class TeamMemberTransfersGetPendingByTeamIDAction:
         field_names = ['requested', 'offered', 'addDrop', 'otherAddDrop']
 
         for transfer_row in transfers:
-            # Parse memberKeys using MKeys with allow_dups=True
             member_keys_str = transfer_row.get('memberKeys') or ""
-            m_keys = MKeys.build(member_keys_str, allow_dups=True)
-
-            # Remove memberKeys from the transfer row as it's now parsed
             transfer_row.pop('memberKeys', None)
+            kg = KeyGroups.unpack(member_keys_str)
 
-            if not m_keys:
+            if not kg:
                 continue
 
-            # For each group in MKeys
-            for g in range(m_keys.size):
-                # Map group index to field name
+            for g, group in enumerate(kg):
                 field_name = field_names[g] if g < len(field_names) else None
                 if not field_name:
                     continue
 
-                # Get all keys in this group
-                group_keys = m_keys.get_group(g)
-
-                # For each key in this group
-                for key in group_keys:
+                for key in group:
                     # Query RealTeamMembers for this member
                     rtm_stmt = text("""
                         SELECT *

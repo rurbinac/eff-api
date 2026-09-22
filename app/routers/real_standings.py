@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Form, Query
 from pydantic import BaseModel
 
+from app.exceptions import UnknownActionException
 from app.actions.real_standings import RealStandingsReadListAction
 from app.context import RequestContext
 from app.database import DbSession
@@ -36,11 +37,11 @@ async def legacy_real_standings(
             )
             return {
                 "table": "RealStandings",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "items": [{"values": item} for item in items],
             }
         else:
-            return {"error": f"Unknown function: {f}"}, 400
+            raise UnknownActionException(f)
     finally:
         RequestContext.reset()
 

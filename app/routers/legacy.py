@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Form, Query, Request
 
+from app.exceptions import UnknownActionException
 from app.actions.sign import SignInAction, SignInfoAction, SignOutAction
 from app.actions.top_epl import TopEPLAction
 from app.context import RequestContext
@@ -26,7 +27,7 @@ async def legacy_users(
             session_data = SignInAction.execute(db, userEmail, userPassword, client_ip)
             return {
                 "table": "Session",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "values": session_data
             }
 
@@ -43,12 +44,12 @@ async def legacy_users(
             session_data = SignInfoAction.execute_with_token(db, token)
             return {
                 "table": "Session",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "values": session_data
             }
 
         else:
-            return {"error": f"Unknown action: {f}"}
+            raise UnknownActionException(f)
     finally:
         RequestContext.reset()
 
@@ -66,7 +67,7 @@ async def legacy_signin(
     session_data = SignInAction.execute(db, userEmail, userPassword, client_ip)
     result = {
         "table": "Session",
-        "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": RequestContext.get_datetime_iso(),
         "values": session_data
     }
     RequestContext.reset()
@@ -96,7 +97,7 @@ async def legacy_signinfo(db: DbSession, token: CurrentToken):
     session_data = SignInfoAction.execute_with_token(db, token)
     result = {
         "table": "Session",
-        "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": RequestContext.get_datetime_iso(),
         "values": session_data
     }
     RequestContext.reset()

@@ -4,7 +4,9 @@ from datetime import datetime, timezone
 from app.utils.dt import utc_now
 
 # Context variable to store the request datetime across the request lifecycle
-_request_datetime: ContextVar[datetime | None] = ContextVar('request_datetime', default=None)
+_request_datetime: ContextVar[datetime | None] = ContextVar(
+    "request_datetime", default=None
+)
 
 
 class RequestContext:
@@ -25,6 +27,11 @@ class RequestContext:
             dt = utc_now()
             _request_datetime.set(dt)
         return dt
+
+    @classmethod
+    def get_datetime_iso(cls, sep: str = " ", timespec: str = "seconds") -> str:
+        """Get the cached request datetime, or create it if not set."""
+        return cls.get_datetime().isoformat(sep=sep, timespec=timespec)
 
     @classmethod
     def reset(cls) -> None:
@@ -50,7 +57,7 @@ class RequestContext:
 
         # Try MySQL datetime format — always treated as UTC by convention
         try:
-            return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+            return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")  # noqa: DTZ007
         except ValueError:
             raise ValueError(f"Invalid datetime format: {dt_str}")
 
@@ -74,19 +81,23 @@ def extract_match_day_status(match_day_data: dict) -> dict:
     result = {}
 
     # Transform scriptStatus to matchDayStatus
-    if 'scriptsStatus' in match_day_data:
-        result['matchDayStatus'] = match_day_data['scriptsStatus']
+    if "scriptsStatus" in match_day_data:
+        result["matchDayStatus"] = match_day_data["scriptsStatus"]
 
     # Transform startMatchDay to matchDayStatusStart
-    if match_day_data.get('startMatchDay'):
-        result['matchDayStatusStart'] = match_day_data['startMatchDay'].isoformat() \
-            if isinstance(match_day_data['startMatchDay'], datetime) \
-            else match_day_data['startMatchDay']
+    if match_day_data.get("startMatchDay"):
+        result["matchDayStatusStart"] = (
+            match_day_data["startMatchDay"].isoformat()
+            if isinstance(match_day_data["startMatchDay"], datetime)
+            else match_day_data["startMatchDay"]
+        )
 
     # Transform finishMatchDay to matchDayStatusFinish
-    if match_day_data.get('finishMatchDay'):
-        result['matchDayStatusFinish'] = match_day_data['finishMatchDay'].isoformat() \
-            if isinstance(match_day_data['finishMatchDay'], datetime) \
-            else match_day_data['finishMatchDay']
+    if match_day_data.get("finishMatchDay"):
+        result["matchDayStatusFinish"] = (
+            match_day_data["finishMatchDay"].isoformat()
+            if isinstance(match_day_data["finishMatchDay"], datetime)
+            else match_day_data["finishMatchDay"]
+        )
 
     return result

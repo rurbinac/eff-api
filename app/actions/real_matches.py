@@ -2,6 +2,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models import RealMatchTeam
+from app.utils.dt import to_iso
 
 
 class RealMatchesReadListAction:
@@ -48,13 +49,6 @@ class RealMatchesReadListAction:
         """)
 
         matches = [dict(r) for r in db.execute(sql, params).mappings()]
-
-        def to_iso(val):
-            if val is None:
-                return None
-            if isinstance(val, str):
-                return val
-            return val.isoformat()
 
         items = []
         for match in matches:

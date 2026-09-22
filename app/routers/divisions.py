@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
@@ -17,6 +18,8 @@ from app.actions.draft.draft_helper import DraftHelper
 from app.actions.draft.draft_values import DraftValues
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
+from app.exceptions import UnknownActionException
+from app.guards import require_pos_int, require_value
 from app.models import Division
 from app.services import pusher as pusher_service
 from app.utils import JsonApiSerializer
@@ -24,7 +27,9 @@ from app.utils import JsonApiSerializer
 router = APIRouter(tags=["divisions"])
 
 
-def _auth_helper(db: Session, user_id: int | None, division_id: int) -> tuple[DraftHelper, HTTPException | None]:
+def _auth_helper(
+    db: Session, user_id: int | None, division_id: int
+) -> tuple[DraftHelper, HTTPException | None]:
     if user_id is None:
         return None, HTTPException(status_code=401, detail="Missing or invalid token")
     dh = DraftHelper(db, user_id, division_id)
@@ -44,9 +49,11 @@ def _draft_response(division_id: int, dv: DraftValues) -> dict:
                 "draftStatus": d.get("draftStatus"),
                 "draftingStart": d.get("draftingStart"),
                 "draftingLimit": d.get("draftingLimit"),
-            }
+            },
         },
-        "meta": {"timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S")}
+        "meta": {
+            "timestamp": RequestContext.get_datetime_iso()
+        },
     }
 
 
@@ -55,99 +62,97 @@ async def legacy_divisions(
     db: DbSession,
     current_user: CurrentUser,
     f: str = Query(..., description="Action name"),
+    type: str | None = Form(None, alias="_type"),
     leagueID: int | None = Form(None),
     divisionID: int | None = Form(None),
     draftType: str | None = Form(None),
-    draftDate: datetime | None = Form(None),
-    draftCompleteDate: datetime | None = Form(None),
+    draftDate: Annotated[datetime | None, Form()] = None,
+    draftCompleteDate: Annotated[datetime | None, Form()] = None,
 ):
     """Legacy PHP-compatible endpoint for Divisions actions."""
     RequestContext.set_datetime()
 
     try:
         if f == "ReadList":
-            if leagueID is None:
-                return {"error": "leagueID is required for ReadList"}, 400
-            items = DivisionsReadListAction.execute(db, leagueID)
-            return {
-                "table": "Divisions",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
-            }
+            if type == "byLeagueID":
+                require_pos_int(leagueID, "leagueID", f"{f}({type})")
+                items = DivisionsReadListAction.execute(db, leagueID, current_user)
+                return {
+                    "table": "Divisions",
+                    "timestamp": RequestContext.get_datetime_iso(),
+                    "items": [{"values": item} for item in items],
+                }
+            else:
+                raise UnknownActionException(f, type)
         elif f == "TransactionsDetail":
-            if divisionID is None:
-                return {"error": "divisionID is required for TransactionsDetail"}, 400
-            items = DivisionsTransactionsDetailAction.execute(db, divisionID)
+            require_pos_int(divisionID, "divisionID", f)
+            items = DivisionsTransactionsDetailAction.execute(db, divisionID, current_user)
             return {
                 "table": "TransactionsDetail",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
+                "timestamp": RequestContext.get_datetime_iso(),
+                "items": [{"values": item} for item in items],
             }
         elif f == "DraftResult":
-            if divisionID is None:
-                return {"error": "divisionID is required for DraftResult"}, 400
+            require_pos_int(divisionID, "divisionID", f)
             items = DraftResultAction.execute(db, divisionID, user_id=current_user)
             return {
                 "table": "DraftResult",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
+                "timestamp": RequestContext.get_datetime_iso(),
+                "items": [{"values": item} for item in items],
             }
         elif f == "DraftSituation":
-            if divisionID is None:
-                return {"error": "divisionID is required for DraftSituation"}
+            require_pos_int(divisionID, "divisionID", f)
             result = DraftSituationAction.execute(db, divisionID)
             if result is None:
-                return {"error": "Division not found"}
+                raise HTTPException(status_code=404, detail="Division not found")
             return {
                 "table": "DraftSituation",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "values": result
+                "timestamp": RequestContext.get_datetime_iso(),
+                "values": result,
             }
         elif f in ("StartDraft", "PauseDraft", "RestartDraft"):
-            if divisionID is None:
-                return {"error": f"divisionID is required for {f}"}
+            require_pos_int(divisionID, "divisionID", f)
             dh, auth_err = _auth_helper(db, current_user, divisionID)
             if auth_err:
-                return {"error": auth_err.detail}
+                raise auth_err
             try:
-                action = {"StartDraft": dh.start, "PauseDraft": dh.pause, "RestartDraft": dh.restart}[f]
+                action = {
+                    "StartDraft": dh.start,
+                    "PauseDraft": dh.pause,
+                    "RestartDraft": dh.restart,
+                }[f]
                 action()
             except DraftException as e:
                 return PlainTextResponse(e.legacy_response(), status_code=e.status_code)
             dv = dh.draft_values
             return {
                 "table": f,
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "values": {
                     "divisionID": divisionID,
                     "draftStatus": dv.division.get("draftStatus"),
                     "draftingStart": dv.division.get("draftingStart"),
                     "draftingLimit": dv.division.get("draftingLimit"),
-                }
+                },
             }
         elif f == "Update":
-            if divisionID is None:
-                return {"error": "divisionID is required for Update"}
-            if current_user is None:
-                return {"error": "Authentication required"}, 401
-            try:
-                values = DivisionsUpdateAction.execute(
-                    db,
-                    division_id=divisionID,
-                    user_id=current_user,
-                    draft_type=draftType,
-                    draft_date=draftDate,
-                    draft_complete_date=draftCompleteDate,
-                )
-            except HTTPException as e:
-                return {"error": e.detail}, e.status_code
+            require_pos_int(divisionID, "divisionID", f)
+            require_value(current_user, "token", f)
+            values = DivisionsUpdateAction.execute(
+                db,
+                division_id=divisionID,
+                user_id=current_user,
+                draft_type=draftType,
+                draft_date=draftDate,
+                draft_complete_date=draftCompleteDate,
+            )
             return {
                 "table": "Divisions",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "values": values,
             }
         else:
-            return {"error": f"Unknown action: {f}"}, 400
+            raise UnknownActionException(f)
     finally:
         RequestContext.reset()
 
@@ -158,12 +163,14 @@ def rest_divisions(db: DbSession, leagueID: int | None = None):
     RequestContext.set_datetime()
     try:
         if leagueID is None:
-            return JsonApiSerializer.serialize_error(400, "Bad Request", "leagueID is required")
+            return JsonApiSerializer.serialize_error(
+                400, "Bad Request", "leagueID is required"
+            )
         items = DivisionsReadListAction.execute(db, leagueID)
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='divisions',
-            resource_id_key='divisionID',
+            resource_type="divisions",
+            resource_id_key="divisionID",
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:
@@ -171,15 +178,17 @@ def rest_divisions(db: DbSession, leagueID: int | None = None):
 
 
 @router.get("/api/v1/divisions/draft_result")
-def rest_divisions_draft_result(db: DbSession, current_user: CurrentUser, divisionID: int):
+def rest_divisions_draft_result(
+    db: DbSession, current_user: CurrentUser, divisionID: int
+):
     """REST endpoint: Get draft result for a division."""
     RequestContext.set_datetime()
     try:
         items = DraftResultAction.execute(db, divisionID, user_id=current_user)
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='draft_result',
-            resource_id_key='teamID',
+            resource_type="draft_result",
+            resource_id_key="teamID",
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:
@@ -196,14 +205,18 @@ def rest_divisions_draft_situation(divisionID: int, db: DbSession):
             raise HTTPException(status_code=404, detail="Division not found")
         return {
             "data": {"type": "divisions", "id": str(divisionID), "attributes": result},
-            "meta": {"timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S")}
+            "meta": {
+                "timestamp": RequestContext.get_datetime_iso()
+            },
         }
     finally:
         RequestContext.reset()
 
 
 @router.post("/api/v1/divisions/start_draft")
-async def rest_divisions_start_draft(db: DbSession, current_user: CurrentUser, divisionID: int):
+async def rest_divisions_start_draft(
+    db: DbSession, current_user: CurrentUser, divisionID: int
+):
     """REST endpoint: Start the draft for a division (commissioner only)."""
     RequestContext.set_datetime()
     try:
@@ -217,7 +230,9 @@ async def rest_divisions_start_draft(db: DbSession, current_user: CurrentUser, d
 
 
 @router.post("/api/v1/divisions/pause_draft")
-async def rest_divisions_pause_draft(db: DbSession, current_user: CurrentUser, divisionID: int):
+async def rest_divisions_pause_draft(
+    db: DbSession, current_user: CurrentUser, divisionID: int
+):
     """REST endpoint: Pause the draft for a division (commissioner only)."""
     RequestContext.set_datetime()
     try:
@@ -231,7 +246,9 @@ async def rest_divisions_pause_draft(db: DbSession, current_user: CurrentUser, d
 
 
 @router.post("/api/v1/divisions/restart_draft")
-async def rest_divisions_restart_draft(db: DbSession, current_user: CurrentUser, divisionID: int):
+async def rest_divisions_restart_draft(
+    db: DbSession, current_user: CurrentUser, divisionID: int
+):
     """REST endpoint: Restart the draft for a division (commissioner only)."""
     RequestContext.set_datetime()
     try:
@@ -250,12 +267,14 @@ def rest_divisions_transactions_detail(db: DbSession, divisionID: int | None = N
     RequestContext.set_datetime()
     try:
         if divisionID is None:
-            return JsonApiSerializer.serialize_error(400, "Bad Request", "divisionID is required")
+            return JsonApiSerializer.serialize_error(
+                400, "Bad Request", "divisionID is required"
+            )
         items = DivisionsTransactionsDetailAction.execute(db, divisionID)
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='divisions',
-            resource_id_key='divisionID',
+            resource_type="divisions",
+            resource_id_key="divisionID",
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:
@@ -269,7 +288,9 @@ async def rest_divisions_pusher_webhook(request: Request, db: DbSession):
     key = request.headers.get("X-Pusher-Key", "")
     signature = request.headers.get("X-Pusher-Signature", "")
 
-    webhook = pusher_service.get_client().validate_webhook(key, signature, body.decode("utf-8"))
+    webhook = pusher_service.get_client().validate_webhook(
+        key, signature, body.decode("utf-8")
+    )
     if webhook is None:
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
@@ -290,7 +311,9 @@ async def rest_divisions_pusher_webhook(request: Request, db: DbSession):
         except ValueError:
             continue
 
-        _update_drafting_users(db, division_id, int(user_id), name == "member_added", sequence)
+        _update_drafting_users(
+            db, division_id, int(user_id), name == "member_added", sequence
+        )
 
     return {"status": "ok"}
 
@@ -327,13 +350,17 @@ async def rest_divisions_update(
                 "id": str(division_id),
                 "attributes": values,
             },
-            "meta": {"timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S")},
+            "meta": {
+                "timestamp": RequestContext.get_datetime_iso()
+            },
         }
     finally:
         RequestContext.reset()
 
 
-def _update_drafting_users(db: Session, division_id: int, user_id: int, online: bool, sequence: int) -> None:
+def _update_drafting_users(
+    db: Session, division_id: int, user_id: int, online: bool, sequence: int
+) -> None:
     division = db.get(Division, division_id)
     if division is None:
         return

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Form, HTTPException, Query
 from pydantic import BaseModel
 
+from app.exceptions import UnknownActionException
+from app.guards import require_value
 from app.actions.teams import (
     TeamsGetCurrentMembersAction,
     TeamsGetRealMembersRankingAction,
@@ -39,77 +41,58 @@ async def legacy_teams(
                 items = TeamsReadListAction.execute(db, league_id=leagueID)
             return {
                 "table": "Teams",
-                "timestamp": RequestContext.get_datetime().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                ),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "items": [{"values": item} for item in items],
             }
         elif f == "GetCurrentMembers":
-            if teamID is None:
-                return {"error": "teamID is required for GetCurrentMembers"}, 400
+            require_value(teamID, "teamID", f)
             items = TeamsGetCurrentMembersAction.execute(db, teamID)
             return {
                 "table": "RealTeamMembers",
-                "timestamp": RequestContext.get_datetime().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                ),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "items": [{"values": item} for item in items],
             }
         elif f == "GetRealMembersRanking":
-            if teamID is None:
-                return {"error": "teamID is required for GetRealMembersRanking"}, 400
+            require_value(teamID, "teamID", f)
             items = TeamsGetRealMembersRankingAction.execute(db, teamID)
             return {
                 "table": "RealTeamMembers",
-                "timestamp": RequestContext.get_datetime().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                ),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "items": [{"values": item} for item in items],
             }
         elif f == "WaiverMembersDetail":
-            if teamID is None:
-                return {"error": "teamID is required for WaiverMembersDetail"}, 400
+            require_value(teamID, "teamID", f)
             items = TeamsWaiverMembersDetailAction.execute(db, teamID)
             return {
                 "table": "WaiverMembers",
-                "timestamp": RequestContext.get_datetime().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                ),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "items": [{"values": item} for item in items],
             }
         elif f == "WishListDetail":
-            if teamID is None:
-                return {"error": "teamID is required for WishListDetail"}, 400
+            require_value(teamID, "teamID", f)
             items = TeamsWishListDetailAction.execute(db, teamID)
             return {
                 "table": "WishList",
-                "timestamp": RequestContext.get_datetime().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                ),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "items": [{"values": item} for item in items],
             }
         elif f == "Update":
-            if teamID is None:
-                return {"error": "teamID is required for Update"}, 400
-            if current_user is None:
-                return {"error": "Authentication required"}, 401
-            try:
-                values = TeamsUpdateAction.execute(
-                    db,
-                    team_id=teamID,
-                    user_id=current_user,
-                    team_name=teamName,
-                    notes=notes,
-                )
-            except HTTPException as e:
-                return {"error": e.detail}, e.status_code
+            require_value(teamID, "teamID", f)
+            require_value(current_user, "token", f)
+            values = TeamsUpdateAction.execute(
+                db,
+                team_id=teamID,
+                user_id=current_user,
+                team_name=teamName,
+                notes=notes,
+            )
             return {
                 "table": "Teams",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "values": values,
             }
         else:
-            return {"error": f"Unknown action: {f}"}, 400
+            raise UnknownActionException(f)
     finally:
         RequestContext.reset()
 
@@ -258,7 +241,7 @@ async def rest_teams_update(
                 "id": str(team_id),
                 "attributes": values,
             },
-            "meta": {"timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S")},
+            "meta": {"timestamp": RequestContext.get_datetime_iso()},
         }
     finally:
         RequestContext.reset()

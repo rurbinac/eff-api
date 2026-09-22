@@ -10,7 +10,7 @@ class TeamStandingsReadListAction:
     @staticmethod
     def execute(
         db: Session,
-        user_id: int | None = None,
+        user_id: int,
         team_id: int | None = None,
         league_id: int | None = None,
     ) -> list[dict]:

@@ -71,3 +71,28 @@ class NotFoundException(EFFException):
         else:
             message = f"{object_name} (id={object_id}) not found."
         super().__init__(message, status_code=status.HTTP_404_NOT_FOUND, legacy_code=404)
+
+class UnknownActionException(EFFException):
+    """Exception raised when a requested resource is not found."""
+
+    def __init__(self, action_name: str | None = None, action_type: str | None = None):
+        if action_name is None:
+            message = "Unknown action."
+        elif action_type is None:
+            message = f"Unknown action ({action_name})."
+        else:
+            message = f"Unknown action ({action_name} - type: {action_type})."
+        super().__init__(message, status_code=status.HTTP_404_NOT_FOUND, legacy_code=404)
+
+class RequiredValueException(EFFException):
+    """Exception raised when a requested resource is not found."""
+
+    def __init__(self, value_name: str | None = None, context: str | None = None):
+        if value_name is None:
+            message = "Missing value action."
+        elif context is None:
+            message = f"The value {value_name} is required."
+        else:
+            message = f"The value {value_name} is required for {context}."
+        super().__init__(message, status_code=status.HTTP_400_BAD_REQUEST, legacy_code=400)
+

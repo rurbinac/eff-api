@@ -2,6 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Form, HTTPException
 
+from app.exceptions import UnknownActionException
 from app.actions.leagues import LeaguesBuildAction, LeaguesJoinAction
 from app.actions.sign import (
     SignInfoAction,
@@ -35,7 +36,7 @@ async def gaming_api_sign_info(db: DbSession, token: CurrentToken):
 
         return {
             "table": "Session",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": RequestContext.get_datetime_iso(),
             "values": session_data
         }
 
@@ -120,7 +121,7 @@ async def gaming_api_users(
 
         return {
             "table": "Session",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": RequestContext.get_datetime_iso(),
             "values": session_data
         }
 
@@ -177,7 +178,7 @@ async def gaming_api_sign_up(
 
         return {
             "table": "Session",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": RequestContext.get_datetime_iso(),
             "values": session_data
         }
 
@@ -236,7 +237,7 @@ async def gaming_api_leagues(
             )
             return {
                 "table": "Leagues",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "values": league_data
             }
 
@@ -249,7 +250,7 @@ async def gaming_api_leagues(
             )
             return {
                 "table": "Teams",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "values": team_data
             }
 
@@ -281,7 +282,7 @@ async def gaming_api_teams(
             items = TeamsGetCurrentMembersAction.execute(db, teamID)
             return {
                 "table": "RealTeamMembers",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "items": [{"values": item} for item in items]
             }
 
@@ -291,7 +292,7 @@ async def gaming_api_teams(
             items = TeamsWaiverMembersDetailAction.execute(db, teamID)
             return {
                 "table": "WaiverMembers",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "items": [{"values": item} for item in items]
             }
 
@@ -321,12 +322,12 @@ async def gaming_api_teams(
 
             return {
                 "table": "success",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "values": result
             }
 
         else:
-            return {"error": f"Unknown function: {f}"}
+            raise UnknownActionException(f)
 
     except HTTPException:
         raise

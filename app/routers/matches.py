@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from app.actions.matches import MatchesReadListAction
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
+from app.exceptions import UnknownActionException
+from app.guards import require_pos_int
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["matches"])
@@ -20,6 +22,7 @@ async def legacy_matches(
     db: DbSession,
     current_user: CurrentUser,
     f: str = Query(...),
+    type: str | None = Form(None, alias="_type"),
     leagueID: int | None = Form(None),
     divisionID: int | None = Form(None),
 ):
@@ -27,6 +30,12 @@ async def legacy_matches(
     RequestContext.set_datetime()
     try:
         if f == "ReadList":
+            if type == "byLeagueID":
+                require_pos_int(leagueID, "leagueID", f"{f}({type})")
+            elif type == "byDivisionID":
+                require_pos_int(divisionID, "divisionID", f"{f}({type})")
+            else:
+                raise UnknownActionException(f, type)
             items = MatchesReadListAction.execute(
                 db,
                 user_id=current_user,
@@ -35,11 +44,11 @@ async def legacy_matches(
             )
             return {
                 "table": "Matches",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": RequestContext.get_datetime_iso(),
                 "items": items,
             }
         else:
-            return {"error": f"Unknown function: {f}"}, 400
+            raise UnknownActionException(f)
     finally:
         RequestContext.reset()
 

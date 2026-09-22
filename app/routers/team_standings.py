@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.actions.team_standings import TeamStandingsReadListAction
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
+from app.exceptions import UnknownActionException
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["team-standings"])
@@ -19,6 +20,7 @@ async def legacy_team_standings(
     db: DbSession,
     current_user: CurrentUser,
     f: str = Query(...),
+    type: str | None = Form(None, alias="_type"),
     teamID: int | None = Form(None),
     leagueID: int | None = Form(None),
 ):
@@ -26,14 +28,17 @@ async def legacy_team_standings(
     RequestContext.set_datetime()
     try:
         if f == "ReadList":
-            items = TeamStandingsReadListAction.execute(db, user_id=current_user, team_id=teamID, league_id=leagueID)
-            return {
-                "table": "TeamStandings",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
-            }
+            if type == "byLeagueID":
+                items = TeamStandingsReadListAction.execute(db, user_id=current_user, team_id=teamID, league_id=leagueID)
+                return {
+                    "table": "TeamStandings",
+                    "timestamp": RequestContext.get_datetime_iso(),
+                    "items": [{"values": item} for item in items]
+                }
+            else:
+                raise UnknownActionException(f, type)
         else:
-            return {"error": f"Unknown function: {f}"}, 400
+            raise UnknownActionException(f)
     finally:
         RequestContext.reset()
 

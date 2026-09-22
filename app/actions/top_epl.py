@@ -14,6 +14,6 @@ class TopEPLAction:
 
         return {
             "table": "TopEPL",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": RequestContext.get_datetime_iso(),
             "items": [{"values": {"realTeamShortName": team}} for team in teams]
         }

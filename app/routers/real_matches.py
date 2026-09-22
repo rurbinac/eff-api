@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from app.actions.real_matches import RealMatchesReadListAction
 from app.context import RequestContext
 from app.database import DbSession
+from app.exceptions import UnknownActionException
+from app.guards import require_pos_int
 from app.utils import JsonApiSerializer
 
 router = APIRouter(tags=["real-matches"])
@@ -18,6 +20,7 @@ class RealMatchesRequest(BaseModel):
 async def legacy_real_matches(
     db: DbSession,
     f: str = Query(...),
+    type: str | None = Form(None, alias="_type"),
     realCompetitionID: int | None = Form(None),
     realCompetitionMatchDay: int | None = Form(None),
 ):
@@ -25,18 +28,23 @@ async def legacy_real_matches(
     RequestContext.set_datetime()
     try:
         if f == "ReadList":
-            items = RealMatchesReadListAction.execute(
-                db,
-                real_competition_id=realCompetitionID,
-                real_competition_match_day=realCompetitionMatchDay,
-            )
-            return {
-                "table": "RealMatches",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
-            }
+            if type == "byMatchDay":
+                require_pos_int(realCompetitionID, "realCompetitionID", f"{f}({type})")
+                require_pos_int(realCompetitionMatchDay, "realCompetitionMatchDay", f"{f}({type})")
+                items = RealMatchesReadListAction.execute(
+                    db,
+                    real_competition_id=realCompetitionID,
+                    real_competition_match_day=realCompetitionMatchDay,
+                )
+                return {
+                    "table": "RealMatches",
+                    "timestamp": RequestContext.get_datetime_iso(),
+                    "items": [{"values": item} for item in items]
+                }
+            else:
+                raise UnknownActionException(f, type)
         else:
-            return {"error": f"Unknown function: {f}"}, 400
+            raise UnknownActionException(f)
     finally:
         RequestContext.reset()
 

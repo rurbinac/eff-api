@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Form, HTTPException, Query, status
 from pydantic import BaseModel
 
-from app.actions.leagues import LeaguesBuildAction, LeaguesJoinAction, LeaguesReadListAction
+from app.actions.leagues import (
+    LeaguesBuildAction,
+    LeaguesJoinAction,
+    LeaguesReadListAction,
+)
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
+from app.exceptions import UnknownActionException
 from app.models import User
 from app.utils import JsonApiSerializer
 
@@ -15,8 +20,7 @@ async def legacy_leagues(
     db: DbSession,
     current_user: CurrentUser,
     f: str = Query(..., description="Action name"),
-    # ReadList params
-    userID: int | None = Form(None),
+    type: str | None = Form(None, alias="_type"),
     season: int | None = Form(None),
     # Build params
     leagueName: str | None = Form(None),
@@ -36,12 +40,15 @@ async def legacy_leagues(
 
     try:
         if f == "ReadList":
-            items = LeaguesReadListAction.execute(db, userID, season)
-            return {
-                "table": "Leagues",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "items": [{"values": item} for item in items]
-            }
+            if type == "byUserID":
+                items = LeaguesReadListAction.execute(db, current_user, season)
+                return {
+                    "table": "Leagues",
+                    "timestamp": RequestContext.get_datetime_iso(),
+                    "items": [{"values": item} for item in items],
+                }
+            else:
+                raise UnknownActionException(f, type)
 
         elif f == "Build":
             if current_user is None:
@@ -65,8 +72,8 @@ async def legacy_leagues(
             )
             return {
                 "table": "Leagues",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "values": league_data
+                "timestamp": RequestContext.get_datetime_iso(),
+                "values": league_data,
             }
 
         elif f == "Join":
@@ -80,12 +87,12 @@ async def legacy_leagues(
             )
             return {
                 "table": "Teams",
-                "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
-                "values": team_data
+                "timestamp": RequestContext.get_datetime_iso(),
+                "values": team_data,
             }
 
         else:
-            return {"error": f"Unknown action: {f}"}
+            raise UnknownActionException(f)
 
     except HTTPException:
         raise
@@ -120,8 +127,8 @@ def rest_leagues(db: DbSession, userID: int | None = None, season: int | None = 
         items = LeaguesReadListAction.execute(db, userID, season)
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='leagues',
-            resource_id_key='leagueID',
+            resource_type="leagues",
+            resource_id_key="leagueID",
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:
@@ -129,15 +136,22 @@ def rest_leagues(db: DbSession, userID: int | None = None, season: int | None = 
 
 
 @router.post("/api/v1/leagues/build")
-def rest_leagues_build(payload: LeaguesBuildRequest, db: DbSession, current_user: CurrentUser):
+def rest_leagues_build(
+    payload: LeaguesBuildRequest, db: DbSession, current_user: CurrentUser
+):
     """REST endpoint: Build a new league."""
     RequestContext.set_datetime()
     try:
         if current_user is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+            )
         user = db.query(User).filter(User.userID == current_user).first()
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
         return LeaguesBuildAction.execute(
             db=db,
             user_id=current_user,
@@ -157,12 +171,17 @@ def rest_leagues_build(payload: LeaguesBuildRequest, db: DbSession, current_user
 
 
 @router.post("/api/v1/leagues/join")
-def rest_leagues_join(payload: LeaguesJoinRequest, db: DbSession, current_user: CurrentUser):
+def rest_leagues_join(
+    payload: LeaguesJoinRequest, db: DbSession, current_user: CurrentUser
+):
     """REST endpoint: Join an existing league."""
     RequestContext.set_datetime()
     try:
         if current_user is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+            )
         return LeaguesJoinAction.execute(
             db=db,
             user_id=current_user,

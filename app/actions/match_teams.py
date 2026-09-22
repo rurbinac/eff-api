@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.constants import MatchStatusConstants
 from app.context import RequestContext
+from app.guards import require_league_member
 from app.models import Match, MatchTeam
 from app.services.query import QueryService
+from app.utils.dt import to_iso
 from app.utils.lineup import Lineup, Scores
 
 
@@ -16,33 +18,15 @@ class MatchTeamsReadListAction:
     """Handle MatchTeams ReadList requests."""
 
     @staticmethod
-    def execute(db: Session, team_id: int | None = None) -> dict:
-        """
-        Get match teams filtered by team ID.
-        Joins with Matches to get match metadata, self-joins to get opposite team data.
-
-        Args:
-            db: Database session
-            team_id: Filter by teamID (matches where this team participated)
-
-        Returns:
-            PHP-compatible response dict with match metadata and opposite team data
-        """
-        query = db.query(MatchTeam)
-
-        if team_id is not None:
-            query = query.filter(MatchTeam.teamID == team_id)
-        else:
-            query = query.filter(False)
-
-        match_teams = query.order_by(MatchTeam.matchID).all()
-
-        def to_iso(dt):
-            if dt is None:
-                return None
-            if isinstance(dt, str):
-                return dt
-            return dt.isoformat()
+    def execute(db: Session, team_id: int, user_id: int) -> dict:
+        """Get match teams for a team (matches where the team participated)."""
+        require_league_member(db, user_id, team_id=team_id)
+        match_teams = (
+            db.query(MatchTeam)
+            .filter(MatchTeam.teamID == team_id)
+            .order_by(MatchTeam.matchID)
+            .all()
+        )
 
         items = []
         for mt in match_teams:
@@ -128,7 +112,7 @@ class MatchTeamsReadListAction:
 
         return {
             "table": "MatchTeams",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": RequestContext.get_datetime_iso(),
             "items": items,
         }
 
@@ -182,7 +166,7 @@ class GetLineupAction:
 
         return {
             "table": "MatchTeams",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": RequestContext.get_datetime_iso(),
             "items": [{"values": m} for m in lineup.get_members()],
         }
 
@@ -260,7 +244,7 @@ class ClearLineupByMatchTeamIDAction:
         db.commit()
         return {
             "table": "MatchTeams",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": RequestContext.get_datetime_iso(),
             "values": {"matchTeamID": match_team_id},
         }
 
@@ -308,7 +292,7 @@ class GetScores:
 
         return {
             "table": "MatchTeams",
-            "timestamp": RequestContext.get_datetime().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": RequestContext.get_datetime_iso(),
             "values": list(scores.get_members()),
         }
 
