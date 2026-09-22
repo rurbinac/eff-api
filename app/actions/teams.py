@@ -163,8 +163,7 @@ class TeamsGetCurrentMembersAction:
               AND `realTeamMemberKey` IN :keys
         """).bindparams(bindparam("keys", expanding=True))
         members_result = db.execute(
-            members_stmt,
-            {"baseRealCompetitionID": base_competition_id, "keys": keys}
+            members_stmt, {"baseRealCompetitionID": base_competition_id, "keys": keys}
         )
 
         # Populate dict with members
@@ -234,15 +233,24 @@ class TeamsSetFranchiseWishListAction:
     """Set team's franchise wish list."""
 
     @staticmethod
-    def execute(db: Session, team_id: int, user_id: int, franchise_wish_list_keys_str: str) -> dict:
+    def execute(
+        db: Session, team_id: int, user_id: int, franchise_wish_list_keys_str: str
+    ) -> dict:
         """Set team's franchise wish list (pure data, no wrapper)."""
         require_team_owner(db, user_id, team_id)
 
         # Parse franchise wish list keys - handle both dot and comma separated formats
-        if "." in franchise_wish_list_keys_str and "," not in franchise_wish_list_keys_str:
-            wish_keys = [k.strip() for k in franchise_wish_list_keys_str.split(".") if k.strip()]
+        if (
+            "." in franchise_wish_list_keys_str
+            and "," not in franchise_wish_list_keys_str
+        ):
+            wish_keys = [
+                k.strip() for k in franchise_wish_list_keys_str.split(".") if k.strip()
+            ]
         else:
-            wish_keys = [k.strip() for k in franchise_wish_list_keys_str.split(",") if k.strip()]
+            wish_keys = [
+                k.strip() for k in franchise_wish_list_keys_str.split(",") if k.strip()
+            ]
 
         keys = Keys(wish_keys)
         if not keys:
@@ -255,13 +263,16 @@ class TeamsSetFranchiseWishListAction:
             SET `franchiseWishList` = :franchiseWishList
             WHERE `teamID` = :teamID
         """)
-        db.execute(update_stmt, {"franchiseWishList": packed_franchise_wish_list, "teamID": team_id})
+        db.execute(
+            update_stmt,
+            {"franchiseWishList": packed_franchise_wish_list, "teamID": team_id},
+        )
         db.commit()
 
         return {
             "success": True,
             "teamID": team_id,
-            "franchiseWishList": packed_franchise_wish_list
+            "franchiseWishList": packed_franchise_wish_list,
         }
 
 
@@ -269,7 +280,9 @@ class TeamsWishListSetAction:
     """Set team's wish list."""
 
     @staticmethod
-    def execute(db: Session, team_id: int, user_id: int, wish_list_keys_str: str) -> dict:
+    def execute(
+        db: Session, team_id: int, user_id: int, wish_list_keys_str: str
+    ) -> dict:
         """Set team's wish list (pure data, no wrapper)."""
         require_team_owner(db, user_id, team_id)
 
@@ -290,14 +303,12 @@ class TeamsWishListSetAction:
             SET `membersWishList` = :membersWishList
             WHERE `teamID` = :teamID
         """)
-        db.execute(update_stmt, {"membersWishList": packed_wish_list, "teamID": team_id})
+        db.execute(
+            update_stmt, {"membersWishList": packed_wish_list, "teamID": team_id}
+        )
         db.commit()
 
-        return {
-            "success": True,
-            "teamID": team_id,
-            "membersWishList": packed_wish_list
-        }
+        return {"success": True, "teamID": team_id, "membersWishList": packed_wish_list}
 
 
 class TeamsSetRealMembersRankingAction:
@@ -324,11 +335,7 @@ class TeamsSetRealMembersRankingAction:
         db.execute(update_stmt, {"membersRanking": packed_ranking, "teamID": team_id})
         db.commit()
 
-        return {
-            "success": True,
-            "teamID": team_id,
-            "membersRanking": packed_ranking
-        }
+        return {"success": True, "teamID": team_id, "membersRanking": packed_ranking}
 
 
 class TeamsGetRealMembersRankingAction:
@@ -368,8 +375,7 @@ class TeamsGetRealMembersRankingAction:
               AND `teamID` != :teamID
         """)
         division_teams_result = db.execute(
-            division_teams_stmt,
-            {"divisionID": division_id, "teamID": team_id}
+            division_teams_stmt, {"divisionID": division_id, "teamID": team_id}
         )
         division_set: set[str] = set()
         for div_row in division_teams_result.mappings():
@@ -389,8 +395,7 @@ class TeamsGetRealMembersRankingAction:
             ORDER BY IFNULL(`last_ranking`, 1000000000), `name`
         """)
         members_result = db.execute(
-            members_stmt,
-            {"baseRealCompetitionID": base_competition_id}
+            members_stmt, {"baseRealCompetitionID": base_competition_id}
         )
 
         all_members: dict[str, dict] = {}
@@ -449,15 +454,12 @@ class TeamsUpdateAction:
         }
 
 
-
-
 class TeamsWaiverMembersDetailAction:
     """Get waiver members detail for a team."""
 
     @staticmethod
     def execute(db: Session, team_id: int, user_id: int) -> list[dict]:
         """Get team's waiver members with their stats and waiver actions (pure data, no wrapper)."""
-        require_league_member(db, user_id, team_id=team_id)
         require_league_member(db, user_id, team_id=team_id)
         # Query team to get membersWaivers and matchDayMapKey
         team_stmt = text("""
@@ -487,10 +489,13 @@ class TeamsWaiverMembersDetailAction:
               AND `finishPostMatch` > :currentDateTime
             LIMIT 1
         """)
-        mds_result = db.execute(mds_stmt, {
-            "matchDayMapKey": match_day_map_key,
-            "currentDateTime": RequestContext.get_datetime()
-        })
+        mds_result = db.execute(
+            mds_stmt,
+            {
+                "matchDayMapKey": match_day_map_key,
+                "currentDateTime": RequestContext.get_datetime(),
+            },
+        )
         mds_row = mds_result.mappings().first()
 
         if not mds_row:
@@ -515,11 +520,14 @@ class TeamsWaiverMembersDetailAction:
                       AND `realCompetitionMatchDay` = :realCompetitionMatchDay
                     LIMIT 1
                 """)
-                rs_result = db.execute(rs_stmt, {
-                    "key": key,
-                    "realCompetitionID": real_competition_id,
-                    "realCompetitionMatchDay": real_competition_match_day
-                })
+                rs_result = db.execute(
+                    rs_stmt,
+                    {
+                        "key": key,
+                        "realCompetitionID": real_competition_id,
+                        "realCompetitionMatchDay": real_competition_match_day,
+                    },
+                )
                 rs_row = rs_result.mappings().first()
 
                 if rs_row:

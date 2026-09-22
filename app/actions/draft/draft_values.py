@@ -120,8 +120,7 @@ class DraftValues:
 
     def get_member_keys(self) -> Iterator[str]:
         if isinstance(self._members, dict):
-            for key in self._members.keys():
-                yield key
+            yield from self._members.keys()
 
     def get_dp(self, key: str) -> str | None:
         if self._members is None:

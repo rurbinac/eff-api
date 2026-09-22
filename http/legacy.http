@@ -433,6 +433,7 @@ User-Agent: {{user-agent}}
 Authorization: Bearer {{access-token}}
 
 _format={{format}}
+&_type=byTeamID
 &teamID={{team-id}}
 
 

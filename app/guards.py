@@ -21,6 +21,7 @@ from app.exceptions import (
     NotFoundException,
     NotYourTeamException,
     RequiredValueException,
+    UnauthorizedException,
 )
 from app.models import Division, League, Team
 
@@ -272,44 +273,112 @@ def user_is_league_commissioner(
 # ---------------------------------------------------------------------------
 
 
+def require_authentication(current_user: int | None) -> None:
+    if current_user is None:
+        raise UnauthorizedException()
+
+
 def require_value(
     value, value_name: str | None = None, context: str | None = None
 ) -> None:
-    if value is None or str(value).strip() == "":
+    failed = False
+    if value is None:
+        failed = True
+    elif isinstance(value, (list, dict, tuple)):
+        failed = len(value) == 0
+    elif not isinstance(value, (int, float)):
+        failed = (value if isinstance(value, str) else str(value)).strip() == ""
+    if failed:
         raise RequiredValueException(value_name, context)
+    return value
+
 
 def require_int(
-    value, value_name: str | None = None, context: str | None = None
+    value,
+    value_name: str | None = None,
+    context: str | None = None,
+    not_empty: bool = True,
 ) -> int:
-    require_value(value, value_name, context)
+    if not_empty:
+        require_value(value, value_name, context)
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        value = value.strip()
+        if value == "":
+            return None
     try:
         return int(value)
     except (ValueError, TypeError):
         raise RequiredValueException(value_name, context)
 
+
 def require_pos_int(
-    value, value_name: str | None = None, context: str | None = None
+    value,
+    value_name: str | None = None,
+    context: str | None = None,
+    not_empty: bool = True,
 ) -> int:
-    val = require_int(value, value_name, context)
+    val = require_int(value, value_name, context, not_empty)
+    if val is None:
+        return None
     if val <= 0:
         raise RequiredValueException(value_name, context)
     return val
 
+
 def require_ints(
-    value, value_name: str | None = None, context: str | None = None
+    value,
+    value_name: str | None = None,
+    context: str | None = None,
+    not_empty: bool = True,
 ) -> list[int]:
     if value is None:
+        val = []
+    elif isinstance(value, str):
+        val = []
+        for v in value.split(","):
+            txt = v.strip()
+            if txt != "":
+                val.append(txt)
+    else:
+        value = list(value)
+    int_list = []
+    for i, v in enumerate(val):
+        try:
+            num = require_int(v, value_name, context, False)
+            if num is not None:
+                int_list.append(num)
+        except (ValueError, TypeError):
+            raise RequiredValueException(value_name, context)
+    if not_empty and len(int_list) == 0:
         raise RequiredValueException(value_name, context)
-    parts = str(value).split(",")
-    return [require_int(v.strip(), value_name, context) for v in parts]
+    return int_list
+
 
 def require_pos_ints(
-    value, value_name: str | None = None, context: str | None = None
+    value,
+    value_name: str | None = None,
+    context: str | None = None,
+    not_empty: bool = True,
 ) -> list[int]:
-    if value is None:
-        raise RequiredValueException(value_name, context)
-    parts = str(value).split(",")
-    return [require_pos_int(v.strip(), value_name, context) for v in parts]
+    int_list = require_ints(value, value_name, context, not_empty)
+    for i in int_list:
+        if i <= 0:
+            raise RequiredValueException(value_name, context)
+    return int_list
+
+
+def require_in_list(
+    value, values: list, value_name: str | None = None, context: str | None = None
+) -> any:
+    require_int(value, value_name, context)
+    if value in values:
+        return value
+    raise RequiredValueException(value_name, context)
+
 
 def require_team(db: Session, team_id: int | None) -> Team:
     row = db.query(Team).filter(Team.teamID == team_id).first() if team_id else None

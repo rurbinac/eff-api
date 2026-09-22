@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Form, Query
 from pydantic import BaseModel
 
-from app.exceptions import UnknownActionException
 from app.actions.real_standings import RealStandingsReadListAction
 from app.context import RequestContext
-from app.database import DbSession
+from app.database import CurrentUser, DbSession
+from app.exceptions import EFFException, UnknownActionException
+from app.guards import require_authentication
 from app.utils import JsonApiSerializer
+from app.utils.returns import return_error, return_many_legacy
 
 router = APIRouter(tags=["real-standings"])
 
@@ -19,6 +21,7 @@ class RealStandingsRequest(BaseModel):
 @router.post("/eff/eff_api/RealStandings.php")
 async def legacy_real_standings(
     db: DbSession,
+    current_user: CurrentUser,
     f: str = Query(...),
     realCompetitionID: int | None = Form(None),
     realCompetitionMatchDay: int | None = Form(None),
@@ -28,20 +31,22 @@ async def legacy_real_standings(
     """Legacy PHP-compatible RealStandings endpoint."""
     RequestContext.set_datetime()
     try:
+        require_authentication(current_user)
         if f == "ReadList":
-            items = RealStandingsReadListAction.execute(
-                db,
-                real_competition_id=realCompetitionID,
-                real_competition_match_day=realCompetitionMatchDay,
-                division_id=divisionID if type == "byDivisionID" else None,
-            )
-            return {
-                "table": "RealStandings",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "items": [{"values": item} for item in items],
-            }
+            if type == "byDivisionID":
+                items = RealStandingsReadListAction.execute(
+                    db,
+                    real_competition_id=realCompetitionID,
+                    real_competition_match_day=realCompetitionMatchDay,
+                    division_id=divisionID if type == "byDivisionID" else None,
+                )
+            else:
+                raise UnknownActionException(f, type)
+            return return_many_legacy("RealStandings", items)
         else:
             raise UnknownActionException(f)
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 

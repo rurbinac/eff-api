@@ -1,9 +1,9 @@
 """JSON:API (https://jsonapi.org) serialization utilities for REST API responses."""
 
-from datetime import datetime
+
+from typing import Any, Dict, List, Optional
 
 from app.utils.dt import utc_now
-from typing import Any, Dict, List, Optional
 
 
 class JsonApiSerializer:

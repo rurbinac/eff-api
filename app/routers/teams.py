@@ -1,8 +1,6 @@
-from fastapi import APIRouter, Form, HTTPException, Query
+from fastapi import APIRouter, Form, Query
 from pydantic import BaseModel
 
-from app.exceptions import UnknownActionException
-from app.guards import require_value
 from app.actions.teams import (
     TeamsGetCurrentMembersAction,
     TeamsGetRealMembersRankingAction,
@@ -13,7 +11,15 @@ from app.actions.teams import (
 )
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
+from app.exceptions import EFFException, UnknownActionException
+from app.guards import (
+    require_authentication,
+    require_league_member,
+    require_pos_int,
+    require_team_owner,
+)
 from app.utils import JsonApiSerializer
+from app.utils.returns import return_error, return_many_legacy, return_one_legacy
 
 router = APIRouter(tags=["teams"])
 
@@ -34,51 +40,42 @@ async def legacy_teams(
     RequestContext.set_datetime()
 
     try:
+        require_authentication(current_user)
         if f == "ReadList":
-            if type == "byDivisionID":
+            if type == "byLeagueID":
+                require_pos_int(leagueID, "leagueID", f"{f}({type})")
+                require_league_member(db, current_user, league_id=leagueID)
+                items = TeamsReadListAction.execute(db, league_id=leagueID)
+            elif type == "byDivisionID":
+                require_pos_int(divisionID, "divisionID", f"{f}({type})")
+                require_league_member(db, current_user, division_id=divisionID)
                 items = TeamsReadListAction.execute(db, division_id=divisionID)
             else:
-                items = TeamsReadListAction.execute(db, league_id=leagueID)
-            return {
-                "table": "Teams",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "items": [{"values": item} for item in items],
-            }
+                raise UnknownActionException(f, type)
+            return return_many_legacy("Teams", items)
         elif f == "GetCurrentMembers":
-            require_value(teamID, "teamID", f)
+            require_pos_int(teamID, "teamID", f)
+            require_league_member(db, current_user, team_id=teamID)
             items = TeamsGetCurrentMembersAction.execute(db, teamID)
-            return {
-                "table": "RealTeamMembers",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "items": [{"values": item} for item in items],
-            }
+            return return_many_legacy("RealTeamMembers", items)
         elif f == "GetRealMembersRanking":
-            require_value(teamID, "teamID", f)
+            require_pos_int(teamID, "teamID", f)
+            require_league_member(db, current_user, team_id=teamID)
             items = TeamsGetRealMembersRankingAction.execute(db, teamID)
-            return {
-                "table": "RealTeamMembers",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "items": [{"values": item} for item in items],
-            }
+            return return_many_legacy("RealTeamMembers", items)
         elif f == "WaiverMembersDetail":
-            require_value(teamID, "teamID", f)
+            require_pos_int(teamID, "teamID", f)
+            require_league_member(db, current_user, team_id=teamID)
             items = TeamsWaiverMembersDetailAction.execute(db, teamID)
-            return {
-                "table": "WaiverMembers",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "items": [{"values": item} for item in items],
-            }
+            return return_many_legacy("WaiverMembers", items)
         elif f == "WishListDetail":
-            require_value(teamID, "teamID", f)
+            require_pos_int(teamID, "teamID", f)
+            require_league_member(db, current_user, team_id=teamID)
             items = TeamsWishListDetailAction.execute(db, teamID)
-            return {
-                "table": "WishList",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "items": [{"values": item} for item in items],
-            }
+            return return_many_legacy("WishList", items)
         elif f == "Update":
-            require_value(teamID, "teamID", f)
-            require_value(current_user, "token", f)
+            require_pos_int(teamID, "teamID", f)
+            require_team_owner(db, current_user, teamID)
             values = TeamsUpdateAction.execute(
                 db,
                 team_id=teamID,
@@ -86,13 +83,11 @@ async def legacy_teams(
                 team_name=teamName,
                 notes=notes,
             )
-            return {
-                "table": "Teams",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "values": values,
-            }
+            return return_one_legacy("Teams", values)
         else:
             raise UnknownActionException(f)
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 
@@ -226,8 +221,7 @@ async def rest_teams_update(
     """Update editable team settings (team owner only)."""
     RequestContext.set_datetime()
     try:
-        if current_user is None:
-            raise HTTPException(status_code=401, detail="Authentication required")
+        require_authentication(current_user)
         values = TeamsUpdateAction.execute(
             db,
             team_id=team_id,

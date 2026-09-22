@@ -3,9 +3,10 @@ from fastapi import APIRouter, Form, Query
 from app.actions.division_notes import DivisionNotesReadListAction
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
-from app.exceptions import UnknownActionException
-from app.guards import require_league_member
+from app.exceptions import EFFException, UnknownActionException
+from app.guards import require_authentication, require_league_member, require_pos_int
 from app.utils import JsonApiSerializer
+from app.utils.returns import return_error, return_many_legacy
 
 router = APIRouter(tags=["division-notes"])
 
@@ -22,19 +23,19 @@ async def legacy_division_notes(
     RequestContext.set_datetime()
 
     try:
+        require_authentication(current_user)
         if f == "ReadList":
             if type == "byDivisionID":
+                require_pos_int(divisionID, "divisionID", f"{f}({type})")
                 require_league_member(db, current_user, division_id=divisionID)
                 items = DivisionNotesReadListAction.execute(db, division_id=divisionID, user_id=current_user)
-                return {
-                    "table": "DivisionNotes",
-                    "timestamp": RequestContext.get_datetime_iso(),
-                    "items": [{"values": item} for item in items]
-                }
             else:
                 raise UnknownActionException(f, type)
+            return return_many_legacy("DivisionNotes", items)
         else:
             raise UnknownActionException(f)
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 

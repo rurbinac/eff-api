@@ -4,8 +4,10 @@ from app.actions.lookups import LookupsReadListAction
 from app.actions.top_epl import TopEPLAction
 from app.context import RequestContext
 from app.database import DbSession
-from app.exceptions import UnknownActionException
+from app.exceptions import EFFException, UnknownActionException
+from app.guards import require_pos_int
 from app.utils import JsonApiSerializer
+from app.utils.returns import return_error, return_many_legacy
 
 router = APIRouter(tags=["lookups"])
 
@@ -14,20 +16,23 @@ router = APIRouter(tags=["lookups"])
 async def legacy_lookups(
     db: DbSession,
     f: str = Query(...),
+    type: str | None = Form(None, alias="_type"),
     lookupNum: int | None = Form(None),
 ):
     """Legacy PHP-compatible Lookups endpoint."""
     RequestContext.set_datetime()
     try:
         if f == "ReadList":
-            items = LookupsReadListAction.execute(db, lookup_num=lookupNum)
-            return {
-                "table": "Lookups",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "items": [{"values": item} for item in items]
-            }
+            if type == "byLookupNum":
+                require_pos_int(lookupNum, "lookupNum", f"{f}({type})")
+                items = LookupsReadListAction.execute(db, lookup_num=lookupNum)
+            else:
+                raise UnknownActionException(f, type)
         else:
             raise UnknownActionException(f)
+        return return_many_legacy("Lookups", items)
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 

@@ -3,10 +3,11 @@ from pydantic import BaseModel
 
 from app.actions.real_matches import RealMatchesReadListAction
 from app.context import RequestContext
-from app.database import DbSession
-from app.exceptions import UnknownActionException
-from app.guards import require_pos_int
+from app.database import CurrentUser, DbSession
+from app.exceptions import EFFException, UnknownActionException
+from app.guards import require_authentication, require_pos_int
 from app.utils import JsonApiSerializer
+from app.utils.returns import return_error, return_many_legacy
 
 router = APIRouter(tags=["real-matches"])
 
@@ -19,6 +20,7 @@ class RealMatchesRequest(BaseModel):
 @router.post("/eff/eff_api/RealMatches.php")
 async def legacy_real_matches(
     db: DbSession,
+    current_user: CurrentUser,
     f: str = Query(...),
     type: str | None = Form(None, alias="_type"),
     realCompetitionID: int | None = Form(None),
@@ -27,6 +29,7 @@ async def legacy_real_matches(
     """Legacy PHP-compatible RealMatches endpoint."""
     RequestContext.set_datetime()
     try:
+        require_authentication(current_user)
         if f == "ReadList":
             if type == "byMatchDay":
                 require_pos_int(realCompetitionID, "realCompetitionID", f"{f}({type})")
@@ -36,15 +39,13 @@ async def legacy_real_matches(
                     real_competition_id=realCompetitionID,
                     real_competition_match_day=realCompetitionMatchDay,
                 )
-                return {
-                    "table": "RealMatches",
-                    "timestamp": RequestContext.get_datetime_iso(),
-                    "items": [{"values": item} for item in items]
-                }
             else:
                 raise UnknownActionException(f, type)
+            return return_many_legacy("RealMatches", items)
         else:
             raise UnknownActionException(f)
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 

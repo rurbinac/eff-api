@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Form, Query, Request
 
-from app.exceptions import UnknownActionException
 from app.actions.sign import SignInAction, SignInfoAction, SignOutAction
 from app.actions.top_epl import TopEPLAction
 from app.context import RequestContext
 from app.database import CurrentToken, DbSession
+from app.exceptions import EFFException, UnknownActionException
+from app.utils.returns import return_error
 
 router = APIRouter(tags=["legacy"])
 
@@ -50,6 +51,8 @@ async def legacy_users(
 
         else:
             raise UnknownActionException(f)
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 

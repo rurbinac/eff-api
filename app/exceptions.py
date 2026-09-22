@@ -12,6 +12,12 @@ class EFFException(HTTPException):
         """Return a legacy response string for backward compatibility."""
         return str(self.legacy_code)
 
+class UnauthorizedException(EFFException):
+    """Exception raised for invalid draft status operations."""
+
+    def __init__(self):
+        message = "Unauthorized"
+        super().__init__(message, status_code=status.HTTP_401_UNAUTHORIZED, legacy_code=115)
 
 class CannotSaveException(EFFException):
     """Exception raised for invalid draft status operations."""

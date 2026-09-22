@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.constants import MatchStatusConstants
 from app.context import RequestContext
-from app.guards import require_league_member
 from app.models import Match, MatchTeam
 from app.services.query import QueryService
 from app.utils.dt import to_iso
@@ -18,9 +17,8 @@ class MatchTeamsReadListAction:
     """Handle MatchTeams ReadList requests."""
 
     @staticmethod
-    def execute(db: Session, team_id: int, user_id: int) -> dict:
+    def execute(db: Session, team_id: int) -> dict:
         """Get match teams for a team (matches where the team participated)."""
-        require_league_member(db, user_id, team_id=team_id)
         match_teams = (
             db.query(MatchTeam)
             .filter(MatchTeam.teamID == team_id)
@@ -108,13 +106,9 @@ class MatchTeamsReadListAction:
                 "updatedBy": mt.updatedBy,
                 "updatedIn": to_iso(mt.updatedIn),
             }
-            items.append({"values": values})
+            items.append(values)
 
-        return {
-            "table": "MatchTeams",
-            "timestamp": RequestContext.get_datetime_iso(),
-            "items": items,
-        }
+        return items
 
 
 class GetLineupAction:
@@ -164,11 +158,7 @@ class GetLineupAction:
             lineup.save_lineup()
             db.commit()
 
-        return {
-            "table": "MatchTeams",
-            "timestamp": RequestContext.get_datetime_iso(),
-            "items": [{"values": m} for m in lineup.get_members()],
-        }
+        return list(lineup.get_members())
 
 
 class GetLineupByMatchTeamIDAction(GetLineupAction):
@@ -242,11 +232,7 @@ class ClearLineupByMatchTeamIDAction:
             {"matchTeamID": match_team_id},
         )
         db.commit()
-        return {
-            "table": "MatchTeams",
-            "timestamp": RequestContext.get_datetime_iso(),
-            "values": {"matchTeamID": match_team_id},
-        }
+        return {"matchTeamID": match_team_id}
 
 
 class GetScores:
@@ -290,11 +276,7 @@ class GetScores:
         if not scores.load(match_teams, match_status):
             return None
 
-        return {
-            "table": "MatchTeams",
-            "timestamp": RequestContext.get_datetime_iso(),
-            "values": list(scores.get_members()),
-        }
+        return list(scores.get_members())
 
 
 class GetScoresByMatchIDsAction:

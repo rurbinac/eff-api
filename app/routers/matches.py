@@ -4,9 +4,10 @@ from pydantic import BaseModel
 from app.actions.matches import MatchesReadListAction
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
-from app.exceptions import UnknownActionException
-from app.guards import require_pos_int
+from app.exceptions import EFFException, UnknownActionException
+from app.guards import require_authentication, require_pos_int
 from app.utils import JsonApiSerializer
+from app.utils.returns import return_error, return_many_legacy
 
 router = APIRouter(tags=["matches"])
 
@@ -29,26 +30,29 @@ async def legacy_matches(
     """Legacy PHP-compatible Matches endpoint."""
     RequestContext.set_datetime()
     try:
+        require_authentication(current_user)
         if f == "ReadList":
             if type == "byLeagueID":
                 require_pos_int(leagueID, "leagueID", f"{f}({type})")
+                items = MatchesReadListAction.execute(
+                    db,
+                    user_id=current_user,
+                    league_id=leagueID,
+                )
             elif type == "byDivisionID":
                 require_pos_int(divisionID, "divisionID", f"{f}({type})")
+                items = MatchesReadListAction.execute(
+                    db,
+                    user_id=current_user,
+                    division_id=divisionID,
+                )
             else:
                 raise UnknownActionException(f, type)
-            items = MatchesReadListAction.execute(
-                db,
-                user_id=current_user,
-                league_id=leagueID,
-                division_id=divisionID,
-            )
-            return {
-                "table": "Matches",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "items": items,
-            }
+            return return_many_legacy("Matches", items)
         else:
             raise UnknownActionException(f)
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 

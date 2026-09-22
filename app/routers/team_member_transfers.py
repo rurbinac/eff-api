@@ -6,9 +6,10 @@ from app.actions.team_member_transfers import (
 )
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
-from app.exceptions import UnknownActionException
-from app.guards import require_pos_int
+from app.exceptions import EFFException, UnknownActionException
+from app.guards import require_authentication, require_pos_int
 from app.utils import JsonApiSerializer
+from app.utils.returns import return_error, return_many_legacy
 
 
 class TeamMemberTransfersRequest(BaseModel):
@@ -30,19 +31,18 @@ async def legacy_team_member_transfers(
     RequestContext.set_datetime()
 
     try:
+        require_authentication(current_user)
         if f == "GetPendingByTeamID":
             if type == "byLeagueID":
                 require_pos_int(teamID, "teamID", f)
                 items = TeamMemberTransfersGetPendingByTeamIDAction.execute(db, teamID, current_user)
-                return {
-                    "table": "TeamMemberTransfers",
-                    "timestamp": RequestContext.get_datetime_iso(),
-                    "items": [{"values": item} for item in items]
-                }
+                return return_many_legacy("TeamMemberTransfers", items)
             else:
                 raise UnknownActionException(f, type)
         else:
             raise UnknownActionException(f)
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 

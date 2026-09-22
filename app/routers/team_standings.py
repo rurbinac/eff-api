@@ -4,8 +4,10 @@ from pydantic import BaseModel
 from app.actions.team_standings import TeamStandingsReadListAction
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
-from app.exceptions import UnknownActionException
+from app.exceptions import EFFException, UnknownActionException
+from app.guards import require_authentication
 from app.utils import JsonApiSerializer
+from app.utils.returns import return_error, return_many_legacy
 
 router = APIRouter(tags=["team-standings"])
 
@@ -27,18 +29,19 @@ async def legacy_team_standings(
     """Legacy PHP-compatible TeamStandings endpoint."""
     RequestContext.set_datetime()
     try:
+        require_authentication(current_user)
         if f == "ReadList":
             if type == "byLeagueID":
-                items = TeamStandingsReadListAction.execute(db, user_id=current_user, team_id=teamID, league_id=leagueID)
-                return {
-                    "table": "TeamStandings",
-                    "timestamp": RequestContext.get_datetime_iso(),
-                    "items": [{"values": item} for item in items]
-                }
+                items = TeamStandingsReadListAction.execute(
+                    db, user_id=current_user, team_id=teamID, league_id=leagueID
+                )
             else:
                 raise UnknownActionException(f, type)
+            return return_many_legacy("TeamStandings", items)
         else:
             raise UnknownActionException(f)
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 
@@ -52,11 +55,13 @@ async def rest_team_standings(
     """REST endpoint for TeamStandings ReadList (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        items = TeamStandingsReadListAction.execute(db, user_id=current_user, team_id=payload.teamID, league_id=payload.leagueID)
+        items = TeamStandingsReadListAction.execute(
+            db, user_id=current_user, team_id=payload.teamID, league_id=payload.leagueID
+        )
         response = JsonApiSerializer.serialize_collection(
             items,
-            resource_type='team-standings',
-            resource_id_key='teamStandingID',
+            resource_type="team-standings",
+            resource_id_key="teamStandingID",
         )
         return JsonApiSerializer.add_timestamp(response)
     finally:

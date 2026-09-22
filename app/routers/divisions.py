@@ -18,11 +18,17 @@ from app.actions.draft.draft_helper import DraftHelper
 from app.actions.draft.draft_values import DraftValues
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
-from app.exceptions import UnknownActionException
-from app.guards import require_pos_int, require_value
+from app.exceptions import EFFException, NotFoundException, UnknownActionException
+from app.guards import (
+    require_authentication,
+    require_division_commissioner,
+    require_league_member,
+    require_pos_int,
+)
 from app.models import Division
 from app.services import pusher as pusher_service
 from app.utils import JsonApiSerializer
+from app.utils.returns import return_error, return_many_legacy, return_one_legacy
 
 router = APIRouter(tags=["divisions"])
 
@@ -73,45 +79,47 @@ async def legacy_divisions(
     RequestContext.set_datetime()
 
     try:
+        require_authentication(current_user)
         if f == "ReadList":
             if type == "byLeagueID":
                 require_pos_int(leagueID, "leagueID", f"{f}({type})")
+                require_league_member(db, current_user, league_id=leagueID)
                 items = DivisionsReadListAction.execute(db, leagueID, current_user)
-                return {
-                    "table": "Divisions",
-                    "timestamp": RequestContext.get_datetime_iso(),
-                    "items": [{"values": item} for item in items],
-                }
             else:
                 raise UnknownActionException(f, type)
+            return return_many_legacy("Divisions", items)
+        elif f == "Update":
+            require_pos_int(divisionID, "divisionID", f)
+            require_division_commissioner(db, current_user, division_id=divisionID)
+            values = DivisionsUpdateAction.execute(
+                db,
+                division_id=divisionID,
+                user_id=current_user,
+                draft_type=draftType,
+                draft_date=draftDate,
+                draft_complete_date=draftCompleteDate,
+            )
+            return return_one_legacy("Divisions", values)
         elif f == "TransactionsDetail":
             require_pos_int(divisionID, "divisionID", f)
+            require_league_member(db, current_user, division_id=divisionID)
             items = DivisionsTransactionsDetailAction.execute(db, divisionID, current_user)
-            return {
-                "table": "TransactionsDetail",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "items": [{"values": item} for item in items],
-            }
+            return return_many_legacy("TransactionsDetail", items)
         elif f == "DraftResult":
             require_pos_int(divisionID, "divisionID", f)
+            require_league_member(db, current_user, division_id=divisionID)
             items = DraftResultAction.execute(db, divisionID, user_id=current_user)
-            return {
-                "table": "DraftResult",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "items": [{"values": item} for item in items],
-            }
+            return return_many_legacy("DraftResult", items)
         elif f == "DraftSituation":
             require_pos_int(divisionID, "divisionID", f)
+            require_league_member(db, current_user, division_id=divisionID)
             result = DraftSituationAction.execute(db, divisionID)
             if result is None:
-                raise HTTPException(status_code=404, detail="Division not found")
-            return {
-                "table": "DraftSituation",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "values": result,
-            }
+                raise NotFoundException("Division", divisionID)
+            return return_one_legacy("DraftSituation", result)
         elif f in ("StartDraft", "PauseDraft", "RestartDraft"):
             require_pos_int(divisionID, "divisionID", f)
+            require_division_commissioner(db, current_user, division_id=divisionID)
             dh, auth_err = _auth_helper(db, current_user, divisionID)
             if auth_err:
                 raise auth_err
@@ -125,34 +133,16 @@ async def legacy_divisions(
             except DraftException as e:
                 return PlainTextResponse(e.legacy_response(), status_code=e.status_code)
             dv = dh.draft_values
-            return {
-                "table": f,
-                "timestamp": RequestContext.get_datetime_iso(),
-                "values": {
-                    "divisionID": divisionID,
-                    "draftStatus": dv.division.get("draftStatus"),
-                    "draftingStart": dv.division.get("draftingStart"),
-                    "draftingLimit": dv.division.get("draftingLimit"),
-                },
-            }
-        elif f == "Update":
-            require_pos_int(divisionID, "divisionID", f)
-            require_value(current_user, "token", f)
-            values = DivisionsUpdateAction.execute(
-                db,
-                division_id=divisionID,
-                user_id=current_user,
-                draft_type=draftType,
-                draft_date=draftDate,
-                draft_complete_date=draftCompleteDate,
-            )
-            return {
-                "table": "Divisions",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "values": values,
-            }
+            return return_one_legacy(f, {
+                "divisionID": divisionID,
+                "draftStatus": dv.division.get("draftStatus"),
+                "draftingStart": dv.division.get("draftingStart"),
+                "draftingLimit": dv.division.get("draftingLimit"),
+            })
         else:
             raise UnknownActionException(f)
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 
@@ -334,8 +324,7 @@ async def rest_divisions_update(
     """Update editable division settings (division or league commissioner only)."""
     RequestContext.set_datetime()
     try:
-        if current_user is None:
-            raise HTTPException(status_code=401, detail="Authentication required")
+        require_authentication(current_user)
         values = DivisionsUpdateAction.execute(
             db,
             division_id=division_id,

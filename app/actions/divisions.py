@@ -3,7 +3,11 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.guards import require_division, require_league_commissioner, require_league_member
+from app.guards import (
+    require_division,
+    require_league_commissioner,
+    require_league_member,
+)
 from app.services import QueryService
 from app.utils.dt import utc_now
 from app.utils.member_keys import Keys
@@ -15,7 +19,6 @@ class DivisionsReadListAction:
     @staticmethod
     def execute(db: Session, league_id: int, user_id: int) -> list[dict]:
         """Get divisions for a league (pure data, no wrapper)."""
-        require_league_member(db, user_id, league_id=league_id)
         rows = QueryService.get_divisions_by_league(db, league_id)
         # Return pure data (no response wrapper)
         return rows
@@ -64,7 +67,6 @@ class DivisionsTransactionsDetailAction:
     @staticmethod
     def execute(db: Session, division_id: int, user_id: int) -> list[dict]:
         """Get transaction details for division in last 14 days (pure data, no wrapper)."""
-        require_league_member(db, user_id, division_id=division_id)
         # Query transaction logs with database-agnostic date calculation
         stmt = text("""
             SELECT `t1`.`baseRealCompetitionID` AS `realCompetitionID`,

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Form, HTTPException, Query, status
+from fastapi import APIRouter, Form, Query
 from pydantic import BaseModel
 
 from app.actions.leagues import (
@@ -8,9 +8,11 @@ from app.actions.leagues import (
 )
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
-from app.exceptions import UnknownActionException
+from app.exceptions import EFFException, NotFoundException, UnknownActionException
+from app.guards import require_authentication
 from app.models import User
 from app.utils import JsonApiSerializer
+from app.utils.returns import return_error, return_many_legacy, return_one_legacy
 
 router = APIRouter(tags=["leagues"])
 
@@ -39,23 +41,19 @@ async def legacy_leagues(
     RequestContext.set_datetime()
 
     try:
+        require_authentication(current_user)
         if f == "ReadList":
             if type == "byUserID":
+
                 items = LeaguesReadListAction.execute(db, current_user, season)
-                return {
-                    "table": "Leagues",
-                    "timestamp": RequestContext.get_datetime_iso(),
-                    "items": [{"values": item} for item in items],
-                }
+                return return_many_legacy("Leagues", items)
             else:
                 raise UnknownActionException(f, type)
 
         elif f == "Build":
-            if current_user is None:
-                return {"error": "Missing authentication token"}
             user = db.query(User).filter(User.userID == current_user).first()
             if not user:
-                return {"error": "User not found"}
+                raise NotFoundException("User", current_user)
             league_data = LeaguesBuildAction.execute(
                 db=db,
                 user_id=current_user,
@@ -70,34 +68,22 @@ async def legacy_leagues(
                 season_status=seasonStatus,
                 teams_per_division=teamsPerDivision,
             )
-            return {
-                "table": "Leagues",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "values": league_data,
-            }
+            return return_one_legacy("Leagues", league_data)
 
         elif f == "Join":
-            if current_user is None:
-                return {"error": "Missing authentication token"}
             team_data = LeaguesJoinAction.execute(
                 db=db,
                 user_id=current_user,
                 league_id=leagueID,
                 league_password=leaguePassword,
             )
-            return {
-                "table": "Teams",
-                "timestamp": RequestContext.get_datetime_iso(),
-                "values": team_data,
-            }
+            return return_one_legacy("Teams", team_data)
 
         else:
             raise UnknownActionException(f)
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        return {"error": str(e)}
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 
@@ -142,16 +128,10 @@ def rest_leagues_build(
     """REST endpoint: Build a new league."""
     RequestContext.set_datetime()
     try:
-        if current_user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required",
-            )
+        require_authentication(current_user)
         user = db.query(User).filter(User.userID == current_user).first()
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-            )
+            raise NotFoundException("User", current_user)
         return LeaguesBuildAction.execute(
             db=db,
             user_id=current_user,
@@ -177,11 +157,7 @@ def rest_leagues_join(
     """REST endpoint: Join an existing league."""
     RequestContext.set_datetime()
     try:
-        if current_user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required",
-            )
+        require_authentication(current_user)
         return LeaguesJoinAction.execute(
             db=db,
             user_id=current_user,

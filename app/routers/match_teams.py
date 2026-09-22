@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Form, HTTPException, Query
+from fastapi import APIRouter, Form, Query
 from pydantic import BaseModel
 
 from app.actions.match_teams import (
@@ -10,11 +10,26 @@ from app.actions.match_teams import (
     MatchTeamsReadListAction,
     SetLineupByCompetitionTypeAction,
 )
+from app.constants import CompetitionTypeConstants
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
-from app.exceptions import UnknownActionException
-from app.guards import require_pos_int, require_pos_ints, require_value
+from app.exceptions import (
+    EFFException,
+    NotFoundException,
+    UnauthorizedException,
+    UnknownActionException,
+)
+from app.guards import (
+    require_authentication,
+    require_in_list,
+    require_league_member,
+    require_pos_int,
+    require_pos_ints,
+    require_team_owner,
+    require_value,
+)
 from app.utils import JsonApiSerializer
+from app.utils.returns import return_error, return_many_legacy, return_one_legacy
 
 router = APIRouter(tags=["match-teams"])
 
@@ -44,69 +59,66 @@ async def legacy_match_teams(
     """Legacy PHP-compatible MatchTeams endpoint."""
     RequestContext.set_datetime()
     try:
+        require_authentication(current_user)
         if f == "ReadList":
             if type == "byTeamID":
-                require_pos_int(teamID, "teamID", f)
-                return MatchTeamsReadListAction.execute(db, team_id=teamID)
+                teamID = require_pos_int(teamID, "teamID", f)
+                require_league_member(db, current_user, team_id=teamID)
+                items = MatchTeamsReadListAction.execute(db, team_id=teamID)
             else:
                 raise UnknownActionException(f, type)
+            return return_many_legacy("MatchTeams", items)
         elif f == "GetLineupByMatchTeamID":
-            require_value(matchTeamID, "matchTeamID", f)
+            matchTeamID = require_value(matchTeamID, "matchTeamID", f)
             result = GetLineupByMatchTeamIDAction.execute(db, match_team_id=matchTeamID)
             if result is None:
-                raise HTTPException(status_code=404, detail="Not found")
-            return result
+                raise NotFoundException("Lineup", matchTeamID)
+            return return_many_legacy("MatchTeams", result)
         elif f == "GetLineupByCompetitionType":
-            require_value(teamID, "teamID", f)
-            require_value(competitionType, "competitionType", f)
-            require_value(competitionMatchDay, "competitionMatchDay", f)
+            teamID = require_pos_int(teamID, "teamID", f)
+            require_league_member(db, current_user, team_id=teamID)
+            competitionMatchDay = require_pos_int(competitionMatchDay, "competitionMatchDay", f)
+            competitionType = require_pos_int(competitionType, "competitionType", f)
+            competitionType = require_in_list(competitionType, CompetitionTypeConstants.valid_values(), "competitionType", f)
             result = GetLineupByCompetitionTypeAction.execute(
                 db,
                 team_id=teamID,
                 competition_type=competitionType,
                 competition_match_day=competitionMatchDay,
             )
-            # None means no MatchTeam exists for these params — return empty items
-            # (unlike GetLineupByMatchTeamID where a missing specific ID is a 404)
-            if result is None:
-                result = {
-                    "table": "MatchTeams",
-                    "timestamp": RequestContext.get_datetime_iso(),
-                    "items": [],
-                }
-            return result
+            return return_many_legacy("MatchTeams", result or [])
         elif f == "SetLineupByCompetitionType":
-            require_value(teamID, "teamID", f)
-            require_value(competitionType, "competitionType", f)
-            require_value(competitionMatchDay, "competitionMatchDay", f)
-            require_value(realTeamID, "realTeamID", f)
-            require_value(realPlayerIDs, "realPlayerIDs", f)
-            player_ids = require_pos_ints(realPlayerIDs, "realPlayerIDs", f)
-            sub_ids = require_pos_ints(substituteRealPlayerIDs, "substituteRealPlayerIDs", f) if substituteRealPlayerIDs else []
+            teamID = require_pos_int(teamID, "teamID", f)
+            require_team_owner(db, current_user, teamID)
+            competitionMatchDay = require_pos_int(competitionMatchDay, "competitionMatchDay", f)
+            competitionType = require_pos_int(competitionType, "competitionType", f)
+            competitionType = require_in_list(competitionType, CompetitionTypeConstants.valid_values(), "competitionType", f)
+            realTeamID = require_pos_int(realTeamID, "realTeamID", f, not_empty=False)
+            realPlayerIDs = require_pos_ints(realPlayerIDs, "realPlayerIDs", f, not_empty=False)
+            substituteRealPlayerIDs = require_pos_ints(substituteRealPlayerIDs, "substituteRealPlayerIDs", f, not_empty=False)
             result = SetLineupByCompetitionTypeAction.execute(
                 db,
                 team_id=teamID,
                 competition_type=competitionType,
                 competition_match_day=competitionMatchDay,
                 real_team_id=realTeamID,
-                real_player_ids=player_ids,
-                substitute_real_player_ids=sub_ids,
+                real_player_ids=realPlayerIDs,
+                substitute_real_player_ids=substituteRealPlayerIDs,
             )
             if result is None:
-                raise HTTPException(status_code=404, detail="Not found")
-            return result
+                raise NotFoundException("Lineup", teamID)
+            return return_many_legacy("MatchTeams", result)
         elif f == "ClearLineupByMatchTeamID":
             require_value(matchTeamID, "matchTeamID", f)
-            require_value(current_user, "token", f)
             try:
                 result = ClearLineupByMatchTeamIDAction.execute(db, match_team_id=matchTeamID, user_id=current_user)
             except PermissionError:
-                raise HTTPException(status_code=401, detail="Unauthorized")
+                raise UnauthorizedException()
             if result is None:
-                raise HTTPException(status_code=404, detail="Not found")
-            return result
+                raise NotFoundException("Lineup", matchTeamID)
+            return return_one_legacy("MatchTeams", result)
         elif f == "GetScoresByMatchDay":
-            require_value(competitionType, "competitionType", f)
+            require_in_list(competitionType, CompetitionTypeConstants.valid_values(), "competitionType", f)
             require_value(competitionMatchDay, "competitionMatchDay", f)
             require_value(leagueID, "leagueID", f)
             result = GetScoresByMatchDayAction.execute(
@@ -117,13 +129,18 @@ async def legacy_match_teams(
                 division_id=divisionID,
             )
             if result is None:
-                raise HTTPException(status_code=404, detail="Not found")
-            return result
+                raise NotFoundException("Scores", competitionMatchDay)
+            return return_many_legacy("MatchTeams", result)
         elif f == "GetScoresByMatchIDs":
             ids = require_pos_ints(matchIDs, "matchIDs", f)
-            return GetScoresByMatchIDsAction.execute(db, match_ids=ids)
+            result = GetScoresByMatchIDsAction.execute(db, match_ids=ids)
+            if result is None:
+                raise NotFoundException("Scores", None)
+            return return_many_legacy("MatchTeams", result)
         else:
             raise UnknownActionException(f)
+    except EFFException as e:
+        return return_error(e)
     finally:
         RequestContext.reset()
 
@@ -137,7 +154,9 @@ async def rest_match_teams(
     """REST endpoint for MatchTeams ReadList (JSON:API format)."""
     RequestContext.set_datetime()
     try:
-        items = MatchTeamsReadListAction.execute(db, team_id=payload.matchID, user_id=current_user)
+        require_authentication(current_user)
+        require_league_member(db, current_user, team_id=payload.matchID)
+        items = MatchTeamsReadListAction.execute(db, team_id=payload.matchID)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='match-teams',

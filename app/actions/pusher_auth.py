@@ -6,7 +6,6 @@ from app.config import settings
 from app.models import User
 from app.utils.dt import utc_now
 
-
 DRAFT_CHANNEL_PREFIX = "presence-draft-"
 
 
