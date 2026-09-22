@@ -19,7 +19,7 @@ from app.guards import (
     require_team_owner,
 )
 from app.utils import JsonApiSerializer
-from app.utils.returns import return_error, return_many_legacy, return_one_legacy
+from app.utils.legacy_returns import return_error, return_many_legacy, return_one_legacy
 
 router = APIRouter(tags=["teams"])
 
@@ -45,33 +45,33 @@ async def legacy_teams(
             if type == "byLeagueID":
                 require_pos_int(leagueID, "leagueID", f"{f}({type})")
                 require_league_member(db, current_user, league_id=leagueID)
-                items = TeamsReadListAction.execute(db, league_id=leagueID)
+                items = TeamsReadListAction.execute(db, user_id=current_user, league_id=leagueID)
             elif type == "byDivisionID":
                 require_pos_int(divisionID, "divisionID", f"{f}({type})")
                 require_league_member(db, current_user, division_id=divisionID)
-                items = TeamsReadListAction.execute(db, division_id=divisionID)
+                items = TeamsReadListAction.execute(db, user_id=current_user, division_id=divisionID)
             else:
                 raise UnknownActionException(f, type)
             return return_many_legacy("Teams", items)
         elif f == "GetCurrentMembers":
             require_pos_int(teamID, "teamID", f)
             require_league_member(db, current_user, team_id=teamID)
-            items = TeamsGetCurrentMembersAction.execute(db, teamID)
+            items = TeamsGetCurrentMembersAction.execute(db, teamID, current_user)
             return return_many_legacy("RealTeamMembers", items)
         elif f == "GetRealMembersRanking":
             require_pos_int(teamID, "teamID", f)
             require_league_member(db, current_user, team_id=teamID)
-            items = TeamsGetRealMembersRankingAction.execute(db, teamID)
+            items = TeamsGetRealMembersRankingAction.execute(db, teamID, current_user)
             return return_many_legacy("RealTeamMembers", items)
         elif f == "WaiverMembersDetail":
             require_pos_int(teamID, "teamID", f)
             require_league_member(db, current_user, team_id=teamID)
-            items = TeamsWaiverMembersDetailAction.execute(db, teamID)
+            items = TeamsWaiverMembersDetailAction.execute(db, teamID, current_user)
             return return_many_legacy("WaiverMembers", items)
         elif f == "WishListDetail":
             require_pos_int(teamID, "teamID", f)
             require_league_member(db, current_user, team_id=teamID)
-            items = TeamsWishListDetailAction.execute(db, teamID)
+            items = TeamsWishListDetailAction.execute(db, teamID, current_user)
             return return_many_legacy("WishList", items)
         elif f == "Update":
             require_pos_int(teamID, "teamID", f)
@@ -95,6 +95,7 @@ async def legacy_teams(
 @router.get("/api/v1/teams")
 def rest_teams(
     db: DbSession,
+    current_user: CurrentUser,
     leagueID: int | None = None,
     divisionID: int | None = None,
 ):
@@ -102,7 +103,7 @@ def rest_teams(
     RequestContext.set_datetime()
     try:
         items = TeamsReadListAction.execute(
-            db, league_id=leagueID, division_id=divisionID
+            db, user_id=current_user, league_id=leagueID, division_id=divisionID
         )
         response = JsonApiSerializer.serialize_collection(
             items,
@@ -117,6 +118,7 @@ def rest_teams(
 @router.get("/api/v1/teams/waiver_members_detail")
 def rest_teams_waiver_members_detail(
     db: DbSession,
+    current_user: CurrentUser,
     teamID: int | None = None,
 ):
     """REST endpoint: Get waiver members detail for team (JSON:API format)."""
@@ -126,7 +128,7 @@ def rest_teams_waiver_members_detail(
             return JsonApiSerializer.serialize_error(
                 400, "Bad Request", "teamID is required"
             )
-        items = TeamsWaiverMembersDetailAction.execute(db, teamID)
+        items = TeamsWaiverMembersDetailAction.execute(db, teamID, current_user)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type="waiver-members",
@@ -140,6 +142,7 @@ def rest_teams_waiver_members_detail(
 @router.get("/api/v1/teams/wish_list_detail")
 def rest_teams_wish_list_detail(
     db: DbSession,
+    current_user: CurrentUser,
     teamID: int | None = None,
 ):
     """REST endpoint: Get wish list detail for team (JSON:API format)."""
@@ -149,7 +152,7 @@ def rest_teams_wish_list_detail(
             return JsonApiSerializer.serialize_error(
                 400, "Bad Request", "teamID is required"
             )
-        items = TeamsWishListDetailAction.execute(db, teamID)
+        items = TeamsWishListDetailAction.execute(db, teamID, current_user)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type="wish-list",
@@ -163,6 +166,7 @@ def rest_teams_wish_list_detail(
 @router.get("/api/v1/teams/current_members")
 def rest_teams_current_members(
     db: DbSession,
+    current_user: CurrentUser,
     teamID: int | None = None,
 ):
     """REST endpoint: Get current members for team (JSON:API format)."""
@@ -172,7 +176,7 @@ def rest_teams_current_members(
             return JsonApiSerializer.serialize_error(
                 400, "Bad Request", "teamID is required"
             )
-        items = TeamsGetCurrentMembersAction.execute(db, teamID)
+        items = TeamsGetCurrentMembersAction.execute(db, teamID, current_user)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type="team-members",
@@ -186,6 +190,7 @@ def rest_teams_current_members(
 @router.get("/api/v1/teams/real_members_ranking")
 def rest_teams_real_members_ranking(
     db: DbSession,
+    current_user: CurrentUser,
     teamID: int | None = None,
 ):
     """REST endpoint: Get real members ranking for team (JSON:API format)."""
@@ -195,7 +200,7 @@ def rest_teams_real_members_ranking(
             return JsonApiSerializer.serialize_error(
                 400, "Bad Request", "teamID is required"
             )
-        items = TeamsGetRealMembersRankingAction.execute(db, teamID)
+        items = TeamsGetRealMembersRankingAction.execute(db, teamID, current_user)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type="team-members",
