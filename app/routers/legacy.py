@@ -5,7 +5,7 @@ from app.actions.top_epl import TopEPLAction
 from app.context import RequestContext
 from app.database import CurrentToken, DbSession
 from app.exceptions import EFFException, UnknownActionException
-from app.utils.returns import return_error
+from app.utils.legacy_returns import return_error
 
 router = APIRouter(tags=["legacy"])
 

@@ -7,7 +7,7 @@ from app.database import DbSession
 from app.exceptions import EFFException, UnknownActionException
 from app.guards import require_pos_int
 from app.utils import JsonApiSerializer
-from app.utils.returns import return_error, return_many_legacy
+from app.utils.legacy_returns import return_error, return_many_legacy
 
 router = APIRouter(tags=["lookups"])
 

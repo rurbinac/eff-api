@@ -7,7 +7,7 @@ from app.database import CurrentUser, DbSession
 from app.exceptions import EFFException, UnknownActionException
 from app.guards import require_authentication, require_pos_int
 from app.utils import JsonApiSerializer
-from app.utils.returns import return_error, return_many_legacy
+from app.utils.legacy_returns import return_error, return_many_legacy
 
 router = APIRouter(tags=["matches"])
 

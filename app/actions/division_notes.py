@@ -12,11 +12,4 @@ class DivisionNotesReadListAction:
         """Get notes for a division."""
         require_league_member(db, user_id, division_id=division_id)
         # Query all notes for division
-        rows = QueryService.get_division_notes(db, division_id)
-
-        # Wrap each note in values dict
-        items = []
-        for row in rows:
-            items.append({"values": row})
-
-        return items
+        return QueryService.get_division_notes(db, division_id)

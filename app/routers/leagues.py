@@ -12,7 +12,7 @@ from app.exceptions import EFFException, NotFoundException, UnknownActionExcepti
 from app.guards import require_authentication
 from app.models import User
 from app.utils import JsonApiSerializer
-from app.utils.returns import return_error, return_many_legacy, return_one_legacy
+from app.utils.legacy_returns import return_error, return_many_legacy, return_one_legacy
 
 router = APIRouter(tags=["leagues"])
 
