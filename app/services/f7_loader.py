@@ -99,11 +99,11 @@ class F7Loader:
 
         # Get RealCompetitions record — enriches the parser competition dict with DB data
         try:
-            competition = F7Loader._get_real_competition(
-                db, parsed_data["competition"]
-            )
+            competition = F7Loader._get_real_competition(db, parsed_data["competition"])
         except Exception as e:
-            task.add_error(f"Failed to get RealCompetitions [{type(e).__name__}]: {e!s}")
+            task.add_error(
+                f"Failed to get RealCompetitions [{type(e).__name__}]: {e!s}"
+            )
             task.close()
             return task, None
 
@@ -169,7 +169,9 @@ class F7Loader:
             - match_events: sorted list of events with eventKey for deduplication
             - standings_data: player standings/performance data
         """
-        task = Task(name="Process F7 Data", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task = Task(
+            name="Process F7 Data", status=Task.RUNNING, status_on_error=Task.ERROR
+        )
         task.init_info("goals", "bookings", "substitutions")
 
         match_data = parsed_data.get("match_data", {})
@@ -180,7 +182,9 @@ class F7Loader:
             task.inc("goals")
 
         for booking_data in match_data.get("bookings", []):
-            load_booking(events_cache, booking_data["element"], booking_data["team_uid"])
+            load_booking(
+                events_cache, booking_data["element"], booking_data["team_uid"]
+            )
             task.inc("bookings")
 
         for sub_data in match_data.get("substitutions", []):
@@ -217,7 +221,9 @@ class F7Loader:
         - RealMatchTeams
         - RealStandings (teams and players)
         """
-        task = Task(name="Save Quick Mode", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task = Task(
+            name="Save Quick Mode", status=Task.RUNNING, status_on_error=Task.ERROR
+        )
         task.init_info(
             "matches_updated",
             "match_teams_updated",
@@ -245,7 +251,9 @@ class F7Loader:
         # Parse match day once for both standings updates
         real_match_day = None
         try:
-            real_match_day = int(foundation["competition"].get("realCompetitionMatchDay"))
+            real_match_day = int(
+                foundation["competition"].get("realCompetitionMatchDay")
+            )
         except (ValueError, TypeError):
             pass
 
@@ -291,7 +299,9 @@ class F7Loader:
     @staticmethod
     def _save_full_mode(db: Session, _foundation: dict, _processed_data: dict) -> Task:
         """Save data in Full mode (complete updates). Not yet implemented."""
-        task = Task(name="Save Full Mode", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task = Task(
+            name="Save Full Mode", status=Task.RUNNING, status_on_error=Task.ERROR
+        )
         task.add_error("Full mode implementation pending")
         task.close()
         return task
@@ -327,11 +337,7 @@ class F7Loader:
             LIMIT 1
         """)
 
-        row = (
-            db.execute(query, {"symid": symid})
-            .mappings()
-            .first()
-        )
+        row = db.execute(query, {"symid": symid}).mappings().first()
 
         if not row:
             raise ValueError(f"RealCompetition not found for symid={symid!r}")
@@ -464,7 +470,7 @@ class F7Loader:
             params["comp_id"] = real_competition_id
 
             query_str = f"""
-                SELECT `realPlayerID`, `realPlayerUID`, `realTeamMemberKey`
+                SELECT `realPlayerID`, `realPlayerUID`, `realTeamMemberKey`, `draftPosition`
                 FROM `RealPlayers`
                 WHERE `realCompetitionID` = :comp_id
                   AND `realPlayerUID` IN ({placeholders})
@@ -476,15 +482,15 @@ class F7Loader:
                 player_uid = row["realPlayerUID"]
                 if player_uid in players_cache:
                     players_cache[player_uid]["realPlayerID"] = row["realPlayerID"]
-                    players_cache[player_uid]["realTeamMemberKey"] = row[
-                        "realTeamMemberKey"
-                    ]
+                    players_cache[player_uid]["realTeamMemberKey"] = row["realTeamMemberKey"]
+                    players_cache[player_uid]["draftPosition"] = row["draftPosition"]
                 else:
                     # Player from database not yet in cache, add them
                     players_cache[player_uid] = {
                         "realPlayerUID": player_uid,
                         "realPlayerID": row["realPlayerID"],
                         "realTeamMemberKey": row["realTeamMemberKey"],
+                        "draftPosition": row["draftPosition"],
                     }
 
         # Enrich with PlayerLineUp data
@@ -789,7 +795,9 @@ class F7Loader:
         # Get match date and status
         match_date = F7Loader._fmt_date(match_data.get("realMatchDate"))
         match_time = match_data.get("realMatchTime")
-        match_status = RealMatchPeriod.to_match_status(match_data.get("realMatchPeriod"))
+        match_status = RealMatchPeriod.to_match_status(
+            match_data.get("realMatchPeriod")
+        )
 
         # Prepare updates for both teams
         teams_to_update = [
@@ -929,7 +937,9 @@ class F7Loader:
         # Get match data
         match_date = F7Loader._fmt_date(match_data.get("realMatchDate"))
         match_time = match_data.get("realMatchTime")
-        match_status = RealMatchPeriod.to_match_status(match_data.get("realMatchPeriod"))
+        match_status = RealMatchPeriod.to_match_status(
+            match_data.get("realMatchPeriod")
+        )
 
         # Build team info lookup (side -> team info)
         team_by_side = {}
