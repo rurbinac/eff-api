@@ -8,7 +8,7 @@ from app.constants import RealMatchPeriod
 from app.models import Feed
 from app.services.f7_events import load_booking, load_goal, load_substitution
 from app.services.f7_parser import F7Parser
-from app.services.f7_standings import calculate_player_points, process_events
+from app.services.f7_standings import calc_player_points, process_events
 from app.utils.dt import utc_now
 from app.utils.tasks import Task
 
@@ -205,7 +205,7 @@ class F7Loader:
         if match_time:
             players_cache = process_events(players_cache, events_cache, match_time)
 
-        players_cache = calculate_player_points(players_cache)
+        players_cache = calc_player_points(players_cache)
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task, {
