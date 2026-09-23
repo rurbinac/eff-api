@@ -3,11 +3,11 @@
 
 from datetime import datetime
 
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 
 from app.constants import DraftPositionConstants, RealMatchPeriod
-from app.models import Feed
+from app.models import Feed, RealCompetition, RealPlayer, RealTeam
 from app.services.f42_parser import F42Parser
 from app.services.save_mds import SaveMDS
 from app.services.sync_fantasy import SyncFantasyService
@@ -246,18 +246,13 @@ class F42Loader:
         )
 
         if row:
-            rc_values = {
-                "realCompetitionID": row["realCompetitionID"],
-                "lastF42Date": comp_data["lastF42Date"],
-                "updatedIn": utc_now(),
-            }
             db.execute(
-                text(
-                    sql_update(
-                        "RealCompetitions", rc_values, id_name="realCompetitionID"
-                    )
-                ),
-                rc_values,
+                update(RealCompetition)
+                .where(RealCompetition.realCompetitionID == row["realCompetitionID"])
+                .values(
+                    lastF42Date=comp_data["lastF42Date"],
+                    updatedIn=utc_now(),
+                )
             )
             task.inc("updated")
             comp_data = dict(row) | comp_data
@@ -303,66 +298,48 @@ class F42Loader:
 
             if result:
                 # Update existing
-                rt_values = {
-                    "realTeamID": result[0],
-                    "realTeamName": team_data["realTeamName"],
-                    "realTeamSYMID": team_data["realTeamSYMID"],
-                    "realTeamShortName": team_data["realTeamSYMID"],
-                    "lastF42Date": comp_data["lastF42Date"],
-                    "lastFDate": comp_data["lastF42Date"],
-                    "updatedIn": task.start_time,
-                }
                 db.execute(
-                    text(sql_update("RealTeams", rt_values, id_name="realTeamID")),
-                    rt_values,
+                    update(RealTeam)
+                    .where(RealTeam.realTeamID == result[0])
+                    .values(
+                        realTeamName=team_data["realTeamName"],
+                        realTeamSYMID=team_data["realTeamSYMID"],
+                        realTeamShortName=team_data["realTeamSYMID"],
+                        lastF42Date=comp_data["lastF42Date"],
+                        lastFDate=comp_data["lastF42Date"],
+                        updatedIn=task.start_time,
+                    )
                 )
                 task.inc("updated")
             else:
                 # Insert new
-                rt_values = {
-                    "realCompetitionID": comp_data["realCompetitionID"],
-                    "realCompetitionUID": comp_data["realCompetitionUID"],
-                    "realCompetitionSYMID": comp_data["realCompetitionSYMID"],
-                    "realCompetitionSeasonId": comp_data["realCompetitionSeasonId"],
-                    "baseRealCompetitionID": comp_data["baseRealCompetitionID"],
-                    "extraRealCompetitionID": comp_data["extraRealCompetitionID"],
-                    "realTeamUID": team_data["realTeamUID"],
-                    "realTeamName": team_data["realTeamName"],
-                    "realTeamSYMID": team_data["realTeamSYMID"],
-                    "realTeamShortName": team_data["realTeamSYMID"],
-                    "realTeamCountry": comp_data["realCompetitionCountry"],
-                    "position": DraftPositionConstants.EPL_TEAM,
-                    "draftPosition": DraftPositionConstants.EPL_TEAM,
-                    "draftPositionOrder": DraftPositionConstants.get_order(
+                new_team = RealTeam(
+                    realCompetitionID=comp_data["realCompetitionID"],
+                    realCompetitionUID=comp_data["realCompetitionUID"],
+                    realCompetitionSYMID=comp_data["realCompetitionSYMID"],
+                    realCompetitionSeasonId=comp_data["realCompetitionSeasonId"],
+                    baseRealCompetitionID=comp_data["baseRealCompetitionID"],
+                    extraRealCompetitionID=comp_data["extraRealCompetitionID"],
+                    realTeamUID=team_data["realTeamUID"],
+                    realTeamName=team_data["realTeamName"],
+                    realTeamSYMID=team_data["realTeamSYMID"],
+                    realTeamShortName=team_data["realTeamSYMID"],
+                    realTeamCountry=comp_data["realCompetitionCountry"],
+                    position=DraftPositionConstants.EPL_TEAM,
+                    draftPosition=DraftPositionConstants.EPL_TEAM,
+                    draftPositionOrder=DraftPositionConstants.get_order(
                         DraftPositionConstants.EPL_TEAM
                     ),
-                    "isProcessedMember": 0,
-                    "lastF42Date": comp_data["lastF42Date"],
-                    "lastFDate": comp_data["lastF42Date"],
-                    "createdIn": task.start_time,
-                    "updatedIn": task.start_time,
-                }
-                db.execute(
-                    text(sql_insert("RealTeams", rt_values)),
-                    rt_values,
+                    isProcessedMember=0,
+                    lastF42Date=comp_data["lastF42Date"],
+                    lastFDate=comp_data["lastF42Date"],
+                    createdIn=task.start_time,
+                    updatedIn=task.start_time,
                 )
+                db.add(new_team)
+                db.flush()
+                team_uid_mapping[team_data["realTeamUID"]] = new_team.realTeamID
                 task.inc("inserted")
-                # Get the inserted realTeamID
-                result = db.execute(
-                    text("""
-                    SELECT realTeamID
-                    FROM `RealTeams`
-                    WHERE `realCompetitionID` = :realCompetitionID
-                      AND `realTeamUID` = :realTeamUID
-                    LIMIT 1
-                """),
-                    {
-                        "realCompetitionID": comp_data["realCompetitionID"],
-                        "realTeamUID": team_data["realTeamUID"],
-                    },
-                ).first()
-                if result:
-                    team_uid_mapping[team_data["realTeamUID"]] = result[0]
 
             # Also store existing team IDs in mapping
             if result and team_data["realTeamUID"] not in team_uid_mapping:
@@ -441,60 +418,57 @@ class F42Loader:
 
             if result:
                 # Update existing
-                rp_values = {
-                    "realPlayerID": result[0],
-                    "firstName": player_data.get("firstName"),
-                    "lastName": player_data.get("lastName"),
-                    "knownName": player_data.get("knownName"),
-                    "position": player_data.get("position"),
-                    "realPosition": player_data.get("realPosition"),
-                    "birthDate": safe_date(player_data.get("birthDate")),
-                    "weight": safe_float(player_data.get("weight")),
-                    "height": safe_float(player_data.get("height")),
-                    "jerseyNumber": safe_int(player_data.get("jerseyNumber")),
-                    "draftPosition": draft_position,
-                    "draftPositionOrder": draft_position_order,
-                    "lastF42Date": comp_data["lastF42Date"],
-                    "lastFDate": comp_data["lastF42Date"],
-                    "updatedIn": task.start_time,
-                }
                 db.execute(
-                    text(sql_update("RealPlayers", rp_values, id_name="realPlayerID")),
-                    rp_values,
+                    update(RealPlayer)
+                    .where(RealPlayer.realPlayerID == result[0])
+                    .values(
+                        firstName=player_data.get("firstName"),
+                        lastName=player_data.get("lastName"),
+                        knownName=player_data.get("knownName"),
+                        position=player_data.get("position"),
+                        realPosition=player_data.get("realPosition"),
+                        birthDate=safe_date(player_data.get("birthDate")),
+                        weight=safe_float(player_data.get("weight")),
+                        height=safe_float(player_data.get("height")),
+                        jerseyNumber=safe_int(player_data.get("jerseyNumber")),
+                        draftPosition=draft_position,
+                        draftPositionOrder=draft_position_order,
+                        lastF42Date=comp_data["lastF42Date"],
+                        lastFDate=comp_data["lastF42Date"],
+                        updatedIn=task.start_time,
+                    )
                 )
                 task.inc("updated")
             else:
                 # Insert new
-                rp_values = {
-                    "realCompetitionID": comp_data["realCompetitionID"],
-                    "realCompetitionUID": comp_data["realCompetitionUID"],
-                    "realCompetitionSYMID": comp_data["realCompetitionSYMID"],
-                    "realCompetitionSeasonId": comp_data["realCompetitionSeasonId"],
-                    "baseRealCompetitionID": comp_data["baseRealCompetitionID"],
-                    "extraRealCompetitionID": comp_data["extraRealCompetitionID"],
-                    "realTeamID": real_team_id,
-                    "realTeamUID": player_data["realTeamUID"],
-                    "realPlayerUID": player_data["realPlayerUID"],
-                    "firstName": player_data.get("firstName"),
-                    "lastName": player_data.get("lastName"),
-                    "knownName": player_data.get("knownName"),
-                    "position": player_data.get("position"),
-                    "realPosition": player_data.get("realPosition"),
-                    "birthDate": safe_date(player_data.get("birthDate")),
-                    "weight": safe_float(player_data.get("weight")),
-                    "height": safe_float(player_data.get("height")),
-                    "jerseyNumber": safe_int(player_data.get("jerseyNumber")),
-                    "draftPosition": draft_position,
-                    "draftPositionOrder": draft_position_order,
-                    "isProcessedMember": 0,
-                    "lastF42Date": comp_data["lastF42Date"],
-                    "lastFDate": comp_data["lastF42Date"],
-                    "createdIn": task.start_time,
-                    "updatedIn": task.start_time,
-                }
-                db.execute(
-                    text(sql_insert("RealPlayers", rp_values)),
-                    rp_values,
+                db.add(
+                    RealPlayer(
+                        realCompetitionID=comp_data["realCompetitionID"],
+                        realCompetitionUID=comp_data["realCompetitionUID"],
+                        realCompetitionSYMID=comp_data["realCompetitionSYMID"],
+                        realCompetitionSeasonId=comp_data["realCompetitionSeasonId"],
+                        baseRealCompetitionID=comp_data["baseRealCompetitionID"],
+                        extraRealCompetitionID=comp_data["extraRealCompetitionID"],
+                        realTeamID=real_team_id,
+                        realTeamUID=player_data["realTeamUID"],
+                        realPlayerUID=player_data["realPlayerUID"],
+                        firstName=player_data.get("firstName"),
+                        lastName=player_data.get("lastName"),
+                        knownName=player_data.get("knownName"),
+                        position=player_data.get("position"),
+                        realPosition=player_data.get("realPosition"),
+                        birthDate=safe_date(player_data.get("birthDate")),
+                        weight=safe_float(player_data.get("weight")),
+                        height=safe_float(player_data.get("height")),
+                        jerseyNumber=safe_int(player_data.get("jerseyNumber")),
+                        draftPosition=draft_position,
+                        draftPositionOrder=draft_position_order,
+                        isProcessedMember=0,
+                        lastF42Date=comp_data["lastF42Date"],
+                        lastFDate=comp_data["lastF42Date"],
+                        createdIn=task.start_time,
+                        updatedIn=task.start_time,
+                    )
                 )
                 task.inc("inserted")
 

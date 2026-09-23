@@ -113,7 +113,9 @@ def _process_sub_on(players_cache: dict, event: dict, real_match_time: int) -> N
             players_cache[real_player_uid]["matchGamePlayed"] = 1
             players_cache[real_player_uid]["_timeIn"] = event_time
             players_cache[real_player_uid]["_timeOut"] = real_match_time
-            players_cache[real_player_uid]["matchTimePlayed"] = real_match_time - event_time
+            players_cache[real_player_uid]["matchTimePlayed"] = (
+                real_match_time - event_time
+            )
             players_cache[real_player_uid]["matchCleanSheet"] = 1
         except (ValueError, TypeError):
             pass
@@ -164,7 +166,9 @@ def _calc_points(player: dict, split_minutes: int) -> None:
             player["matchPointsL1OwnGoals"] = _calc_own_goals_points(player, -3)
 
         case DraftPositionConstants.MIDFIELDER:
-            player["matchPointsL1GoalsAllowed"] = _calc_goals_allowed_points(player, 0.5)
+            player["matchPointsL1GoalsAllowed"] = _calc_goals_allowed_points(
+                player, 0.5
+            )
             player["matchPointsL1CleanSheet"] = _calc_clean_sheet_points(
                 player, split_minutes, 2, 1, 0
             )
@@ -194,7 +198,7 @@ def _calc_points(player: dict, split_minutes: int) -> None:
 
 def _calc_played_points(player: dict, split_minutes: int) -> int:
     """Calculate points for time played."""
-    return _split_points(player, split_minutes, 3, 2, 1)
+    return _calc_split_points(player, split_minutes, 3, 2, 1)
 
 
 def _calc_goals_allowed_points(player: dict, factor: float) -> int:
@@ -207,7 +211,7 @@ def _calc_clean_sheet_points(
 ) -> int:
     """Calculate clean sheet points based on playing time."""
     if player.get("matchCleanSheet"):
-        return _split_points(player, split_minutes, full_game, high, low)
+        return _calc_split_points(player, split_minutes, full_game, high, low)
     else:
         return 0
 
@@ -244,7 +248,7 @@ def _calc_own_goals_points(player: dict, factor: int) -> int:
     return factor * player.get("_ownGoals", 0)
 
 
-def _split_points(
+def _calc_split_points(
     player: dict, split_minutes: int, full_game: int, high: int, low: int
 ) -> int:
     """Calculate split points based on playing time."""

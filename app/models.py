@@ -594,6 +594,83 @@ class RealMatchTeam(SQLModel, table=True):
     updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
+class RealTeam(SQLModel, table=True):
+    __tablename__ = "RealTeams"
+
+    realTeamID: int | None = Field(default=None, primary_key=True)
+    realCompetitionID: int
+    realCompetitionUID: str = Field(max_length=20)
+    realCompetitionSYMID: str = Field(max_length=20)
+    realCompetitionSeasonId: str = Field(max_length=20)
+    baseRealCompetitionID: int | None = None
+    extraRealCompetitionID: int | None = None
+    realTeamUID: str = Field(max_length=20)
+    realTeamName: str = Field(max_length=128)
+    realTeamSYMID: str | None = Field(default=None, max_length=20)
+    realTeamShortName: str | None = Field(default=None, max_length=10)
+    realTeamCountry: str | None = Field(default=None, max_length=50)
+    position: str | None = Field(default=None, max_length=20)
+    draftPosition: str | None = Field(default=None, max_length=20)
+    draftPositionOrder: int | None = Field(default=None, sa_type=TINYINT)
+    isProcessedMember: int = Field(default=0, sa_type=TINYINT)
+    baseRealTeamID: int | None = None
+    baseRealTeamUID: str | None = Field(default=None, max_length=20)
+    baseRealTeamName: str | None = Field(default=None, max_length=128)
+    baseRealTeamShortName: str | None = Field(default=None, max_length=10)
+    realTeamMemberKey: str | None = Field(default=None, max_length=10)
+    realTeamMemberID: int | None = None
+    prevRealTeamID: int | None = None
+    nextRealTeamID: int | None = None
+    ranking: int | None = None
+    lastF7Date: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
+    lastF42Date: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
+    lastFDate: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
+
+
+class RealPlayer(SQLModel, table=True):
+    __tablename__ = "RealPlayers"
+
+    realPlayerID: int | None = Field(default=None, primary_key=True)
+    realCompetitionID: int
+    realCompetitionUID: str = Field(max_length=20)
+    realCompetitionSYMID: str = Field(max_length=20)
+    realCompetitionSeasonId: str = Field(max_length=20)
+    baseRealCompetitionID: int | None = None
+    extraRealCompetitionID: int | None = None
+    realTeamID: int
+    realTeamUID: str = Field(max_length=20)
+    realPlayerUID: str = Field(max_length=20)
+    firstName: str | None = Field(default=None, max_length=100)
+    lastName: str | None = Field(default=None, max_length=100)
+    knownName: str | None = Field(default=None, max_length=100)
+    position: str | None = Field(default=None, max_length=20)
+    realPosition: str | None = Field(default=None, max_length=20)
+    birthDate: str | None = Field(default=None, max_length=10)
+    weight: float | None = None
+    height: float | None = None
+    jerseyNumber: int | None = None
+    draftPosition: str | None = Field(default=None, max_length=20)
+    draftPositionOrder: int | None = Field(default=None, sa_type=TINYINT)
+    isProcessedMember: int = Field(default=0, sa_type=TINYINT)
+    baseRealPlayerID: int | None = None
+    baseRealTeamID: int | None = None
+    baseRealTeamUID: str | None = Field(default=None, max_length=20)
+    baseRealTeamName: str | None = Field(default=None, max_length=128)
+    baseRealTeamShortName: str | None = Field(default=None, max_length=10)
+    realTeamMemberKey: str | None = Field(default=None, max_length=10)
+    realTeamMemberID: int | None = None
+    prevRealPlayerID: int | None = None
+    nextRealPlayerID: int | None = None
+    ranking: int | None = None
+    lastF7Date: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
+    lastF42Date: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
+    lastFDate: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
+
+
 class TeamMemberTransfers(SQLModel, table=True):
     __tablename__ = "TeamMemberTransfers"
 
