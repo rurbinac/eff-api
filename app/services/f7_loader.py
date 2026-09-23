@@ -624,40 +624,40 @@ class F7Loader:
         # Update RealMatches
         update_query = text("""
             UPDATE `RealMatches`
-            SET realMatchStatus = :status,
-                realMatchType = :match_type,
-                realMatchPeriod = :period,
-                realMatchRealPeriod = :real_period,
-                realMatchAttendance = :attendance,
-                realMatchDate = :match_date,
-                realMatchDateOffset = :date_offset,
-                realMatchResultType = :result_type,
-                realMatchTime = :match_time,
-                realMatchFirstHalfTime = :first_half_time,
-                realMatchSecondHalfTime = :second_half_time,
-                realMatchEnded = :match_ended,
+            SET realMatchStatus = :realMatchStatus,
+                realMatchType = :realMatchType,
+                realMatchPeriod = :realMatchPeriod,
+                realMatchRealPeriod = :realMatchRealPeriod,
+                realMatchAttendance = :realMatchAttendance,
+                realMatchDate = :realMatchDate,
+                realMatchDateOffset = :realMatchDateOffset,
+                realMatchResultType = :realMatchResultType,
+                realMatchTime = :realMatchTime,
+                realMatchFirstHalfTime = :realMatchFirstHalfTime,
+                realMatchSecondHalfTime = :realMatchSecondHalfTime,
+                realMatchEnded = :realMatchEnded,
                 lastF7Date = :now,
                 lastFDate = :now,
                 updatedIn = :now
-            WHERE realMatchID = :match_id
+            WHERE realMatchID = :realMatchID
         """)
 
         db.execute(
             update_query,
             {
-                "match_id": match_ids["realMatchID"],
-                "status": real_match_status,
-                "match_type": match_data.get("realMatchType"),
-                "period": period,
-                "real_period": match_data.get("realMatchPeriod"),
-                "attendance": attendance,
-                "match_date": match_date,
-                "date_offset": match_data.get("realMatchDateOffset"),
-                "result_type": match_data.get("realMatchResultType"),
-                "match_time": match_time,
-                "first_half_time": first_half_time,
-                "second_half_time": second_half_time,
-                "match_ended": real_match_ended,
+                "realMatchID": match_ids["realMatchID"],
+                "realMatchStatus": real_match_status,
+                "realMatchType": match_data.get("realMatchType"),
+                "realMatchPeriod": period,
+                "realMatchRealPeriod": match_data.get("realMatchPeriod"),
+                "realMatchAttendance": attendance,
+                "realMatchDate": match_date,
+                "realMatchDateOffset": match_data.get("realMatchDateOffset"),
+                "realMatchResultType": match_data.get("realMatchResultType"),
+                "realMatchTime": match_time,
+                "realMatchFirstHalfTime": first_half_time,
+                "realMatchSecondHalfTime": second_half_time,
+                "realMatchEnded": real_match_ended,
                 "now": now,
             },
         )
@@ -713,41 +713,35 @@ class F7Loader:
 
         for team_update in teams_to_update:
             # Calculate points and result
-            points = 0
-            result = None
-
-            if (
-                team_update["my_score"] is not None
-                and team_update["other_score"] is not None
-            ):
-                if team_update["my_score"] > team_update["other_score"]:
-                    points = 3
-                    result = 1  # Win
-                elif team_update["my_score"] == team_update["other_score"]:
-                    points = 1
-                    result = 0  # Draw
-                else:
-                    points = 0
-                    result = -1  # Loss
+            my_score = team_update["my_score"]
+            other_score = team_update["other_score"]
+            if my_score is None or other_score is None:
+                points, result = 0, None
+            elif my_score > other_score:
+                points, result = 3, 1   # Win
+            elif my_score < other_score:
+                points, result = 0, -1  # Loss
+            else:
+                points, result = 1, 0   # Draw
 
             # Update RealMatchTeams
             update_query = text("""
                 UPDATE `RealMatchTeams`
-                SET realTeamScore = :score,
-                    realTeamRealScore = :score,
-                    realTeamResult = :result,
-                    realTeamPoints = :points,
+                SET realTeamScore = :realTeamScore,
+                    realTeamRealScore = :realTeamScore,
+                    realTeamResult = :realTeamResult,
+                    realTeamPoints = :realTeamPoints,
                     updatedIn = :now
-                WHERE realMatchTeamID = :mt_id
+                WHERE realMatchTeamID = :realMatchTeamID
             """)
 
             db.execute(
                 update_query,
                 {
-                    "mt_id": team_update["realMatchTeamID"],
-                    "score": team_update["my_score"],
-                    "result": result,
-                    "points": points,
+                    "realMatchTeamID": team_update["realMatchTeamID"],
+                    "realTeamScore": my_score,
+                    "realTeamResult": result,
+                    "realTeamPoints": points,
                     "now": now,
                 },
             )
@@ -839,33 +833,14 @@ class F7Loader:
             other_score = team_update["other_score"]
 
             # Calculate match results
-            match_won = (
-                1
-                if (
-                    my_score is not None
-                    and other_score is not None
-                    and my_score > other_score
-                )
-                else 0
-            )
-            match_draw = (
-                1
-                if (
-                    my_score is not None
-                    and other_score is not None
-                    and my_score == other_score
-                )
-                else 0
-            )
-            match_lost = (
-                1
-                if (
-                    my_score is not None
-                    and other_score is not None
-                    and my_score < other_score
-                )
-                else 0
-            )
+            match_won, match_draw, match_lost = 0, 0, 0
+            if my_score is not None and other_score is not None:
+                if my_score > other_score:
+                    match_won = 1
+                elif my_score < other_score:
+                    match_lost = 1
+                else:
+                    match_draw = 1
 
             # Calculate match points
             match_points = 3 * match_won + match_draw
@@ -873,38 +848,38 @@ class F7Loader:
             # Update RealStandings
             update_query = text("""
                 UPDATE `RealStandings`
-                SET realMatchDate = :match_date,
-                    realMatchTime = :match_time,
-                    realMatchStatus = :match_status,
-                    realTeamScore = :my_score,
-                    oppositeRealTeamScore = :other_score,
-                    matchWon = :match_won,
-                    matchDraw = :match_draw,
-                    matchLost = :match_lost,
-                    matchPointsL1 = :match_points,
-                    livePointsL1 = :match_points,
+                SET realMatchDate = :realMatchDate,
+                    realMatchTime = :realMatchTime,
+                    realMatchStatus = :realMatchStatus,
+                    realTeamScore = :realTeamScore,
+                    oppositeRealTeamScore = :oppositeRealTeamScore,
+                    matchWon = :matchWon,
+                    matchDraw = :matchDraw,
+                    matchLost = :matchLost,
+                    matchPointsL1 = :matchPointsL1,
+                    livePointsL1 = :matchPointsL1,
                     processed = 1,
                     updatedIn = :now
-                WHERE realCompetitionID = :comp_id
-                  AND realCompetitionMatchDay = :match_day
+                WHERE realCompetitionID = :realCompetitionID
+                  AND realCompetitionMatchDay = :realCompetitionMatchDay
                   AND realTeamMemberKey = :team_member_key
             """)
 
             db.execute(
                 update_query,
                 {
-                    "match_date": match_date,
-                    "match_time": match_time,
-                    "match_status": match_status,
-                    "my_score": my_score,
-                    "other_score": other_score,
-                    "match_won": match_won,
-                    "match_draw": match_draw,
-                    "match_lost": match_lost,
-                    "match_points": match_points,
-                    "comp_id": real_competition_id,
-                    "match_day": real_match_day,
-                    "team_member_key": team_info.get("realTeamMemberKey"),
+                    "realMatchDate": match_date,
+                    "realMatchTime": match_time,
+                    "realMatchStatus": match_status,
+                    "realTeamScore": my_score,
+                    "oppositeRealTeamScore": other_score,
+                    "matchWon": match_won,
+                    "matchDraw": match_draw,
+                    "matchLost": match_lost,
+                    "matchPointsL1": match_points,
+                    "realCompetitionID": real_competition_id,
+                    "realCompetitionMatchDay": real_match_day,
+                    "realTeamMemberKey": team_info.get("realTeamMemberKey"),
                     "now": now,
                 },
             )
@@ -1008,100 +983,100 @@ class F7Loader:
             # Update RealStandings for player
             update_query = text("""
                 UPDATE `RealStandings`
-                SET realMatchID = :match_id,
-                    realMatchTeamID = :match_team_id,
-                    realMatchDate = :match_date,
-                    realMatchTime = :match_time,
-                    realMatchStatus = :match_status,
-                    realTeamID = :team_id,
-                    realTeamUID = :team_uid,
-                    realTeamName = :team_name,
-                    realTeamShortName = :team_short_name,
-                    realTeamScore = :team_score,
-                    realTeamSide = :team_side,
-                    oppositeRealTeamID = :opp_team_id,
-                    oppositeRealTeamUID = :opp_team_uid,
-                    oppositeRealTeamName = :opp_team_name,
-                    oppositeRealTeamShortName = :opp_team_short_name,
-                    oppositeRealTeamScore = :opp_team_score,
-                    realPlayerID = :player_id,
-                    realPlayerUID = :player_uid,
-                    firstName = :first_name,
-                    lastName = :last_name,
-                    knownName = :known_name,
+                SET realMatchID = :realMatchID,
+                    realMatchTeamID = :realMatchTeamID,
+                    realMatchDate = :realMatchDate,
+                    realMatchTime = :realMatchTime,
+                    realMatchStatus = :realMatchStatus,
+                    realTeamID = :realTeamID,
+                    realTeamUID = :realTeamUID,
+                    realTeamName = :realTeamName,
+                    realTeamShortName = :realTeamShortName,
+                    realTeamScore = :realTeamScore,
+                    realTeamSide = :realTeamSide,
+                    oppositeRealTeamID = :oppositeRealTeamID,
+                    oppositeRealTeamUID = :oppositeRealTeamUID,
+                    oppositeRealTeamName = :oppositeRealTeamName,
+                    oppositeRealTeamShortName = :oppositeRealTeamShortName,
+                    oppositeRealTeamScore = :oppositeRealTeamScore,
+                    realPlayerID = :realPlayerID,
+                    realPlayerUID = :realPlayerUID,
+                    firstName = :firstName,
+                    lastName = :lastName,
+                    knownName = :knownName,
                     name = :name,
-                    sortName = :sort_name,
-                    matchTimePlayed = :time_played,
-                    matchGamePlayed = :game_played,
-                    matchGoals = :goals,
+                    sortName = :sortName,
+                    matchTimePlayed = :matchTimePlayed,
+                    matchGamePlayed = :matchGamePlayed,
+                    matchGoals = :matchGoals,
                     matchAssists = :matchAssists,
-                    matchYellowCards = :yellow_cards,
-                    matchRedCards = :red_cards,
-                    matchGoalsConceded = :goals_conceded,
-                    matchCleanSheet = :clean_sheet,
-                    matchDayPlayed = :day_played,
-                    matchPointsL1Played = :points_played,
-                    matchPointsL1GoalsAllowed = :points_goals_allowed,
-                    matchPointsL1CleanSheet = :points_clean_sheet,
-                    matchPointsL1Cards = :points_cards,
-                    matchPointsL1Goals = :points_goals,
-                    matchPointsL1Assists = :points_matchAssists,
-                    matchPointsL1OwnGoals = :points_own_goals,
-                    matchPointsL1 = :total_points,
-                    livePointsL1 = :total_points,
+                    matchYellowCards = :matchYellowCards,
+                    matchRedCards = :matchRedCards,
+                    matchGoalsConceded = :matchGoalsConceded,
+                    matchCleanSheet = :matchCleanSheet,
+                    matchDayPlayed = :matchDayPlayed,
+                    matchPointsL1Played = :matchPointsL1Played,
+                    matchPointsL1GoalsAllowed = :matchPointsL1GoalsAllowed,
+                    matchPointsL1CleanSheet = :matchPointsL1CleanSheet,
+                    matchPointsL1Cards = :matchPointsL1Cards,
+                    matchPointsL1Goals = :matchPointsL1Goals,
+                    matchPointsL1Assists = :matchPointsL1Assists,
+                    matchPointsL1OwnGoals = :matchPointsL1OwnGoals,
+                    matchPointsL1 = :matchPointsL1,
+                    livePointsL1 = :matchPointsL1,
                     processed = 1,
                     updatedIn = :now
-                WHERE realCompetitionID = :comp_id
-                  AND realCompetitionMatchDay = :match_day
-                  AND realTeamMemberKey = :team_member_key
+                WHERE realCompetitionID = :realCompetitionID
+                  AND realCompetitionMatchDay = :realCompetitionMatchDay
+                  AND realTeamMemberKey = :realTeamMemberKey
             """)
 
             db.execute(
                 update_query,
                 {
-                    "match_id": match_ids["realMatchID"],
-                    "match_team_id": real_match_team_id,
-                    "match_date": match_date,
-                    "match_time": match_time,
-                    "match_status": match_status,
-                    "team_id": team_info["realTeamID"],
-                    "team_uid": player_team_uid,
-                    "team_name": team_info["realTeamName"],
-                    "team_short_name": team_info["realTeamShortName"],
-                    "team_score": team_info["score"],
-                    "team_side": player_side,
-                    "opp_team_id": opponent_info["realTeamID"],
-                    "opp_team_uid": opponent_uid,
-                    "opp_team_name": opponent_info["realTeamName"],
-                    "opp_team_short_name": opponent_info["realTeamShortName"],
-                    "opp_team_score": opponent_info["score"],
-                    "player_id": player.get("realPlayerID"),
-                    "player_uid": player_uid,
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "known_name": known_name,
+                    "realMatchID": match_ids["realMatchID"],
+                    "realMatchTeamID": real_match_team_id,
+                    "realMatchDate": match_date,
+                    "realMatchTime": match_time,
+                    "realMatchStatus": match_status,
+                    "realTeamID": team_info["realTeamID"],
+                    "realTeamUID": player_team_uid,
+                    "realTeamName": team_info["realTeamName"],
+                    "realTeamShortName": team_info["realTeamShortName"],
+                    "realTeamScore": team_info["score"],
+                    "realTeamSide": player_side,
+                    "oppositeRealTeamID": opponent_info["realTeamID"],
+                    "oppositeRealTeamUID": opponent_uid,
+                    "oppositeRealTeamName": opponent_info["realTeamName"],
+                    "oppositeRealTeamShortName": opponent_info["realTeamShortName"],
+                    "oppositeRealTeamScore": opponent_info["score"],
+                    "realPlayerID": player.get("realPlayerID"),
+                    "realPlayerUID": player_uid,
+                    "firstName": first_name,
+                    "lastName": last_name,
+                    "knownName": known_name,
                     "name": name,
-                    "sort_name": sort_name,
-                    "time_played": player.get("matchTimePlayed", 0),
-                    "game_played": player.get("matchGamePlayed", 0),
-                    "goals": player.get("matchGoals", 0),
+                    "sortName": sort_name,
+                    "matchTimePlayed": player.get("matchTimePlayed", 0),
+                    "matchGamePlayed": player.get("matchGamePlayed", 0),
+                    "matchGoals": player.get("matchGoals", 0),
                     "matchAssists": player.get("matchAssists", 0),
-                    "yellow_cards": player.get("matchYellowCards", 0),
-                    "red_cards": player.get("matchRedCards", 0),
-                    "goals_conceded": player.get("matchGoalsConceded", 0),
-                    "clean_sheet": player.get("matchCleanSheet", 0),
-                    "day_played": player.get("matchGamePlayed", 0),
-                    "points_played": player.get("matchPointsL1Played", 0),
-                    "points_goals_allowed": player.get("matchPointsL1GoalsAllowed", 0),
-                    "points_clean_sheet": player.get("matchPointsL1CleanSheet", 0),
-                    "points_cards": player.get("matchPointsL1Cards", 0),
-                    "points_goals": player.get("matchPointsL1Goals", 0),
-                    "points_matchAssists": player.get("matchPointsL1Assists", 0),
-                    "points_own_goals": player.get("matchPointsL1OwnGoals", 0),
-                    "total_points": total_points,
-                    "comp_id": real_competition_id,
-                    "match_day": real_match_day,
-                    "team_member_key": player["realTeamMemberKey"],
+                    "matchYellowCards": player.get("matchYellowCards", 0),
+                    "matchRedCards": player.get("matchRedCards", 0),
+                    "matchGoalsConceded": player.get("matchGoalsConceded", 0),
+                    "matchCleanSheet": player.get("matchCleanSheet", 0),
+                    "matchDayPlayed": player.get("matchGamePlayed", 0),
+                    "matchPointsL1Played": player.get("matchPointsL1Played", 0),
+                    "matchPointsL1GoalsAllowed": player.get("matchPointsL1GoalsAllowed", 0),
+                    "matchPointsL1CleanSheet": player.get("matchPointsL1CleanSheet", 0),
+                    "matchPointsL1Cards": player.get("matchPointsL1Cards", 0),
+                    "matchPointsL1Goals": player.get("matchPointsL1Goals", 0),
+                    "matchPointsL1Assists": player.get("matchPointsL1Assists", 0),
+                    "matchPointsL1OwnGoals": player.get("matchPointsL1OwnGoals", 0),
+                    "matchPointsL1": total_points,
+                    "realCompetitionID": real_competition_id,
+                    "realCompetitionMatchDay": real_match_day,
+                    "realTeamMemberKey": player["realTeamMemberKey"],
                     "now": now,
                 },
             )
