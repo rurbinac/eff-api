@@ -398,12 +398,17 @@ class F7Loader:
         db: Session, real_competition_id: int, teams_cache: dict
     ) -> dict | None:
         """Get RealMatch and RealMatchTeam IDs."""
-        team_uids = list(teams_cache.keys())
-        if len(team_uids) < 2:
+        if len(teams_cache) < 2:
             return None
 
-        home_uid = team_uids[0]
-        away_uid = team_uids[1]
+        home_uid = next(
+            (uid for uid, d in teams_cache.items() if d.get("side") == "Home"), None
+        )
+        away_uid = next(
+            (uid for uid, d in teams_cache.items() if d.get("side") == "Away"), None
+        )
+        if not home_uid or not away_uid:
+            return None
 
         query = text("""
             SELECT `m`.`realMatchID` AS `mID`,
