@@ -1,11 +1,11 @@
 # ruff: noqa: BLE001  – broad except blocks are intentional diagnostic catches
 """F7 OPTA feed loader - loads single match detailed results."""
 
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 
 from app.constants import RealMatchPeriod
-from app.models import Feed
+from app.models import Feed, RealMatch, RealMatchTeam, RealStanding
 from app.services.f7_events import load_booking, load_goal, load_substitution
 from app.services.f7_parser import F7Parser
 from app.services.f7_standings import calc_player_points, process_events
@@ -617,49 +617,27 @@ class F7Loader:
             except (ValueError, TypeError):
                 return None
 
-        match_time = safe_int(match_data.get("realMatchTime"))
-        first_half_time = safe_int(match_data.get("realMatchFirstHalfTime"))
-        second_half_time = safe_int(match_data.get("realMatchSecondHalfTime"))
-
         # Update RealMatches
-        update_query = text("""
-            UPDATE `RealMatches`
-            SET realMatchStatus = :realMatchStatus,
-                realMatchType = :realMatchType,
-                realMatchPeriod = :realMatchPeriod,
-                realMatchRealPeriod = :realMatchRealPeriod,
-                realMatchAttendance = :realMatchAttendance,
-                realMatchDate = :realMatchDate,
-                realMatchDateOffset = :realMatchDateOffset,
-                realMatchResultType = :realMatchResultType,
-                realMatchTime = :realMatchTime,
-                realMatchFirstHalfTime = :realMatchFirstHalfTime,
-                realMatchSecondHalfTime = :realMatchSecondHalfTime,
-                realMatchEnded = :realMatchEnded,
-                lastF7Date = :now,
-                lastFDate = :now,
-                updatedIn = :now
-            WHERE realMatchID = :realMatchID
-        """)
-
         db.execute(
-            update_query,
-            {
-                "realMatchID": match_ids["realMatchID"],
-                "realMatchStatus": real_match_status,
-                "realMatchType": match_data.get("realMatchType"),
-                "realMatchPeriod": period,
-                "realMatchRealPeriod": match_data.get("realMatchPeriod"),
-                "realMatchAttendance": attendance,
-                "realMatchDate": match_date,
-                "realMatchDateOffset": match_data.get("realMatchDateOffset"),
-                "realMatchResultType": match_data.get("realMatchResultType"),
-                "realMatchTime": match_time,
-                "realMatchFirstHalfTime": first_half_time,
-                "realMatchSecondHalfTime": second_half_time,
-                "realMatchEnded": real_match_ended,
-                "now": now,
-            },
+            update(RealMatch)
+            .where(RealMatch.realMatchID == match_ids["realMatchID"])
+            .values(
+                realMatchStatus=real_match_status,
+                realMatchType=match_data.get("realMatchType"),
+                realMatchPeriod=period,
+                realMatchRealPeriod=match_data.get("realMatchPeriod"),
+                realMatchAttendance=attendance,
+                realMatchDate=match_date,
+                realMatchDateOffset=match_data.get("realMatchDateOffset"),
+                realMatchResultType=match_data.get("realMatchResultType"),
+                realMatchTime=safe_int(match_data.get("realMatchTime")),
+                realMatchFirstHalfTime=safe_int(match_data.get("realMatchFirstHalfTime")),
+                realMatchSecondHalfTime=safe_int(match_data.get("realMatchSecondHalfTime")),
+                realMatchEnded=real_match_ended,
+                lastF7Date=now,
+                lastFDate=now,
+                updatedIn=now,
+            )
         )
 
         return {"status": "updated", "match_id": match_ids["realMatchID"]}
@@ -725,25 +703,16 @@ class F7Loader:
                 points, result = 1, 0   # Draw
 
             # Update RealMatchTeams
-            update_query = text("""
-                UPDATE `RealMatchTeams`
-                SET realTeamScore = :realTeamScore,
-                    realTeamRealScore = :realTeamScore,
-                    realTeamResult = :realTeamResult,
-                    realTeamPoints = :realTeamPoints,
-                    updatedIn = :now
-                WHERE realMatchTeamID = :realMatchTeamID
-            """)
-
             db.execute(
-                update_query,
-                {
-                    "realMatchTeamID": team_update["realMatchTeamID"],
-                    "realTeamScore": my_score,
-                    "realTeamResult": result,
-                    "realTeamPoints": points,
-                    "now": now,
-                },
+                update(RealMatchTeam)
+                .where(RealMatchTeam.realMatchTeamID == team_update["realMatchTeamID"])
+                .values(
+                    realTeamScore=my_score,
+                    realTeamRealScore=my_score,
+                    realTeamResult=result,
+                    realTeamPoints=points,
+                    updatedIn=now,
+                )
             )
 
             update_count += 1
@@ -846,42 +815,27 @@ class F7Loader:
             match_points = 3 * match_won + match_draw
 
             # Update RealStandings
-            update_query = text("""
-                UPDATE `RealStandings`
-                SET realMatchDate = :realMatchDate,
-                    realMatchTime = :realMatchTime,
-                    realMatchStatus = :realMatchStatus,
-                    realTeamScore = :realTeamScore,
-                    oppositeRealTeamScore = :oppositeRealTeamScore,
-                    matchWon = :matchWon,
-                    matchDraw = :matchDraw,
-                    matchLost = :matchLost,
-                    matchPointsL1 = :matchPointsL1,
-                    livePointsL1 = :matchPointsL1,
-                    processed = 1,
-                    updatedIn = :now
-                WHERE realCompetitionID = :realCompetitionID
-                  AND realCompetitionMatchDay = :realCompetitionMatchDay
-                  AND realTeamMemberKey = :team_member_key
-            """)
-
             db.execute(
-                update_query,
-                {
-                    "realMatchDate": match_date,
-                    "realMatchTime": match_time,
-                    "realMatchStatus": match_status,
-                    "realTeamScore": my_score,
-                    "oppositeRealTeamScore": other_score,
-                    "matchWon": match_won,
-                    "matchDraw": match_draw,
-                    "matchLost": match_lost,
-                    "matchPointsL1": match_points,
-                    "realCompetitionID": real_competition_id,
-                    "realCompetitionMatchDay": real_match_day,
-                    "realTeamMemberKey": team_info.get("realTeamMemberKey"),
-                    "now": now,
-                },
+                update(RealStanding)
+                .where(
+                    RealStanding.realCompetitionID == real_competition_id,
+                    RealStanding.realCompetitionMatchDay == real_match_day,
+                    RealStanding.realTeamMemberKey == team_info.get("realTeamMemberKey"),
+                )
+                .values(
+                    realMatchDate=match_date,
+                    realMatchTime=match_time,
+                    realMatchStatus=match_status,
+                    realTeamScore=my_score,
+                    oppositeRealTeamScore=other_score,
+                    matchWon=match_won,
+                    matchDraw=match_draw,
+                    matchLost=match_lost,
+                    matchPointsL1=match_points,
+                    livePointsL1=match_points,
+                    processed=1,
+                    updatedIn=now,
+                )
             )
 
             update_count += 1
@@ -981,104 +935,58 @@ class F7Loader:
             )
 
             # Update RealStandings for player
-            update_query = text("""
-                UPDATE `RealStandings`
-                SET realMatchID = :realMatchID,
-                    realMatchTeamID = :realMatchTeamID,
-                    realMatchDate = :realMatchDate,
-                    realMatchTime = :realMatchTime,
-                    realMatchStatus = :realMatchStatus,
-                    realTeamID = :realTeamID,
-                    realTeamUID = :realTeamUID,
-                    realTeamName = :realTeamName,
-                    realTeamShortName = :realTeamShortName,
-                    realTeamScore = :realTeamScore,
-                    realTeamSide = :realTeamSide,
-                    oppositeRealTeamID = :oppositeRealTeamID,
-                    oppositeRealTeamUID = :oppositeRealTeamUID,
-                    oppositeRealTeamName = :oppositeRealTeamName,
-                    oppositeRealTeamShortName = :oppositeRealTeamShortName,
-                    oppositeRealTeamScore = :oppositeRealTeamScore,
-                    realPlayerID = :realPlayerID,
-                    realPlayerUID = :realPlayerUID,
-                    firstName = :firstName,
-                    lastName = :lastName,
-                    knownName = :knownName,
-                    name = :name,
-                    sortName = :sortName,
-                    matchTimePlayed = :matchTimePlayed,
-                    matchGamePlayed = :matchGamePlayed,
-                    matchGoals = :matchGoals,
-                    matchAssists = :matchAssists,
-                    matchYellowCards = :matchYellowCards,
-                    matchRedCards = :matchRedCards,
-                    matchGoalsConceded = :matchGoalsConceded,
-                    matchCleanSheet = :matchCleanSheet,
-                    matchDayPlayed = :matchDayPlayed,
-                    matchPointsL1Played = :matchPointsL1Played,
-                    matchPointsL1GoalsAllowed = :matchPointsL1GoalsAllowed,
-                    matchPointsL1CleanSheet = :matchPointsL1CleanSheet,
-                    matchPointsL1Cards = :matchPointsL1Cards,
-                    matchPointsL1Goals = :matchPointsL1Goals,
-                    matchPointsL1Assists = :matchPointsL1Assists,
-                    matchPointsL1OwnGoals = :matchPointsL1OwnGoals,
-                    matchPointsL1 = :matchPointsL1,
-                    livePointsL1 = :matchPointsL1,
-                    processed = 1,
-                    updatedIn = :now
-                WHERE realCompetitionID = :realCompetitionID
-                  AND realCompetitionMatchDay = :realCompetitionMatchDay
-                  AND realTeamMemberKey = :realTeamMemberKey
-            """)
-
             db.execute(
-                update_query,
-                {
-                    "realMatchID": match_ids["realMatchID"],
-                    "realMatchTeamID": real_match_team_id,
-                    "realMatchDate": match_date,
-                    "realMatchTime": match_time,
-                    "realMatchStatus": match_status,
-                    "realTeamID": team_info["realTeamID"],
-                    "realTeamUID": player_team_uid,
-                    "realTeamName": team_info["realTeamName"],
-                    "realTeamShortName": team_info["realTeamShortName"],
-                    "realTeamScore": team_info["score"],
-                    "realTeamSide": player_side,
-                    "oppositeRealTeamID": opponent_info["realTeamID"],
-                    "oppositeRealTeamUID": opponent_uid,
-                    "oppositeRealTeamName": opponent_info["realTeamName"],
-                    "oppositeRealTeamShortName": opponent_info["realTeamShortName"],
-                    "oppositeRealTeamScore": opponent_info["score"],
-                    "realPlayerID": player.get("realPlayerID"),
-                    "realPlayerUID": player_uid,
-                    "firstName": first_name,
-                    "lastName": last_name,
-                    "knownName": known_name,
-                    "name": name,
-                    "sortName": sort_name,
-                    "matchTimePlayed": player.get("matchTimePlayed", 0),
-                    "matchGamePlayed": player.get("matchGamePlayed", 0),
-                    "matchGoals": player.get("matchGoals", 0),
-                    "matchAssists": player.get("matchAssists", 0),
-                    "matchYellowCards": player.get("matchYellowCards", 0),
-                    "matchRedCards": player.get("matchRedCards", 0),
-                    "matchGoalsConceded": player.get("matchGoalsConceded", 0),
-                    "matchCleanSheet": player.get("matchCleanSheet", 0),
-                    "matchDayPlayed": player.get("matchGamePlayed", 0),
-                    "matchPointsL1Played": player.get("matchPointsL1Played", 0),
-                    "matchPointsL1GoalsAllowed": player.get("matchPointsL1GoalsAllowed", 0),
-                    "matchPointsL1CleanSheet": player.get("matchPointsL1CleanSheet", 0),
-                    "matchPointsL1Cards": player.get("matchPointsL1Cards", 0),
-                    "matchPointsL1Goals": player.get("matchPointsL1Goals", 0),
-                    "matchPointsL1Assists": player.get("matchPointsL1Assists", 0),
-                    "matchPointsL1OwnGoals": player.get("matchPointsL1OwnGoals", 0),
-                    "matchPointsL1": total_points,
-                    "realCompetitionID": real_competition_id,
-                    "realCompetitionMatchDay": real_match_day,
-                    "realTeamMemberKey": player["realTeamMemberKey"],
-                    "now": now,
-                },
+                update(RealStanding)
+                .where(
+                    RealStanding.realCompetitionID == real_competition_id,
+                    RealStanding.realCompetitionMatchDay == real_match_day,
+                    RealStanding.realTeamMemberKey == player["realTeamMemberKey"],
+                )
+                .values(
+                    realMatchID=match_ids["realMatchID"],
+                    realMatchTeamID=real_match_team_id,
+                    realMatchDate=match_date,
+                    realMatchTime=match_time,
+                    realMatchStatus=match_status,
+                    realTeamID=team_info["realTeamID"],
+                    realTeamUID=player_team_uid,
+                    realTeamName=team_info["realTeamName"],
+                    realTeamShortName=team_info["realTeamShortName"],
+                    realTeamScore=team_info["score"],
+                    realTeamSide=player_side,
+                    oppositeRealTeamID=opponent_info["realTeamID"],
+                    oppositeRealTeamUID=opponent_uid,
+                    oppositeRealTeamName=opponent_info["realTeamName"],
+                    oppositeRealTeamShortName=opponent_info["realTeamShortName"],
+                    oppositeRealTeamScore=opponent_info["score"],
+                    realPlayerID=player.get("realPlayerID"),
+                    realPlayerUID=player_uid,
+                    firstName=first_name,
+                    lastName=last_name,
+                    knownName=known_name,
+                    name=name,
+                    sortName=sort_name,
+                    matchTimePlayed=player.get("matchTimePlayed", 0),
+                    matchGamePlayed=player.get("matchGamePlayed", 0),
+                    matchGoals=player.get("matchGoals", 0),
+                    matchAssists=player.get("matchAssists", 0),
+                    matchYellowCards=player.get("matchYellowCards", 0),
+                    matchRedCards=player.get("matchRedCards", 0),
+                    matchGoalsConceded=player.get("matchGoalsConceded", 0),
+                    matchCleanSheet=player.get("matchCleanSheet", 0),
+                    matchDayPlayed=player.get("matchGamePlayed", 0),
+                    matchPointsL1Played=player.get("matchPointsL1Played", 0),
+                    matchPointsL1GoalsAllowed=player.get("matchPointsL1GoalsAllowed", 0),
+                    matchPointsL1CleanSheet=player.get("matchPointsL1CleanSheet", 0),
+                    matchPointsL1Cards=player.get("matchPointsL1Cards", 0),
+                    matchPointsL1Goals=player.get("matchPointsL1Goals", 0),
+                    matchPointsL1Assists=player.get("matchPointsL1Assists", 0),
+                    matchPointsL1OwnGoals=player.get("matchPointsL1OwnGoals", 0),
+                    matchPointsL1=total_points,
+                    livePointsL1=total_points,
+                    processed=1,
+                    updatedIn=now,
+                )
             )
 
             update_count += 1
