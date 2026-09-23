@@ -235,13 +235,13 @@ class F7Loader:
         match_data = processed_data["match_data"]
 
         try:
-            F7Loader.update_match_quick_mode(db, match_ids, match_data)
+            F7Loader._update_match_quick_mode(db, match_ids, match_data)
             task.inc("matches_updated")
         except Exception as e:
             task.add_error(f"RealMatches update failed [{type(e).__name__}]: {e!s}")
 
         try:
-            teams_result = F7Loader.update_match_teams_quick_mode(
+            teams_result = F7Loader._update_match_teams_quick_mode(
                 db, match_ids, match_data, foundation["teams_cache"]
             )
             task.assign("match_teams_updated", teams_result.get("teams_updated", 0))
@@ -259,7 +259,7 @@ class F7Loader:
 
         if real_match_day:
             try:
-                standings_result = F7Loader.update_standings_quick_mode(
+                standings_result = F7Loader._update_standings_quick_mode(
                     db,
                     match_ids,
                     match_data,
@@ -276,7 +276,7 @@ class F7Loader:
                 )
 
             try:
-                player_result = F7Loader.update_player_standings_quick_mode(
+                player_result = F7Loader._update_player_standings_quick_mode(
                     db,
                     match_ids,
                     match_data,
@@ -580,7 +580,7 @@ class F7Loader:
             return raw
 
     @staticmethod
-    def update_match_quick_mode(db: Session, match_ids: dict, match_data: dict) -> dict:
+    def _update_match_quick_mode(db: Session, match_ids: dict, match_data: dict) -> dict:
         """Update RealMatches with F7 data in Quick mode.
 
         Args:
@@ -665,7 +665,7 @@ class F7Loader:
         return {"status": "updated", "match_id": match_ids["realMatchID"]}
 
     @staticmethod
-    def update_match_teams_quick_mode(
+    def _update_match_teams_quick_mode(
         db: Session, match_ids: dict, match_data: dict, teams_cache: dict
     ) -> dict:
         """Update RealMatchTeams with F7 data in Quick mode.
@@ -757,7 +757,7 @@ class F7Loader:
         return {"status": "updated", "teams_updated": update_count}
 
     @staticmethod
-    def update_standings_quick_mode(
+    def _update_standings_quick_mode(
         db: Session,
         match_ids: dict,
         match_data: dict,
@@ -914,7 +914,7 @@ class F7Loader:
         return {"status": "updated", "standings_updated": update_count}
 
     @staticmethod
-    def update_player_standings_quick_mode(
+    def _update_player_standings_quick_mode(
         db: Session,
         match_ids: dict,
         match_data: dict,
