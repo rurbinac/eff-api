@@ -322,22 +322,27 @@ class F7Loader:
         if not symid:
             raise ValueError("Missing realCompetitionSYMID in competition data")
 
-        query = text("""
-            SELECT `realCompetitionID`,
-                   `baseRealCompetitionID`,
-                   `extraRealCompetitionID`,
-                   `realCompetitionUID`,
-                   `realCompetitionSeasonId`,
-                   `realCompetitionCountry`,
-                   `realCompetitionFirstMatchDay`,
-                   `realCompetitionLastMatchDay`
-            FROM `RealCompetitions`
-            WHERE `realCompetitionSYMID` = :symid
-            ORDER BY `updatedIn` DESC
-            LIMIT 1
-        """)
-
-        row = db.execute(query, {"symid": symid}).mappings().first()
+        row = (
+            db.execute(
+                text("""
+                    SELECT `realCompetitionID`,
+                           `baseRealCompetitionID`,
+                           `extraRealCompetitionID`,
+                           `realCompetitionUID`,
+                           `realCompetitionSeasonId`,
+                           `realCompetitionCountry`,
+                           `realCompetitionFirstMatchDay`,
+                           `realCompetitionLastMatchDay`
+                    FROM `RealCompetitions`
+                    WHERE `realCompetitionSYMID` = :symid
+                    ORDER BY `updatedIn` DESC
+                    LIMIT 1
+                """),
+                {"symid": symid},
+            )
+            .mappings()
+            .first()
+        )
 
         if not row:
             raise ValueError(f"RealCompetition not found for symid={symid!r}")
@@ -356,16 +361,19 @@ class F7Loader:
         if not (home_team_uid and away_team_uid):
             raise ValueError("Missing home or away team reference in match data")
 
-        query = text("""
-            SELECT `realTeamID`, `realTeamUID`, `realTeamMemberKey`, `realTeamName`, `realTeamShortName`
-            FROM `RealTeams`
-            WHERE `realCompetitionID` = :comp_id
-              AND (`realTeamUID` = :home_uid OR `realTeamUID` = :away_uid)
-        """)
-
         results = (
             db.execute(
-                query,
+                text("""
+                    SELECT `realTeamID`,
+                           `realTeamUID`,
+                           `realTeamMemberKey`,
+                           `realTeamName`,
+                           `realTeamShortName`
+                    FROM `RealTeams`
+                    WHERE `realCompetitionID` = :comp_id
+                      AND (`realTeamUID` = :home_uid
+                           OR `realTeamUID` = :away_uid)
+                """),
                 {
                     "comp_id": real_competition_id,
                     "home_uid": home_team_uid,
@@ -410,23 +418,23 @@ class F7Loader:
         if not home_uid or not away_uid:
             return None
 
-        query = text("""
-            SELECT `m`.`realMatchID` AS `mID`,
-                   `t1`.`realMatchTeamID` AS `mtID_Home`,
-                   `t2`.`realMatchTeamID` AS `mtID_Away`
-            FROM `RealMatches` `m`
-            INNER JOIN `RealMatchTeams` `t1` ON `m`.`realMatchID` = `t1`.`realMatchID`
-                AND `t1`.`realTeamNumber` = 1
-            INNER JOIN `RealMatchTeams` `t2` ON `m`.`realMatchID` = `t2`.`realMatchID`
-                AND `t2`.`realTeamNumber` = 2
-            WHERE `m`.`realCompetitionID` = :comp_id
-              AND `t1`.`realTeamUID` = :home_uid
-              AND `t2`.`realTeamUID` = :away_uid
-            LIMIT 1
-        """)
-
         result = db.execute(
-            query,
+            text("""
+                SELECT `m`.`realMatchID` AS `mID`,
+                       `t1`.`realMatchTeamID` AS `mtID_Home`,
+                       `t2`.`realMatchTeamID` AS `mtID_Away`
+                FROM `RealMatches` `m`
+                INNER JOIN `RealMatchTeams` `t1`
+                    ON `m`.`realMatchID` = `t1`.`realMatchID`
+                    AND `t1`.`realTeamNumber` = 1
+                INNER JOIN `RealMatchTeams` `t2`
+                    ON `m`.`realMatchID` = `t2`.`realMatchID`
+                    AND `t2`.`realTeamNumber` = 2
+                WHERE `m`.`realCompetitionID` = :comp_id
+                  AND `t1`.`realTeamUID` = :home_uid
+                  AND `t2`.`realTeamUID` = :away_uid
+                LIMIT 1
+            """),
             {
                 "comp_id": real_competition_id,
                 "home_uid": home_uid,
@@ -474,20 +482,30 @@ class F7Loader:
             params = {f"uid_{i}": uid for i, uid in enumerate(player_uids)}
             params["comp_id"] = real_competition_id
 
-            query_str = f"""
-                SELECT `realPlayerID`, `realPlayerUID`, `realTeamMemberKey`, `draftPosition`
-                FROM `RealPlayers`
-                WHERE `realCompetitionID` = :comp_id
-                  AND `realPlayerUID` IN ({placeholders})
-            """
-
-            results = db.execute(text(query_str), params).mappings().all()
+            results = (
+                db.execute(
+                    text(f"""
+                        SELECT `realPlayerID`,
+                               `realPlayerUID`,
+                               `realTeamMemberKey`,
+                               `draftPosition`
+                        FROM `RealPlayers`
+                        WHERE `realCompetitionID` = :comp_id
+                          AND `realPlayerUID` IN ({placeholders})
+                    """),
+                    params,
+                )
+                .mappings()
+                .all()
+            )
 
             for row in results:
                 player_uid = row["realPlayerUID"]
                 if player_uid in players_cache:
                     players_cache[player_uid]["realPlayerID"] = row["realPlayerID"]
-                    players_cache[player_uid]["realTeamMemberKey"] = row["realTeamMemberKey"]
+                    players_cache[player_uid]["realTeamMemberKey"] = row[
+                        "realTeamMemberKey"
+                    ]
                     players_cache[player_uid]["draftPosition"] = row["draftPosition"]
                 else:
                     # Player from database not yet in cache, add them
@@ -580,7 +598,9 @@ class F7Loader:
             return raw
 
     @staticmethod
-    def _update_match_quick_mode(db: Session, match_ids: dict, match_data: dict) -> dict:
+    def _update_match_quick_mode(
+        db: Session, match_ids: dict, match_data: dict
+    ) -> dict:
         """Update RealMatches with F7 data in Quick mode.
 
         Args:
@@ -631,8 +651,12 @@ class F7Loader:
                 realMatchDateOffset=match_data.get("realMatchDateOffset"),
                 realMatchResultType=match_data.get("realMatchResultType"),
                 realMatchTime=safe_int(match_data.get("realMatchTime")),
-                realMatchFirstHalfTime=safe_int(match_data.get("realMatchFirstHalfTime")),
-                realMatchSecondHalfTime=safe_int(match_data.get("realMatchSecondHalfTime")),
+                realMatchFirstHalfTime=safe_int(
+                    match_data.get("realMatchFirstHalfTime")
+                ),
+                realMatchSecondHalfTime=safe_int(
+                    match_data.get("realMatchSecondHalfTime")
+                ),
                 realMatchEnded=real_match_ended,
                 lastF7Date=now,
                 lastFDate=now,
@@ -696,11 +720,11 @@ class F7Loader:
             if my_score is None or other_score is None:
                 points, result = 0, None
             elif my_score > other_score:
-                points, result = 3, 1   # Win
+                points, result = 3, 1  # Win
             elif my_score < other_score:
                 points, result = 0, -1  # Loss
             else:
-                points, result = 1, 0   # Draw
+                points, result = 1, 0  # Draw
 
             # Update RealMatchTeams
             db.execute(
@@ -820,7 +844,8 @@ class F7Loader:
                 .where(
                     RealStanding.realCompetitionID == real_competition_id,
                     RealStanding.realCompetitionMatchDay == real_match_day,
-                    RealStanding.realTeamMemberKey == team_info.get("realTeamMemberKey"),
+                    RealStanding.realTeamMemberKey
+                    == team_info.get("realTeamMemberKey"),
                 )
                 .values(
                     realMatchDate=match_date,
@@ -976,7 +1001,9 @@ class F7Loader:
                     matchCleanSheet=player.get("matchCleanSheet", 0),
                     matchDayPlayed=player.get("matchGamePlayed", 0),
                     matchPointsL1Played=player.get("matchPointsL1Played", 0),
-                    matchPointsL1GoalsAllowed=player.get("matchPointsL1GoalsAllowed", 0),
+                    matchPointsL1GoalsAllowed=player.get(
+                        "matchPointsL1GoalsAllowed", 0
+                    ),
                     matchPointsL1CleanSheet=player.get("matchPointsL1CleanSheet", 0),
                     matchPointsL1Cards=player.get("matchPointsL1Cards", 0),
                     matchPointsL1Goals=player.get("matchPointsL1Goals", 0),

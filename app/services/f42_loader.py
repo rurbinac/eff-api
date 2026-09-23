@@ -7,7 +7,14 @@ from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 
 from app.constants import DraftPositionConstants, RealMatchPeriod
-from app.models import Feed, RealCompetition, RealMatch, RealMatchTeam, RealPlayer, RealTeam
+from app.models import (
+    Feed,
+    RealCompetition,
+    RealMatch,
+    RealMatchTeam,
+    RealPlayer,
+    RealTeam,
+)
 from app.services.f42_parser import F42Parser
 from app.services.save_mds import SaveMDS
 from app.services.sync_fantasy import SyncFantasyService
@@ -112,17 +119,19 @@ class F42Loader:
                 team_uid = team_data.get("realTeamUID")
                 if team_uid in team_id_mapping:
                     # Query for team details
-                    team_query = text("""
-                        SELECT realTeamID, realTeamName, realTeamShortName
-                        FROM `RealTeams`
-                        WHERE realCompetitionID = :comp_id AND realTeamUID = :uid
-                        LIMIT 1
-                    """)
                     team_result = db.execute(
-                        team_query,
+                        text("""
+                        SELECT `realTeamID`,
+                               `realTeamName`,
+                               `realTeamShortName`
+                           FROM `RealTeams`
+                           WHERE `realCompetitionID` = :realCompetitionID
+                             AND `realTeamUID` = :realTeamUID
+                           LIMIT 1
+                    """),
                         {
-                            "comp_id": comp_data["realCompetitionID"],
-                            "uid": team_uid,
+                            "realCompetitionID": comp_data["realCompetitionID"],
+                            "realTeamUID": team_uid,
                         },
                     ).first()
                     if team_result:
@@ -154,7 +163,9 @@ class F42Loader:
             task.add_error(f"Error saving MDS data [{type(e).__name__}]: {e!s}")
 
         try:
-            sync_result = F42Loader._sync(db, comp_data["realCompetitionID"], include_rtm=True)
+            sync_result = F42Loader._sync(
+                db, comp_data["realCompetitionID"], include_rtm=True
+            )
             task.add_subtask(sync_result)
         except Exception as e:
             db.rollback()
@@ -171,12 +182,16 @@ class F42Loader:
         task = Task(name="Sync", status=Task.RUNNING, status_on_error=Task.ERROR)
 
         try:
-            sync_real = SyncRealService.sync_all(db, real_competition_id, include_rtm=include_rtm)
+            sync_real = SyncRealService.sync_all(
+                db, real_competition_id, include_rtm=include_rtm
+            )
             db.commit()
             task.add_subtask(sync_real)
         except Exception as e:
             db.rollback()
-            sub = Task(name="sync_real", status=Task.RUNNING, status_on_error=Task.ERROR)
+            sub = Task(
+                name="sync_real", status=Task.RUNNING, status_on_error=Task.ERROR
+            )
             sub.add_error(f"[{type(e).__name__}]: {e!s}")
             sub.close()
             task.add_subtask(sub)
@@ -187,7 +202,9 @@ class F42Loader:
             task.add_subtask(sync_fantasy)
         except Exception as e:
             db.rollback()
-            sub = Task(name="sync_fantasy", status=Task.RUNNING, status_on_error=Task.ERROR)
+            sub = Task(
+                name="sync_fantasy", status=Task.RUNNING, status_on_error=Task.ERROR
+            )
             sub.add_error(f"[{type(e).__name__}]: {e!s}")
             sub.close()
             task.add_subtask(sub)
@@ -216,25 +233,26 @@ class F42Loader:
 
         Competitions are managed externally — this loader does not insert.
         """
-        task = Task(name="Load Competition", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task = Task(
+            name="Load Competition", status=Task.RUNNING, status_on_error=Task.ERROR
+        )
         task.init_info("updated")
         # Query for existing competition
-        query = text("""
-            SELECT `realCompetitionID`,
-                   `baseRealCompetitionID`,
-                   `extraRealCompetitionID`,
-                   `realCompetitionUID`,
-                   `realCompetitionCountry`,
-                   `realCompetitionFirstMatchDay`,
-                   `realCompetitionLastMatchDay`
-            FROM `RealCompetitions`
-            WHERE `realCompetitionSYMID` = :realCompetitionSYMID
-              AND `realCompetitionSeasonId` = :realCompetitionSeasonId
-            LIMIT 1
-        """)
         row = (
             db.execute(
-                query,
+                text("""
+                    SELECT `realCompetitionID`,
+                           `baseRealCompetitionID`,
+                           `extraRealCompetitionID`,
+                           `realCompetitionUID`,
+                           `realCompetitionCountry`,
+                           `realCompetitionFirstMatchDay`,
+                           `realCompetitionLastMatchDay`
+                    FROM `RealCompetitions`
+                    WHERE `realCompetitionSYMID` = :realCompetitionSYMID
+                      AND `realCompetitionSeasonId` = :realCompetitionSeasonId
+                    LIMIT 1
+                """),
                 {
                     "realCompetitionSYMID": comp_data["realCompetitionSYMID"],
                     "realCompetitionSeasonId": comp_data["realCompetitionSeasonId"],
@@ -279,16 +297,14 @@ class F42Loader:
                 continue
 
             # Query for existing team
-            query = text("""
-                SELECT `realTeamID`
-                FROM `RealTeams`
-                WHERE `realCompetitionID` = :realCompetitionID
-                  AND `realTeamUID` = :realTeamUID
-                LIMIT 1
-            """)
-
             result = db.execute(
-                query,
+                text("""
+                    SELECT `realTeamID`
+                    FROM `RealTeams`
+                    WHERE `realCompetitionID` = :realCompetitionID
+                      AND `realTeamUID` = :realTeamUID
+                    LIMIT 1
+                """),
                 {
                     "realCompetitionID": comp_data["realCompetitionID"],
                     "realTeamUID": team_data["realTeamUID"],
@@ -355,7 +371,9 @@ class F42Loader:
         team_uid_mapping: dict,
     ) -> Task:
         """Load or update players in RealPlayers."""
-        task = Task(name="Load Players", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task = Task(
+            name="Load Players", status=Task.RUNNING, status_on_error=Task.ERROR
+        )
         task.init_info("inserted", "updated")
 
         def safe_int(value):
@@ -483,23 +501,24 @@ class F42Loader:
         """
         cache = {}
 
-        query_text = text("""
-            SELECT `m`.`realMatchID` AS `mID`,
-                   `t1`.`realMatchTeamID` AS `mtID_1`,
-                   `t2`.`realMatchTeamID` AS `mtID_2`,
-                   `t1`.`realTeamUID` AS `tUID_1`,
-                   `t2`.`realTeamUID` AS `tUID_2`
-            FROM `RealMatches` `m`
-            INNER JOIN `RealMatchTeams` `t1` ON `m`.`realMatchID` = `t1`.`realMatchID`
-                AND `t1`.`realTeamNumber` = 1
-            INNER JOIN `RealMatchTeams` `t2` ON `m`.`realMatchID` = `t2`.`realMatchID`
-                AND `t2`.`realTeamNumber` = 2
-            WHERE `m`.`realCompetitionID` = :realCompetitionID
-        """)
-
         results = (
             db.execute(
-                query_text, {"realCompetitionID": comp_data["realCompetitionID"]}
+                text("""
+                    SELECT `m`.`realMatchID` AS `mID`,
+                           `t1`.`realMatchTeamID` AS `mtID_1`,
+                           `t2`.`realMatchTeamID` AS `mtID_2`,
+                           `t1`.`realTeamUID` AS `tUID_1`,
+                           `t2`.`realTeamUID` AS `tUID_2`
+                    FROM `RealMatches` `m`
+                    INNER JOIN `RealMatchTeams` `t1`
+                        ON `m`.`realMatchID` = `t1`.`realMatchID`
+                        AND `t1`.`realTeamNumber` = 1
+                    INNER JOIN `RealMatchTeams` `t2`
+                        ON `m`.`realMatchID` = `t2`.`realMatchID`
+                        AND `t2`.`realTeamNumber` = 2
+                    WHERE `m`.`realCompetitionID` = :realCompetitionID
+                """),
+                {"realCompetitionID": comp_data["realCompetitionID"]},
             )
             .mappings()
             .all()
@@ -520,7 +539,9 @@ class F42Loader:
         comp_data: dict,
     ) -> Task:
         """Load or update matches and match teams."""
-        task = Task(name="Load Matches", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task = Task(
+            name="Load Matches", status=Task.RUNNING, status_on_error=Task.ERROR
+        )
         task.init_info("inserted", "updated")
 
         for match_data in matches_data:
@@ -580,17 +601,25 @@ class F42Loader:
                     realCompetitionSYMID=comp_data["realCompetitionSYMID"],
                     realCompetitionSeasonId=comp_data["realCompetitionSeasonId"],
                     realCompetitionMatchDay=match_data.get("match_day"),
-                    realCompetitionFirstMatchDay=comp_data["realCompetitionFirstMatchDay"],
-                    realCompetitionLastMatchDay=comp_data["realCompetitionLastMatchDay"],
+                    realCompetitionFirstMatchDay=comp_data[
+                        "realCompetitionFirstMatchDay"
+                    ],
+                    realCompetitionLastMatchDay=comp_data[
+                        "realCompetitionLastMatchDay"
+                    ],
                     baseRealCompetitionID=comp_data["baseRealCompetitionID"],
                     extraRealCompetitionID=comp_data["extraRealCompetitionID"],
                     realMatchType=match_data.get("match_type"),
-                    realMatchStatus=RealMatchPeriod.to_match_status(match_data.get("period")),
+                    realMatchStatus=RealMatchPeriod.to_match_status(
+                        match_data.get("period")
+                    ),
                     realMatchPeriod=match_data.get("period"),
                     realMatchRealPeriod=match_data.get("period"),
                     realMatchDate=match_data.get("date_utc"),
                     realMatchDateOffset=match_data.get("date_offset"),
-                    realMatchEnded=RealMatchPeriod.to_match_ended(match_data.get("period")),
+                    realMatchEnded=RealMatchPeriod.to_match_ended(
+                        match_data.get("period")
+                    ),
                     realMatchIgnore=0,
                     enabled=1,
                     lastF42Date=task.start_time,
