@@ -7,13 +7,12 @@ from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 
 from app.constants import DraftPositionConstants, RealMatchPeriod
-from app.models import Feed, RealCompetition, RealPlayer, RealTeam
+from app.models import Feed, RealCompetition, RealMatch, RealMatchTeam, RealPlayer, RealTeam
 from app.services.f42_parser import F42Parser
 from app.services.save_mds import SaveMDS
 from app.services.sync_fantasy import SyncFantasyService
 from app.services.sync_real import SyncRealService
 from app.utils.dt import utc_now
-from app.utils.sql_text import sql_insert, sql_update
 from app.utils.tasks import Task
 
 
@@ -559,98 +558,68 @@ class F42Loader:
             if cache_key in matches_cache:
                 # Update existing match
                 real_match_id, *_ = matches_cache[cache_key]
-                rm_values = {
-                    "realMatchID": real_match_id,
-                    "realMatchType": match_data.get("match_type"),
-                    "realMatchPeriod": match_data.get("period"),
-                    "realMatchRealPeriod": match_data.get("period"),
-                    "realMatchDate": match_data.get("date_utc"),
-                    "realCompetitionMatchDay": match_data.get("match_day"),
-                    "lastF42Date": task.start_time,
-                    "updatedIn": task.start_time,
-                }
                 db.execute(
-                    text(sql_update("RealMatches", rm_values, id_name="realMatchID")),
-                    rm_values,
+                    update(RealMatch)
+                    .where(RealMatch.realMatchID == real_match_id)
+                    .values(
+                        realMatchType=match_data.get("match_type"),
+                        realMatchPeriod=match_data.get("period"),
+                        realMatchRealPeriod=match_data.get("period"),
+                        realMatchDate=match_data.get("date_utc"),
+                        realCompetitionMatchDay=match_data.get("match_day"),
+                        lastF42Date=task.start_time,
+                        updatedIn=task.start_time,
+                    )
                 )
                 task.inc("updated")
             else:
                 # Insert new match
-                rm_values = {
-                    "realCompetitionID": comp_data["realCompetitionID"],
-                    "realCompetitionUID": comp_data["realCompetitionUID"],
-                    "realCompetitionSYMID": comp_data["realCompetitionSYMID"],
-                    "realCompetitionSeasonId": comp_data["realCompetitionSeasonId"],
-                    "realCompetitionMatchDay": match_data.get("match_day"),
-                    "realCompetitionFirstMatchDay": comp_data[
-                        "realCompetitionFirstMatchDay"
-                    ],
-                    "realCompetitionLastMatchDay": comp_data[
-                        "realCompetitionLastMatchDay"
-                    ],
-                    "baseRealCompetitionID": comp_data["baseRealCompetitionID"],
-                    "extraRealCompetitionID": comp_data["extraRealCompetitionID"],
-                    "realMatchType": match_data.get("match_type"),
-                    "realMatchStatus": RealMatchPeriod.to_match_status(
-                        match_data.get("period")
-                    ),
-                    "realMatchPeriod": match_data.get("period"),
-                    "realMatchRealPeriod": match_data.get("period"),
-                    "realMatchDate": match_data.get("date_utc"),
-                    "realMatchDateOffset": match_data.get("date_offset"),
-                    "realMatchEnded": RealMatchPeriod.to_match_ended(
-                        match_data.get("period")
-                    ),
-                    "realMatchIgnore": 0,
-                    "enabled": 1,
-                    "lastF42Date": task.start_time,
-                    "createdIn": task.start_time,
-                    "updatedIn": task.start_time,
-                }
-                db.execute(
-                    text(sql_insert("RealMatches", rm_values)),
-                    rm_values,
+                new_match = RealMatch(
+                    realCompetitionID=comp_data["realCompetitionID"],
+                    realCompetitionUID=comp_data["realCompetitionUID"],
+                    realCompetitionSYMID=comp_data["realCompetitionSYMID"],
+                    realCompetitionSeasonId=comp_data["realCompetitionSeasonId"],
+                    realCompetitionMatchDay=match_data.get("match_day"),
+                    realCompetitionFirstMatchDay=comp_data["realCompetitionFirstMatchDay"],
+                    realCompetitionLastMatchDay=comp_data["realCompetitionLastMatchDay"],
+                    baseRealCompetitionID=comp_data["baseRealCompetitionID"],
+                    extraRealCompetitionID=comp_data["extraRealCompetitionID"],
+                    realMatchType=match_data.get("match_type"),
+                    realMatchStatus=RealMatchPeriod.to_match_status(match_data.get("period")),
+                    realMatchPeriod=match_data.get("period"),
+                    realMatchRealPeriod=match_data.get("period"),
+                    realMatchDate=match_data.get("date_utc"),
+                    realMatchDateOffset=match_data.get("date_offset"),
+                    realMatchEnded=RealMatchPeriod.to_match_ended(match_data.get("period")),
+                    realMatchIgnore=0,
+                    enabled=1,
+                    lastF42Date=task.start_time,
+                    createdIn=task.start_time,
+                    updatedIn=task.start_time,
                 )
+                db.add(new_match)
                 db.flush()
+                real_match_id = new_match.realMatchID
+                task.inc("inserted")
 
-                # Get the inserted match ID
-                result = db.execute(
-                    text("""
-                        SELECT realMatchID FROM `RealMatches`
-                        WHERE realCompetitionID = :realCompetitionID
-                          AND realMatchDate = :realMatchDate
-                        ORDER BY realMatchID DESC LIMIT 1
-                    """),
-                    {
-                        "realCompetitionID": comp_data["realCompetitionID"],
-                        "realMatchDate": match_data.get("date_utc"),
-                    },
-                ).first()
-
-                if result:
-                    real_match_id = result[0]
-                    task.inc("inserted")
-
-                    # Insert RealMatchTeams for Home and Away
-                    for side, team_uid, team_id, team_info in [
-                        ("Home", home_team_uid, home_team_info[0], home_team_info),
-                        ("Away", away_team_uid, away_team_info[0], away_team_info),
-                    ]:
-                        rmt_values = {
-                            "realMatchID": real_match_id,
-                            "realTeamID": team_id,
-                            "realTeamUID": team_uid,
-                            "realTeamName": team_info[1],
-                            "realTeamShortName": team_info[2],
-                            "realTeamSide": side,
-                            "realTeamNumber": 1 if side == "Home" else 2,
-                            "createdIn": task.start_time,
-                            "updatedIn": task.start_time,
-                        }
-                        db.execute(
-                            text(sql_insert("RealMatchTeams", rmt_values)),
-                            rmt_values,
+                # Insert RealMatchTeams for Home and Away
+                for side, team_uid, team_id, team_info in [
+                    ("Home", home_team_uid, home_team_info[0], home_team_info),
+                    ("Away", away_team_uid, away_team_info[0], away_team_info),
+                ]:
+                    db.add(
+                        RealMatchTeam(
+                            realMatchID=real_match_id,
+                            realTeamID=team_id,
+                            realTeamUID=team_uid,
+                            realTeamName=team_info[1],
+                            realTeamShortName=team_info[2],
+                            realTeamSide=side,
+                            realTeamNumber=1 if side == "Home" else 2,
+                            createdIn=task.start_time,
+                            updatedIn=task.start_time,
                         )
+                    )
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
