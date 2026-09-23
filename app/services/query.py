@@ -17,6 +17,7 @@ from app.models import (
     Team,
     User,
 )
+from app.utils.dt import to_iso
 
 
 class QueryService:
@@ -244,10 +245,8 @@ class QueryService:
                 if finish_field and current_datetime < finish_field:
                     tail["matchDayStatus"] = phase
                     start_field = getattr(mds, start, None)
-                    tail["matchDayStatusStart"] = (
-                        start_field.isoformat() if start_field else None
-                    )
-                    tail["matchDayStatusFinish"] = finish_field.isoformat()
+                    tail["matchDayStatusStart"] = to_iso(start_field)
+                    tail["matchDayStatusFinish"] = to_iso(finish_field)
             if include_boundaries:
                 include.append(start)
                 include.append(finish)
@@ -472,9 +471,7 @@ class QueryService:
                 "leagueType": row.leagueType,
                 "gameType": row.gameType,
                 "scoringSystem": row.scoringSystem,
-                "tradeDeadline": row.tradeDeadline.isoformat()
-                if row.tradeDeadline
-                else None,
+                "tradeDeadline": to_iso(row.tradeDeadline),
                 "publishLeague": row.publishLeague,
                 "seasonStatus": row.seasonStatus,
                 "totalTeams": row.totalTeams,
@@ -500,21 +497,17 @@ class QueryService:
                 "lowestMidfielder": row.lowestMidfielder,
                 "lowestStriker": row.lowestStriker,
                 "createdBy": row.createdBy,
-                "createdIn": row.createdIn.isoformat() if row.createdIn else None,
+                "createdIn": to_iso(row.createdIn),
                 "updatedBy": row.updatedBy,
-                "updatedIn": row.updatedIn.isoformat() if row.updatedIn else None,
+                "updatedIn": to_iso(row.updatedIn),
                 "divisionID": row.divisionID,
                 "matchDayMapKey": row.matchDayMapKey,
                 "divisionType": row.divisionType,
                 "draftType": row.draftType,
-                "draftDate": row.draftDate.isoformat() if row.draftDate else None,
+                "draftDate": to_iso(row.draftDate),
                 "draftStatus": row.draftStatus,
-                "draftingStart": row.draftingStart.isoformat()
-                if row.draftingStart
-                else None,
-                "draftingFinish": row.draftingFinish.isoformat()
-                if row.draftingFinish
-                else None,
+                "draftingStart": to_iso(row.draftingStart),
+                "draftingFinish": to_iso(row.draftingFinish),
                 "draftingRound": row.draftingRound,
                 "draftingTeamOrder": row.draftingTeamOrder,
                 "matchDay": row.matchDay,
@@ -549,50 +542,22 @@ class QueryService:
                 "commissionerFirstName": row.commissionerFirstName,
                 "commissionerLastName": row.commissionerLastName,
                 "scriptsStatus": row.scriptsStatus,
-                "startMatchDay": row.startMatchDay.isoformat()
-                if row.startMatchDay
-                else None,
-                "finishMatchDay": row.finishMatchDay.isoformat()
-                if row.finishMatchDay
-                else None,
-                "startWaivers": row.startWaivers.isoformat()
-                if row.startWaivers
-                else None,
-                "finishWaivers": row.finishWaivers.isoformat()
-                if row.finishWaivers
-                else None,
-                "startWaiversSettle": row.startWaiversSettle.isoformat()
-                if row.startWaiversSettle
-                else None,
-                "finishWaiversSettle": row.finishWaiversSettle.isoformat()
-                if row.finishWaiversSettle
-                else None,
-                "startOpenWaivers": row.startOpenWaivers.isoformat()
-                if row.startOpenWaivers
-                else None,
-                "finishOpenWaivers": row.finishOpenWaivers.isoformat()
-                if row.finishOpenWaivers
-                else None,
-                "startOpenWaiversSettle": row.startOpenWaiversSettle.isoformat()
-                if row.startOpenWaiversSettle
-                else None,
-                "finishOpenWaiversSettle": row.finishOpenWaiversSettle.isoformat()
-                if row.finishOpenWaiversSettle
-                else None,
-                "startPreMatch": row.startPreMatch.isoformat()
-                if row.startPreMatch
-                else None,
-                "finishPreMatch": row.finishPreMatch.isoformat()
-                if row.finishPreMatch
-                else None,
-                "startMatch": row.startMatch.isoformat() if row.startMatch else None,
-                "finishMatch": row.finishMatch.isoformat() if row.finishMatch else None,
-                "startPostMatch": row.startPostMatch.isoformat()
-                if row.startPostMatch
-                else None,
-                "finishPostMatch": row.finishPostMatch.isoformat()
-                if row.finishPostMatch
-                else None,
+                "startMatchDay": to_iso(row.startMatchDay),
+                "finishMatchDay": to_iso(row.finishMatchDay),
+                "startWaivers": to_iso(row.startWaivers),
+                "finishWaivers": to_iso(row.finishWaivers),
+                "startWaiversSettle": to_iso(row.startWaiversSettle),
+                "finishWaiversSettle": to_iso(row.finishWaiversSettle),
+                "startOpenWaivers": to_iso(row.startOpenWaivers),
+                "finishOpenWaivers": to_iso(row.finishOpenWaivers),
+                "startOpenWaiversSettle": to_iso(row.startOpenWaiversSettle),
+                "finishOpenWaiversSettle": to_iso(row.finishOpenWaiversSettle),
+                "startPreMatch": to_iso(row.startPreMatch),
+                "finishPreMatch": to_iso(row.finishPreMatch),
+                "startMatch": to_iso(row.startMatch),
+                "finishMatch": to_iso(row.finishMatch),
+                "startPostMatch": to_iso(row.startPostMatch),
+                "finishPostMatch": to_iso(row.finishPostMatch),
             }
             results.append(row_dict)
 
@@ -625,23 +590,13 @@ class QueryService:
                 "leagueMatches": division.leagueMatches,
                 "divisionMatches": division.divisionMatches,
                 "draftType": division.draftType,
-                "draftDate": division.draftDate.isoformat()
-                if division.draftDate
-                else None,
-                "draftCompleteDate": division.draftCompleteDate.isoformat()
-                if division.draftCompleteDate
-                else None,
+                "draftDate": to_iso(division.draftDate),
+                "draftCompleteDate": to_iso(division.draftCompleteDate),
                 "draftStatus": division.draftStatus,
                 "draftTime": division.draftTime,
-                "draftingStart": division.draftingStart.isoformat()
-                if division.draftingStart
-                else None,
-                "draftingFinish": division.draftingFinish.isoformat()
-                if division.draftingFinish
-                else None,
-                "draftingLimit": division.draftingLimit.isoformat()
-                if division.draftingLimit
-                else None,
+                "draftingStart": to_iso(division.draftingStart),
+                "draftingFinish": to_iso(division.draftingFinish),
+                "draftingLimit": to_iso(division.draftingLimit),
                 "draftingRound": division.draftingRound,
                 "draftingMemberOrder": division.draftingMemberOrder,
                 "draftingTeamOrder": division.draftingTeamOrder,
@@ -660,13 +615,9 @@ class QueryService:
                 "availableTeams": division.availableTeams,
                 "divisionType": division.divisionType,
                 "createdBy": division.createdBy,
-                "createdIn": division.createdIn.isoformat()
-                if division.createdIn
-                else None,
+                "createdIn": to_iso(division.createdIn),
                 "updatedBy": division.updatedBy,
-                "updatedIn": division.updatedIn.isoformat()
-                if division.updatedIn
-                else None,
+                "updatedIn": to_iso(division.updatedIn),
             }
             results.append(row_dict)
 
@@ -732,9 +683,9 @@ class QueryService:
                 "seedingC2": team.seedingC2,
                 "seedingC3": team.seedingC3,
                 "createdBy": team.createdBy,
-                "createdIn": team.createdIn.isoformat() if team.createdIn else None,
+                "createdIn": to_iso(team.createdIn),
                 "updatedBy": team.updatedBy,
-                "updatedIn": team.updatedIn.isoformat() if team.updatedIn else None,
+                "updatedIn": to_iso(team.updatedIn),
             }
             results.append(row_dict)
 
@@ -765,9 +716,9 @@ class QueryService:
                     "notes": note.notes,
                     "divisionNoteType": note.divisionNoteType,
                     "createdBy": note.createdBy,
-                    "createdIn": note.createdIn.isoformat() if note.createdIn else None,
+                    "createdIn": to_iso(note.createdIn),
                     "updatedBy": note.updatedBy,
-                    "updatedIn": note.updatedIn.isoformat() if note.updatedIn else None,
+                    "updatedIn": to_iso(note.updatedIn),
                 }
                 results.append(row_dict)
 

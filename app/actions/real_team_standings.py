@@ -1,6 +1,8 @@
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.utils.dt import to_iso
+
 
 class RealTeamStandingsReadListAction:
     """Handle RealTeamStandings ReadList requests."""
@@ -82,13 +84,6 @@ class RealTeamStandingsReadListAction:
                 "realCompetitionMatchDay": real_competition_match_day,
             },
         )
-
-        def to_iso(dt):
-            if dt is None:
-                return None
-            if isinstance(dt, str):
-                return dt
-            return dt.isoformat()
 
         items = []
         for row in result:

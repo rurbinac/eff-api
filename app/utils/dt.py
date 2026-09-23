@@ -46,13 +46,16 @@ def add_days(dt: datetime, days: int) -> datetime:
     return dt + timedelta(days=days)
 
 
-def to_iso(val: datetime | str | None) -> str | None:
+def to_iso(val: datetime | str | None, sep: str = " ", timespec: str = "seconds", default: str | datetime | None = None) -> str | None:
     """Return an ISO 8601 string for a datetime, pass strings through, and map None to None."""
+    def _default() -> str | None:
+        return to_iso(default, sep=sep, timespec=timespec) if isinstance(default, datetime) else default
     if val is None:
-        return None
+        return _default()
     if isinstance(val, str):
-        return val
-    return val.isoformat()
+        v = val.strip()
+        return v if v != "" else _default()
+    return val.isoformat(sep=sep, timespec=timespec)
 
 
 def next_midnight(dt: datetime) -> datetime:

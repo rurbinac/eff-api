@@ -13,6 +13,7 @@ from app.security import (
     verify_password,
 )
 from app.services import QueryService
+from app.utils.dt import to_iso
 
 
 class SignInAction:
@@ -28,7 +29,7 @@ class SignInAction:
             "userLevel": user.userLevel,
             "firstName": user.firstName,
             "lastName": user.lastName,
-            "birthday": user.birthday.isoformat() if user.birthday else None,
+            "birthday": to_iso(user.birthday),
             "country": user.country,
             "state": user.state,
             "city": user.city,
@@ -36,12 +37,10 @@ class SignInAction:
             "timeZone": user.timeZone,
             "userAvatar": user.userAvatar,
             "favoriteTeam": user.favoriteTeam,
-            "lastSignInDate": user.lastSignInDate.isoformat()
-            if user.lastSignInDate
-            else None,
+            "lastSignInDate": to_iso(user.lastSignInDate),
             "lastSignInIP": user.lastSignInIP,
-            "createdIn": user.createdIn.isoformat() if user.createdIn else None,
-            "updatedIn": user.updatedIn.isoformat() if user.updatedIn else None,
+            "createdIn": to_iso(user.createdIn),
+            "updatedIn": to_iso(user.updatedIn),
             "feedsMode": 0,
         }
         if token:

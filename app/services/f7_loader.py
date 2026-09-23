@@ -10,6 +10,7 @@ from app.services.f7_events import load_booking, load_goal, load_substitution
 from app.services.f7_parser import F7Parser
 from app.services.f7_standings import calc_player_points, process_events
 from app.utils.dt import utc_now
+from app.utils.scalars import to_int
 from app.utils.tasks import Task
 
 
@@ -146,6 +147,15 @@ class F7Loader:
             task.add_error(f"Failed to build players cache [{type(e).__name__}]: {e!s}")
             task.close()
             return task, None
+
+        # Populate oppositeRealTeamUID on each player — required by _process_goal
+        # to call _process_match_clean_sheet on the correct team's players
+        team_uids = list(teams_cache.keys())
+        for player_data in players_cache.values():
+            own = player_data.get("realTeamUID")
+            player_data["oppositeRealTeamUID"] = next(
+                (uid for uid in team_uids if uid != own), None
+            )
 
         task.close(status=Task.COMPLETED)
         return task, {
@@ -630,12 +640,6 @@ class F7Loader:
             except (ValueError, TypeError):
                 pass
 
-        # Convert match times to int or None
-        def safe_int(value):
-            try:
-                return int(value) if value else None
-            except (ValueError, TypeError):
-                return None
 
         # Update RealMatches
         db.execute(
@@ -650,11 +654,11 @@ class F7Loader:
                 realMatchDate=match_date,
                 realMatchDateOffset=match_data.get("realMatchDateOffset"),
                 realMatchResultType=match_data.get("realMatchResultType"),
-                realMatchTime=safe_int(match_data.get("realMatchTime")),
-                realMatchFirstHalfTime=safe_int(
+                realMatchTime=to_int(match_data.get("realMatchTime")),
+                realMatchFirstHalfTime=to_int(
                     match_data.get("realMatchFirstHalfTime")
                 ),
-                realMatchSecondHalfTime=safe_int(
+                realMatchSecondHalfTime=to_int(
                     match_data.get("realMatchSecondHalfTime")
                 ),
                 realMatchEnded=real_match_ended,

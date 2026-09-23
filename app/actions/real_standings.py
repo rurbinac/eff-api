@@ -2,6 +2,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models import RealStanding
+from app.utils.dt import to_iso
 
 
 class RealStandingsReadListAction:
@@ -60,7 +61,7 @@ class RealStandingsReadListAction:
                 "baseMatchDay": standing.baseMatchDay,
                 "realMatchID": standing.realMatchID,
                 "realMatchTeamID": standing.realMatchTeamID,
-                "realMatchDate": standing.realMatchDate.isoformat() if standing.realMatchDate else None,
+                "realMatchDate": to_iso(standing.realMatchDate),
                 "realMatchTime": standing.realMatchTime,
                 "realMatchStatus": standing.realMatchStatus,
                 "realTeamID": standing.realTeamID,
@@ -144,8 +145,8 @@ class RealStandingsReadListAction:
                 "livePointsL1": standing.livePointsL1,
                 "ranking": standing.ranking,
                 "processed": standing.processed,
-                "createdIn": standing.createdIn.isoformat() if standing.createdIn else None,
-                "updatedIn": standing.updatedIn.isoformat() if standing.updatedIn else None,
+                "createdIn": to_iso(standing.createdIn),
+                "updatedIn": to_iso(standing.updatedIn),
             }
 
             # Add fantasy team enrichment if division_id provided

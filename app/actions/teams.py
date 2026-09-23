@@ -10,7 +10,7 @@ from app.guards import (
     require_team_owner,
 )
 from app.models import Team
-from app.utils.dt import utc_now
+from app.utils.dt import to_iso, utc_now
 from app.utils.member_keys import KeyGroups, Keys
 
 
@@ -94,9 +94,9 @@ class TeamsReadListAction:
                 "seedingC2": team.seedingC2,
                 "seedingC3": team.seedingC3,
                 "createdBy": team.createdBy,
-                "createdIn": team.createdIn.isoformat() if team.createdIn else None,
+                "createdIn": to_iso(team.createdIn),
                 "updatedBy": team.updatedBy,
-                "updatedIn": team.updatedIn.isoformat() if team.updatedIn else None,
+                "updatedIn": to_iso(team.updatedIn),
             }
             items.append(row)
 
@@ -450,7 +450,7 @@ class TeamsUpdateAction:
             "teamName": team.teamName,
             "notes": team.notes,
             "updatedBy": team.updatedBy,
-            "updatedIn": team.updatedIn.isoformat() if team.updatedIn else None,
+            "updatedIn": to_iso(team.updatedIn),
         }
 
 

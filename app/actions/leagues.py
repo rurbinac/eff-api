@@ -16,6 +16,7 @@ from app.constants import (
 from app.context import RequestContext, extract_match_day_status
 from app.models import Division, League, Team
 from app.services import QueryService
+from app.utils.dt import to_iso
 
 
 class LeaguesReadListAction:
@@ -377,7 +378,7 @@ class LeaguesBuildAction:
             "leagueType": new_league.leagueType,
             "gameType": new_league.gameType,
             "scoringSystem": new_league.scoringSystem,
-            "tradeDeadline": new_league.tradeDeadline.isoformat(),
+            "tradeDeadline": to_iso(new_league.tradeDeadline),
             "publishLeague": new_league.publishLeague,
             "seasonStatus": new_league.seasonStatus,
             "baseRealCompetitionID": new_league.baseRealCompetitionID,

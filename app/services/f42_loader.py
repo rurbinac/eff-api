@@ -20,6 +20,7 @@ from app.services.save_mds import SaveMDS
 from app.services.sync_fantasy import SyncFantasyService
 from app.services.sync_real import SyncRealService
 from app.utils.dt import utc_now
+from app.utils.scalars import to_float, to_int
 from app.utils.tasks import Task
 
 
@@ -376,18 +377,6 @@ class F42Loader:
         )
         task.init_info("inserted", "updated")
 
-        def safe_int(value):
-            try:
-                return int(value) if value else None
-            except (ValueError, TypeError):
-                return None
-
-        def safe_float(value):
-            try:
-                return float(value) if value else None
-            except (ValueError, TypeError):
-                return None
-
         def safe_date(value):
             if not value or value.lower() == "unknown":
                 return None
@@ -445,9 +434,9 @@ class F42Loader:
                         position=player_data.get("position"),
                         realPosition=player_data.get("realPosition"),
                         birthDate=safe_date(player_data.get("birthDate")),
-                        weight=safe_float(player_data.get("weight")),
-                        height=safe_float(player_data.get("height")),
-                        jerseyNumber=safe_int(player_data.get("jerseyNumber")),
+                        weight=to_float(player_data.get("weight")),
+                        height=to_float(player_data.get("height")),
+                        jerseyNumber=to_int(player_data.get("jerseyNumber")),
                         draftPosition=draft_position,
                         draftPositionOrder=draft_position_order,
                         lastF42Date=comp_data["lastF42Date"],
@@ -475,9 +464,9 @@ class F42Loader:
                         position=player_data.get("position"),
                         realPosition=player_data.get("realPosition"),
                         birthDate=safe_date(player_data.get("birthDate")),
-                        weight=safe_float(player_data.get("weight")),
-                        height=safe_float(player_data.get("height")),
-                        jerseyNumber=safe_int(player_data.get("jerseyNumber")),
+                        weight=to_float(player_data.get("weight")),
+                        height=to_float(player_data.get("height")),
+                        jerseyNumber=to_int(player_data.get("jerseyNumber")),
                         draftPosition=draft_position,
                         draftPositionOrder=draft_position_order,
                         isProcessedMember=0,

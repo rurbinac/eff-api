@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.guards import require_league_member
 from app.models import Match, MatchTeam
+from app.utils.dt import to_iso
 
 
 class MatchesReadListAction:
@@ -48,13 +49,6 @@ class MatchesReadListAction:
 
             # Create a dict keyed by matchTeamNum
             teams_by_num = {mt.matchTeamNum: mt for mt in team_records}
-
-            def to_iso(dt):
-                if dt is None:
-                    return None
-                if isinstance(dt, str):
-                    return dt
-                return dt.isoformat()
 
             # Build values dict with match metadata and pivoted team data
             values = {

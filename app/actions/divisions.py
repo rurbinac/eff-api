@@ -8,7 +8,7 @@ from app.guards import (
     require_league_commissioner,
 )
 from app.services import QueryService
-from app.utils.dt import utc_now
+from app.utils.dt import to_iso, utc_now
 from app.utils.member_keys import Keys
 
 
@@ -52,10 +52,10 @@ class DivisionsUpdateAction:
         return {
             "divisionID": division.divisionID,
             "draftType": division.draftType,
-            "draftDate": division.draftDate.isoformat() if division.draftDate else None,
-            "draftCompleteDate": division.draftCompleteDate.isoformat() if division.draftCompleteDate else None,
+            "draftDate": to_iso(division.draftDate),
+            "draftCompleteDate": to_iso(division.draftCompleteDate),
             "updatedBy": division.updatedBy,
-            "updatedIn": division.updatedIn.isoformat() if division.updatedIn else None,
+            "updatedIn": to_iso(division.updatedIn),
         }
 
 class DivisionsTransactionsDetailAction:
