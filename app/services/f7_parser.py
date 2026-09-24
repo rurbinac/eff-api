@@ -206,7 +206,11 @@ class F7Parser:
                 match_data["realMatchDate"] = date_elem.text
                 # Extract offset from date if present (format: 20250519T200000+0100)
                 if match_data["realMatchDate"] and "+" in match_data["realMatchDate"]:
-                    match_data["realMatchDateOffset"] = match_data["realMatchDate"].split("+")[1]
+                    raw_offset = match_data["realMatchDate"].split("+")[1]
+                    try:
+                        match_data["realMatchDateOffset"] = int(raw_offset)
+                    except (ValueError, TypeError):
+                        pass
 
             result_elem = match_info.find("Result")
             if result_elem is not None:

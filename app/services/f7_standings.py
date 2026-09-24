@@ -56,15 +56,15 @@ def _process_goal(players_cache: dict, event: dict) -> None:
     """Process a goal event."""
     real_player_uid = event["realPlayerUID"]
 
-    if event.get("eventType") != "Own":
+    if event.get("eventType") == "Own":
+        players_cache[real_player_uid]["_ownGoals"] += 1
+        own_team_uid = players_cache[real_player_uid]["realTeamUID"]
+        _process_match_clean_sheet(players_cache, own_team_uid)
+    else:
         players_cache[real_player_uid]["matchGoals"] += 1
         opposite_team_uid = players_cache[real_player_uid].get("oppositeRealTeamUID")
         if opposite_team_uid:
             _process_match_clean_sheet(players_cache, opposite_team_uid)
-    else:
-        players_cache[real_player_uid]["_ownGoals"] += 1
-        own_team_uid = players_cache[real_player_uid]["realTeamUID"]
-        _process_match_clean_sheet(players_cache, own_team_uid)
 
 
 def _process_match_clean_sheet(players_cache: dict, real_team_uid: str) -> None:

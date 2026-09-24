@@ -1,6 +1,8 @@
 # ruff: noqa: BLE001  – broad except blocks are intentional diagnostic catches
 """F7 OPTA feed loader - loads single match detailed results."""
 
+from datetime import datetime
+
 from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 
@@ -585,27 +587,30 @@ class F7Loader:
         return players_cache
 
     @staticmethod
-    def _fmt_date(raw: str | None) -> str | None:
-        """Convert OPTA date string to MySQL DATETIME format.
+    def _fmt_date(raw: str | None) -> datetime | None:
+        """Convert OPTA date string to a naive datetime.
 
         Handles the compact format used in F7 XML:
-            20260913T163000+0100  ->  2026-09-13 16:30:00
-            20260913T163000Z      ->  2026-09-13 16:30:00
+            20260913T163000+0100  ->  datetime(2026, 9, 13, 16, 30, 0)
+            20260913T163000Z      ->  datetime(2026, 9, 13, 16, 30, 0)
 
-        The timezone offset is discarded; callers that need UTC conversion
-        should handle that separately.
+        The timezone offset is discarded; the value is stored as-is (local kick-off time).
         """
         if not raw or "T" not in raw:
-            return raw
+            return None
         try:
             date_part = raw.split("T")[0]
             time_part = raw.split("T")[1].split("+")[0].split("-")[0].split("Z")[0]
-            return (
-                f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
-                f" {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+            return datetime(
+                int(date_part[:4]),
+                int(date_part[4:6]),
+                int(date_part[6:8]),
+                int(time_part[:2]),
+                int(time_part[2:4]),
+                int(time_part[4:6]),
             )
         except Exception:
-            return raw
+            return None
 
     @staticmethod
     def _update_match_quick_mode(
