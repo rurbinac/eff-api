@@ -1,10 +1,14 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
 
-_UTC_LOWEST = datetime(1000, 1, 1, tzinfo=timezone.utc).replace(tzinfo=None)  # MySQL DATETIME min
-_UTC_LARGEST = datetime(9999, 12, 31, 23, 59, 59, tzinfo=timezone.utc).replace(tzinfo=None)  # MySQL DATETIME max
+_UTC_LOWEST = datetime(1000, 1, 1, tzinfo=timezone.utc).replace(
+    tzinfo=None
+)  # MySQL DATETIME min
+_UTC_LARGEST = datetime(9999, 12, 31, 23, 59, 59, tzinfo=timezone.utc).replace(
+    tzinfo=None
+)  # MySQL DATETIME max
 
 
 def utc_now(microsecond: bool = False) -> datetime:
@@ -46,16 +50,30 @@ def add_days(dt: datetime, days: int) -> datetime:
     return dt + timedelta(days=days)
 
 
-def to_iso(val: datetime | str | None, sep: str = " ", timespec: str = "seconds", default: str | datetime | None = None) -> str | None:
-    """Return an ISO 8601 string for a datetime, pass strings through, and map None to None."""
+def to_iso(
+    val: datetime | date | str | None,
+    sep: str = " ",
+    timespec: str = "seconds",
+    default: str | datetime | None = None,
+) -> str | None:
+    """Return an ISO 8601 string for a datetime/date, pass strings through, and map None to None."""
+
     def _default() -> str | None:
-        return to_iso(default, sep=sep, timespec=timespec) if isinstance(default, datetime) else default
+        return (
+            to_iso(default, sep=sep, timespec=timespec)
+            if isinstance(default, datetime)
+            else default
+        )
+
     if val is None:
         return _default()
     if isinstance(val, str):
         v = val.strip()
         return v if v != "" else _default()
-    return val.isoformat(sep=sep, timespec=timespec)
+    # datetime is a subclass of date — check datetime first so it gets sep/timespec
+    if isinstance(val, datetime):
+        return val.isoformat(sep=sep, timespec=timespec)
+    return val.isoformat()  # plain date: no sep/timespec
 
 
 def next_midnight(dt: datetime) -> datetime:
