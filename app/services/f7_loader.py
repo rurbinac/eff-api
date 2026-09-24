@@ -15,19 +15,18 @@ from app.utils.tasks import Task
 
 
 class F7Loader:
-    """Load F7 parsed data into the database (foundation layer for both quick and full modes)."""
+    """Load F7 parsed data into the database."""
 
     @staticmethod
     def load_file(
-        db: Session, feed: Feed, tmp_name: str | None = None, quick_mode: bool = True
+        db: Session, feed: Feed, tmp_name: str | None = None
     ) -> Feed:
-        """Parse and load an F7 file with mode-specific persistence.
+        """Parse and load an F7 file.
 
         Args:
             db: Database session
             feed: Feed log row
             tmp_name: Path to the temporary file containing the F7 data
-            quick_mode: True for quick mode, False for full mode
 
         Returns:
             Feed row stamped with processing results.
@@ -70,12 +69,8 @@ class F7Loader:
             task.close()
             return FLoader.log_feed_end(db, feed, result=task)
 
-        # Phase 3: Persist based on mode
-        quick_mode = False
-        if quick_mode:
-            s_task = F7Loader._save_quick_mode(db, foundation, processed_data)
-        else:
-            s_task = F7Loader._save_full_mode(db, foundation, processed_data)
+        # Phase 3: Persist
+        s_task = F7Loader._save(db, foundation, processed_data)
         task.add_subtask(s_task)
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
@@ -310,13 +305,11 @@ class F7Loader:
         return task
 
     @staticmethod
-    def _save_full_mode(db: Session, foundation: dict, processed_data: dict) -> Task:
-        """Save data in Full mode — runs quick mode then applies additional updates.
+    def _save(db: Session, foundation: dict, processed_data: dict) -> Task:
+        """Persist all F7 data: match, standings, teams, and players.
 
-        Full mode adds on top of quick mode:
-        - RealTeams: name + timestamps
-        - RealPlayers: names, jersey number, position + timestamps (update existing;
-          insert new players not yet created by F42)
+        Runs quick-mode sub-tasks first (match + standings), then updates
+        RealTeams and upserts RealPlayers (skipping player rows where nothing changed).
         """
         task = Task(
             name="Save Full Mode", status=Task.RUNNING, status_on_error=Task.ERROR

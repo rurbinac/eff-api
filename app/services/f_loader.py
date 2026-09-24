@@ -182,9 +182,7 @@ class FLoader:
                 case FeedTypes.F42:
                     return F42Loader.load_file(db, feed=feed, tmp_name=tmp_name)
                 case FeedTypes.F7:
-                    return F7Loader.load_file(
-                        db, feed=feed, tmp_name=tmp_name, quick_mode=True
-                    )
+                    return F7Loader.load_file(db, feed=feed, tmp_name=tmp_name)
                 case _:
                     task = Task(
                         name=f"Load {feed.feedType} file: {feed.feedName}",
