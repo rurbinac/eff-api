@@ -455,277 +455,257 @@ class QueryService:
             .order_by(League.leagueName)
         )
 
-        results = []
-        for row in query.all():
-            row_dict = {
-                "leagueID": row.leagueID,
-                "baseRealCompetitionID": row.baseRealCompetitionID,
-                "extraRealCompetitionID": row.extraRealCompetitionID,
-                "leagueName": row.leagueName,
-                "commissionerID": row.commissionerID,
-                "prevLeagueID": row.prevLeagueID,
-                "nextLeagueID": row.nextLeagueID,
-                "season": row.season,
-                "seasonNum": row.seasonNum,
-                "numDivisions": row.numDivisions,
-                "leagueType": row.leagueType,
-                "gameType": row.gameType,
-                "scoringSystem": row.scoringSystem,
-                "tradeDeadline": to_iso(row.tradeDeadline),
-                "publishLeague": row.publishLeague,
-                "seasonStatus": row.seasonStatus,
-                "totalTeams": row.totalTeams,
-                "availableTeams": row.availableTeams,
-                "totPromoted": row.totPromoted,
-                "maxFranchiseMembers": row.maxFranchiseMembers,
-                "maxWaiver": row.maxWaiver,
-                "minEPLTeam": row.minEPLTeam,
-                "minPlayer": row.minPlayer,
-                "minGoalkeeper": row.minGoalkeeper,
-                "minDefender": row.minDefender,
-                "minMidfielder": row.minMidfielder,
-                "minStriker": row.minStriker,
-                "maxEPLTeam": row.maxEPLTeam,
-                "maxPlayer": row.maxPlayer,
-                "maxGoalkeeper": row.maxGoalkeeper,
-                "maxDefender": row.maxDefender,
-                "maxMidfielder": row.maxMidfielder,
-                "maxStriker": row.maxStriker,
-                "lowestEPLTeam": row.lowestEPLTeam,
-                "lowestGoalkeeper": row.lowestGoalkeeper,
-                "lowestDefender": row.lowestDefender,
-                "lowestMidfielder": row.lowestMidfielder,
-                "lowestStriker": row.lowestStriker,
-                "createdBy": row.createdBy,
-                "createdIn": to_iso(row.createdIn),
-                "updatedBy": row.updatedBy,
-                "updatedIn": to_iso(row.updatedIn),
-                "divisionID": row.divisionID,
-                "matchDayMapKey": row.matchDayMapKey,
-                "divisionType": row.divisionType,
-                "draftType": row.draftType,
-                "draftDate": to_iso(row.draftDate),
-                "draftStatus": row.draftStatus,
-                "draftingStart": to_iso(row.draftingStart),
-                "draftingFinish": to_iso(row.draftingFinish),
-                "draftingRound": row.draftingRound,
-                "draftingTeamOrder": row.draftingTeamOrder,
-                "matchDay": row.matchDay,
-                "isCupMatchDay": row.isCupMatchDay,
-                "isDivisionCupMatchDay": row.isDivisionCupMatchDay,
-                "numTeams": row.numTeams,
-                "firstRealCompetitionMatchDay": row.firstRealCompetitionMatchDay,
-                "lastRealCompetitionMatchDay": row.lastRealCompetitionMatchDay,
-                "teamID": row.teamID,
-                "userID": row.userID,
-                "draftOrder": row.draftOrder,
-                "teamName": row.teamName,
-                "teamAvatar": row.teamAvatar,
-                "fantasyPoints": row.fantasyPoints,
-                "teamRanking": row.teamRanking,
-                "locked": row.locked,
-                "isCommissioner": row.isCommissioner,
-                "cntPlayer": row.cntPlayer,
-                "cntGoalkeeper": row.cntGoalkeeper,
-                "cntDefender": row.cntDefender,
-                "cntMidfielder": row.cntMidfielder,
-                "cntStriker": row.cntStriker,
-                "cntAdd": row.cntAdd,
-                "cntDrop": row.cntDrop,
-                "cntWaiver": row.cntWaiver,
-                "place": row.place,
-                "points": row.points,
-                "statusC1": row.statusC1,
-                "statusC2": row.statusC2,
-                "statusC3": row.statusC3,
-                "commissionerUserName": row.commissionerUserName,
-                "commissionerFirstName": row.commissionerFirstName,
-                "commissionerLastName": row.commissionerLastName,
-                "scriptsStatus": row.scriptsStatus,
-                "startMatchDay": to_iso(row.startMatchDay),
-                "finishMatchDay": to_iso(row.finishMatchDay),
-                "startWaivers": to_iso(row.startWaivers),
-                "finishWaivers": to_iso(row.finishWaivers),
-                "startWaiversSettle": to_iso(row.startWaiversSettle),
-                "finishWaiversSettle": to_iso(row.finishWaiversSettle),
-                "startOpenWaivers": to_iso(row.startOpenWaivers),
-                "finishOpenWaivers": to_iso(row.finishOpenWaivers),
-                "startOpenWaiversSettle": to_iso(row.startOpenWaiversSettle),
-                "finishOpenWaiversSettle": to_iso(row.finishOpenWaiversSettle),
-                "startPreMatch": to_iso(row.startPreMatch),
-                "finishPreMatch": to_iso(row.finishPreMatch),
-                "startMatch": to_iso(row.startMatch),
-                "finishMatch": to_iso(row.finishMatch),
-                "startPostMatch": to_iso(row.startPostMatch),
-                "finishPostMatch": to_iso(row.finishPostMatch),
+        return [
+            {
+                "leagueID": r.leagueID,
+                "baseRealCompetitionID": r.baseRealCompetitionID,
+                "extraRealCompetitionID": r.extraRealCompetitionID,
+                "leagueName": r.leagueName,
+                "commissionerID": r.commissionerID,
+                "prevLeagueID": r.prevLeagueID,
+                "nextLeagueID": r.nextLeagueID,
+                "season": r.season,
+                "seasonNum": r.seasonNum,
+                "numDivisions": r.numDivisions,
+                "leagueType": r.leagueType,
+                "gameType": r.gameType,
+                "scoringSystem": r.scoringSystem,
+                "tradeDeadline": to_iso(r.tradeDeadline),
+                "publishLeague": r.publishLeague,
+                "seasonStatus": r.seasonStatus,
+                "totalTeams": r.totalTeams,
+                "availableTeams": r.availableTeams,
+                "totPromoted": r.totPromoted,
+                "maxFranchiseMembers": r.maxFranchiseMembers,
+                "maxWaiver": r.maxWaiver,
+                "minEPLTeam": r.minEPLTeam,
+                "minPlayer": r.minPlayer,
+                "minGoalkeeper": r.minGoalkeeper,
+                "minDefender": r.minDefender,
+                "minMidfielder": r.minMidfielder,
+                "minStriker": r.minStriker,
+                "maxEPLTeam": r.maxEPLTeam,
+                "maxPlayer": r.maxPlayer,
+                "maxGoalkeeper": r.maxGoalkeeper,
+                "maxDefender": r.maxDefender,
+                "maxMidfielder": r.maxMidfielder,
+                "maxStriker": r.maxStriker,
+                "lowestEPLTeam": r.lowestEPLTeam,
+                "lowestGoalkeeper": r.lowestGoalkeeper,
+                "lowestDefender": r.lowestDefender,
+                "lowestMidfielder": r.lowestMidfielder,
+                "lowestStriker": r.lowestStriker,
+                "createdBy": r.createdBy,
+                "createdIn": to_iso(r.createdIn),
+                "updatedBy": r.updatedBy,
+                "updatedIn": to_iso(r.updatedIn),
+                "divisionID": r.divisionID,
+                "matchDayMapKey": r.matchDayMapKey,
+                "divisionType": r.divisionType,
+                "draftType": r.draftType,
+                "draftDate": to_iso(r.draftDate),
+                "draftStatus": r.draftStatus,
+                "draftingStart": to_iso(r.draftingStart),
+                "draftingFinish": to_iso(r.draftingFinish),
+                "draftingRound": r.draftingRound,
+                "draftingTeamOrder": r.draftingTeamOrder,
+                "matchDay": r.matchDay,
+                "isCupMatchDay": r.isCupMatchDay,
+                "isDivisionCupMatchDay": r.isDivisionCupMatchDay,
+                "numTeams": r.numTeams,
+                "firstRealCompetitionMatchDay": r.firstRealCompetitionMatchDay,
+                "lastRealCompetitionMatchDay": r.lastRealCompetitionMatchDay,
+                "teamID": r.teamID,
+                "userID": r.userID,
+                "draftOrder": r.draftOrder,
+                "teamName": r.teamName,
+                "teamAvatar": r.teamAvatar,
+                "fantasyPoints": r.fantasyPoints,
+                "teamRanking": r.teamRanking,
+                "locked": r.locked,
+                "isCommissioner": r.isCommissioner,
+                "cntPlayer": r.cntPlayer,
+                "cntGoalkeeper": r.cntGoalkeeper,
+                "cntDefender": r.cntDefender,
+                "cntMidfielder": r.cntMidfielder,
+                "cntStriker": r.cntStriker,
+                "cntAdd": r.cntAdd,
+                "cntDrop": r.cntDrop,
+                "cntWaiver": r.cntWaiver,
+                "place": r.place,
+                "points": r.points,
+                "statusC1": r.statusC1,
+                "statusC2": r.statusC2,
+                "statusC3": r.statusC3,
+                "commissionerUserName": r.commissionerUserName,
+                "commissionerFirstName": r.commissionerFirstName,
+                "commissionerLastName": r.commissionerLastName,
+                "scriptsStatus": r.scriptsStatus,
+                "startMatchDay": to_iso(r.startMatchDay),
+                "finishMatchDay": to_iso(r.finishMatchDay),
+                "startWaivers": to_iso(r.startWaivers),
+                "finishWaivers": to_iso(r.finishWaivers),
+                "startWaiversSettle": to_iso(r.startWaiversSettle),
+                "finishWaiversSettle": to_iso(r.finishWaiversSettle),
+                "startOpenWaivers": to_iso(r.startOpenWaivers),
+                "finishOpenWaivers": to_iso(r.finishOpenWaivers),
+                "startOpenWaiversSettle": to_iso(r.startOpenWaiversSettle),
+                "finishOpenWaiversSettle": to_iso(r.finishOpenWaiversSettle),
+                "startPreMatch": to_iso(r.startPreMatch),
+                "finishPreMatch": to_iso(r.finishPreMatch),
+                "startMatch": to_iso(r.startMatch),
+                "finishMatch": to_iso(r.finishMatch),
+                "startPostMatch": to_iso(r.startPostMatch),
+                "finishPostMatch": to_iso(r.finishPostMatch),
             }
-            results.append(row_dict)
-
-        return results
+            for r in query.all()
+        ]
 
     @staticmethod
     def get_divisions_by_league(db: Session, league_id: int) -> list[dict]:
         """Get all divisions for a league."""
-        query = (
-            db.query(Division)
-            .filter(Division.leagueID == league_id)
-            .order_by(Division.divisionID)
-        )
-
-        results = []
-        for division in query.all():
-            row_dict = {
-                "divisionID": division.divisionID,
-                "baseRealCompetitionID": division.baseRealCompetitionID,
-                "extraRealCompetitionID": division.extraRealCompetitionID,
-                "matchDayMapKey": division.matchDayMapKey,
-                "leagueID": division.leagueID,
-                "commissionerID": division.commissionerID,
-                "prevLeagueID": division.prevLeagueID,
-                "nextLeagueID": division.nextLeagueID,
-                "prevDivisionID": division.prevDivisionID,
-                "nextDivisionID": division.nextDivisionID,
-                "season": division.season,
-                "seasonNum": division.seasonNum,
-                "leagueMatches": division.leagueMatches,
-                "divisionMatches": division.divisionMatches,
-                "draftType": division.draftType,
-                "draftDate": to_iso(division.draftDate),
-                "draftCompleteDate": to_iso(division.draftCompleteDate),
-                "draftStatus": division.draftStatus,
-                "draftTime": division.draftTime,
-                "draftingStart": to_iso(division.draftingStart),
-                "draftingFinish": to_iso(division.draftingFinish),
-                "draftingLimit": to_iso(division.draftingLimit),
-                "draftingRound": division.draftingRound,
-                "draftingMemberOrder": division.draftingMemberOrder,
-                "draftingTeamOrder": division.draftingTeamOrder,
-                "draftingNextTeamOrder": division.draftingNextTeamOrder,
-                "draftingUsers": division.draftingUsers,
-                "draftingHooks": division.draftingHooks,
-                "franchiseMembers": division.franchiseMembers,
-                "firstRealCompetitionMatchDay": division.firstRealCompetitionMatchDay,
-                "lastRealCompetitionMatchDay": division.lastRealCompetitionMatchDay,
-                "waiverStatus": division.waiverStatus,
-                "matchDay": division.matchDay,
-                "isCupMatchDay": division.isCupMatchDay,
-                "isDivisionCupMatchDay": division.isDivisionCupMatchDay,
-                "totalTeams": division.totalTeams,
-                "numTeams": division.numTeams,
-                "availableTeams": division.availableTeams,
-                "divisionType": division.divisionType,
-                "createdBy": division.createdBy,
-                "createdIn": to_iso(division.createdIn),
-                "updatedBy": division.updatedBy,
-                "updatedIn": to_iso(division.updatedIn),
+        return [
+            {
+                "divisionID": d.divisionID,
+                "baseRealCompetitionID": d.baseRealCompetitionID,
+                "extraRealCompetitionID": d.extraRealCompetitionID,
+                "matchDayMapKey": d.matchDayMapKey,
+                "leagueID": d.leagueID,
+                "commissionerID": d.commissionerID,
+                "prevLeagueID": d.prevLeagueID,
+                "nextLeagueID": d.nextLeagueID,
+                "prevDivisionID": d.prevDivisionID,
+                "nextDivisionID": d.nextDivisionID,
+                "season": d.season,
+                "seasonNum": d.seasonNum,
+                "leagueMatches": d.leagueMatches,
+                "divisionMatches": d.divisionMatches,
+                "draftType": d.draftType,
+                "draftDate": to_iso(d.draftDate),
+                "draftCompleteDate": to_iso(d.draftCompleteDate),
+                "draftStatus": d.draftStatus,
+                "draftTime": d.draftTime,
+                "draftingStart": to_iso(d.draftingStart),
+                "draftingFinish": to_iso(d.draftingFinish),
+                "draftingLimit": to_iso(d.draftingLimit),
+                "draftingRound": d.draftingRound,
+                "draftingMemberOrder": d.draftingMemberOrder,
+                "draftingTeamOrder": d.draftingTeamOrder,
+                "draftingNextTeamOrder": d.draftingNextTeamOrder,
+                "draftingUsers": d.draftingUsers,
+                "draftingHooks": d.draftingHooks,
+                "franchiseMembers": d.franchiseMembers,
+                "firstRealCompetitionMatchDay": d.firstRealCompetitionMatchDay,
+                "lastRealCompetitionMatchDay": d.lastRealCompetitionMatchDay,
+                "waiverStatus": d.waiverStatus,
+                "matchDay": d.matchDay,
+                "isCupMatchDay": d.isCupMatchDay,
+                "isDivisionCupMatchDay": d.isDivisionCupMatchDay,
+                "totalTeams": d.totalTeams,
+                "numTeams": d.numTeams,
+                "availableTeams": d.availableTeams,
+                "divisionType": d.divisionType,
+                "createdBy": d.createdBy,
+                "createdIn": to_iso(d.createdIn),
+                "updatedBy": d.updatedBy,
+                "updatedIn": to_iso(d.updatedIn),
             }
-            results.append(row_dict)
-
-        return results
+            for d in db.query(Division).filter(Division.leagueID == league_id).order_by(Division.divisionID).all()
+        ]
 
     @staticmethod
     def get_teams_by_league(db: Session, league_id: int) -> list[dict]:
         """Get all teams for a league."""
-        query = db.query(Team).filter(Team.leagueID == league_id).order_by(Team.teamID)
-
-        results = []
-        for team in query.all():
-            row_dict = {
-                "teamID": team.teamID,
-                "baseRealCompetitionID": team.baseRealCompetitionID,
-                "extraRealCompetitionID": team.extraRealCompetitionID,
-                "matchDayMapKey": team.matchDayMapKey,
-                "leagueID": team.leagueID,
-                "divisionID": team.divisionID,
-                "commissionerID": team.commissionerID,
-                "userID": team.userID,
-                "prevLeagueID": team.prevLeagueID,
-                "nextLeagueID": team.nextLeagueID,
-                "prevDivisionID": team.prevDivisionID,
-                "nextDivisionID": team.nextDivisionID,
-                "prevTeamID": team.prevTeamID,
-                "nextTeamID": team.nextTeamID,
-                "season": team.season,
-                "seasonNum": team.seasonNum,
-                "leagueMatches": team.leagueMatches,
-                "divisionMatches": team.divisionMatches,
-                "draftOrder": team.draftOrder,
-                "randomOrder": team.randomOrder,
-                "waiversOrder": team.waiversOrder,
-                "teamName": team.teamName,
-                "teamAvatar": team.teamAvatar,
-                "teamMembers": team.teamMembers,
-                "draftMembers": team.draftMembers,
-                "membersRanking": team.membersRanking,
-                "membersWaivers": team.membersWaivers,
-                "membersWishList": team.membersWishList,
-                "franchiseWishList": team.franchiseWishList,
-                "fantasyPoints": team.fantasyPoints,
-                "teamRanking": team.teamRanking,
-                "locked": team.locked,
-                "isCommissioner": team.isCommissioner,
-                "cntEPLTeam": team.cntEPLTeam,
-                "cntPlayer": team.cntPlayer,
-                "cntGoalkeeper": team.cntGoalkeeper,
-                "cntDefender": team.cntDefender,
-                "cntMidfielder": team.cntMidfielder,
-                "cntStriker": team.cntStriker,
-                "cntAdd": team.cntAdd,
-                "cntDrop": team.cntDrop,
-                "cntWaiver": team.cntWaiver,
-                "notes": team.notes,
-                "place": team.place,
-                "points": team.points,
-                "statusC1": team.statusC1,
-                "statusC2": team.statusC2,
-                "statusC3": team.statusC3,
-                "seedingC1": team.seedingC1,
-                "seedingC2": team.seedingC2,
-                "seedingC3": team.seedingC3,
-                "createdBy": team.createdBy,
-                "createdIn": to_iso(team.createdIn),
-                "updatedBy": team.updatedBy,
-                "updatedIn": to_iso(team.updatedIn),
+        return [
+            {
+                "teamID": t.teamID,
+                "baseRealCompetitionID": t.baseRealCompetitionID,
+                "extraRealCompetitionID": t.extraRealCompetitionID,
+                "matchDayMapKey": t.matchDayMapKey,
+                "leagueID": t.leagueID,
+                "divisionID": t.divisionID,
+                "commissionerID": t.commissionerID,
+                "userID": t.userID,
+                "prevLeagueID": t.prevLeagueID,
+                "nextLeagueID": t.nextLeagueID,
+                "prevDivisionID": t.prevDivisionID,
+                "nextDivisionID": t.nextDivisionID,
+                "prevTeamID": t.prevTeamID,
+                "nextTeamID": t.nextTeamID,
+                "season": t.season,
+                "seasonNum": t.seasonNum,
+                "leagueMatches": t.leagueMatches,
+                "divisionMatches": t.divisionMatches,
+                "draftOrder": t.draftOrder,
+                "randomOrder": t.randomOrder,
+                "waiversOrder": t.waiversOrder,
+                "teamName": t.teamName,
+                "teamAvatar": t.teamAvatar,
+                "teamMembers": t.teamMembers,
+                "draftMembers": t.draftMembers,
+                "membersRanking": t.membersRanking,
+                "membersWaivers": t.membersWaivers,
+                "membersWishList": t.membersWishList,
+                "franchiseWishList": t.franchiseWishList,
+                "fantasyPoints": t.fantasyPoints,
+                "teamRanking": t.teamRanking,
+                "locked": t.locked,
+                "isCommissioner": t.isCommissioner,
+                "cntEPLTeam": t.cntEPLTeam,
+                "cntPlayer": t.cntPlayer,
+                "cntGoalkeeper": t.cntGoalkeeper,
+                "cntDefender": t.cntDefender,
+                "cntMidfielder": t.cntMidfielder,
+                "cntStriker": t.cntStriker,
+                "cntAdd": t.cntAdd,
+                "cntDrop": t.cntDrop,
+                "cntWaiver": t.cntWaiver,
+                "notes": t.notes,
+                "place": t.place,
+                "points": t.points,
+                "statusC1": t.statusC1,
+                "statusC2": t.statusC2,
+                "statusC3": t.statusC3,
+                "seedingC1": t.seedingC1,
+                "seedingC2": t.seedingC2,
+                "seedingC3": t.seedingC3,
+                "createdBy": t.createdBy,
+                "createdIn": to_iso(t.createdIn),
+                "updatedBy": t.updatedBy,
+                "updatedIn": to_iso(t.updatedIn),
             }
-            results.append(row_dict)
-
-        return results
+            for t in db.query(Team).filter(Team.leagueID == league_id).order_by(Team.teamID).all()
+        ]
 
     @staticmethod
     def get_division_notes(db: Session, division_id: int) -> list[dict]:
         """Get all notes for a division."""
-        try:
-            query = (
-                db.query(DivisionNotes)
-                .filter(DivisionNotes.divisionID == division_id)
-                .order_by(DivisionNotes.divisionNoteID)
-            )
+        query = (
+            db.query(DivisionNotes)
+            .filter(DivisionNotes.divisionID == division_id)
+            .order_by(DivisionNotes.divisionNoteID)
+        )
 
-            results = []
-            for note in query.all():
-                row_dict = {
-                    "divisionNoteID": note.divisionNoteID,
-                    "leagueID": note.leagueID,
-                    "divisionID": note.divisionID,
-                    "teamID": note.teamID,
-                    "userID": note.userID,
-                    "commissionerID": note.commissionerID,
-                    "parentDivisionNoteID": note.parentDivisionNoteID,
-                    "userName": note.userName,
-                    "title": note.title,
-                    "notes": note.notes,
-                    "divisionNoteType": note.divisionNoteType,
-                    "createdBy": note.createdBy,
-                    "createdIn": to_iso(note.createdIn),
-                    "updatedBy": note.updatedBy,
-                    "updatedIn": to_iso(note.updatedIn),
-                }
-                results.append(row_dict)
-
-            return results
-        except Exception:
-            # Table may not exist yet - return empty list
-            return []
+        return [
+            {
+                "divisionNoteID": n.divisionNoteID,
+                "leagueID": n.leagueID,
+                "divisionID": n.divisionID,
+                "teamID": n.teamID,
+                "userID": n.userID,
+                "commissionerID": n.commissionerID,
+                "parentDivisionNoteID": n.parentDivisionNoteID,
+                "userName": n.userName,
+                "title": n.title,
+                "notes": n.notes,
+                "divisionNoteType": n.divisionNoteType,
+                "createdBy": n.createdBy,
+                "createdIn": to_iso(n.createdIn),
+                "updatedBy": n.updatedBy,
+                "updatedIn": to_iso(n.updatedIn),
+            }
+            for n in query.all()
+        ]
 
     @staticmethod
     def validate_lookup(db: Session, lookup_num: int, lookup_key: str | int) -> bool:
@@ -740,12 +720,11 @@ class QueryService:
         Returns:
             True if the lookup exists, False otherwise
         """
-        result = (
+        return (
             db.query(Lookup)
             .filter(Lookup.lookupNum == lookup_num, Lookup.lookupKey == str(lookup_key))
             .first()
-        )
-        return result is not None
+        ) is not None
 
     @staticmethod
     def get_lookups_by_num(db: Session, lookup_num: int) -> list[dict]:
@@ -759,11 +738,10 @@ class QueryService:
         Returns:
             List of dicts with lookupKey and lookupText, ordered by position
         """
-        results = (
+        query = (
             db.query(Lookup)
             .filter(Lookup.lookupNum == lookup_num)
             .order_by(Lookup.position)
-            .all()
         )
 
         return [
@@ -772,7 +750,7 @@ class QueryService:
                 "lookupText": lookup.lookupText,
                 "position": lookup.position,
             }
-            for lookup in results
+            for lookup in query.all()
         ]
 
     @staticmethod

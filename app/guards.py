@@ -24,6 +24,7 @@ from app.exceptions import (
     UnauthorizedException,
 )
 from app.models import Division, League, Team
+from app.utils.member_keys import Keys
 
 # ---------------------------------------------------------------------------
 # Bool checks
@@ -378,6 +379,25 @@ def require_in_list(
     if value in values:
         return value
     raise RequiredValueException(value_name, context)
+
+
+def require_key(value, context: str | None = None) -> str | None:
+    if value is None:
+        return None
+    val = str(value).strip()
+    if val == "":
+        return None
+    if Keys.is_valid(val):
+        return val
+    else:
+        raise RequiredValueException("RealTeamMemberKey", context)
+
+
+def require_keys(value, context: str | None = None) -> Keys:
+    try:
+        return Keys(value)
+    except (ValueError, TypeError):
+        raise RequiredValueException("RealTeamMemberKey", context)
 
 
 def require_team(db: Session, team_id: int | None) -> Team:

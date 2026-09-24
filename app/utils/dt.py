@@ -1,5 +1,8 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, tzinfo
+from zoneinfo import ZoneInfo
 
+from dateutil import parser as _dateutil_parser
+from dateutil.parser import ParserError
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
 
@@ -35,20 +38,64 @@ def utc_largest() -> datetime:
     return _UTC_LARGEST
 
 
-def add_minutes(dt: datetime, minutes: int) -> datetime:
-    """Return dt shifted by the given number of minutes (negative to go back)."""
-    return dt + timedelta(minutes=minutes)
 
 
-def add_hours(dt: datetime, hours: int) -> datetime:
-    """Return dt shifted by the given number of hours (negative to go back)."""
-    return dt + timedelta(hours=hours)
+def to_tz(dt: datetime, tz: tzinfo | str | None = timezone.utc) -> datetime:
+    """Convert dt to the given timezone.
+
+    - Aware datetimes: converted to tz (instant preserved, e.g. values from UTCDateTime columns).
+    - Naive datetimes: tz is *attached* without shifting the time value.
+    - tz=None: tzinfo is stripped; the instant is NOT converted first.
+    - tz accepts a tzinfo object or an IANA name string(e.g. 'Europe/London').
+    """
+    if isinstance(tz, str):
+        tz = ZoneInfo(tz) if tz.strip() else None
+
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        return dt.replace(tzinfo=tz)
+    if tz is None:
+        return dt.replace(tzinfo=None)
+    return dt.astimezone(tz)
 
 
-def add_days(dt: datetime, days: int) -> datetime:
-    """Return dt shifted by the given number of days (negative to go back)."""
-    return dt + timedelta(days=days)
+def to_datetime(
+    val, raise_on_error: bool = False, tz: tzinfo | str | None = None
+) -> datetime | None:
+    """Parse a string into a datetime; return None if unparseable (or raise if raise_on_error)."""
+    try:
+        if val is None or not isinstance(val, str) or val.strip() == "":
+            return None
+        dt = _dateutil_parser.parse(val)
+        return dt if tz is None else to_tz(dt, tz=tz)
+    except (ParserError, OverflowError, ValueError, TypeError):
+        if raise_on_error:
+            raise
+    return None
 
+
+def add_to_datetime(
+    dt: datetime | None,
+    tz: tzinfo | str | None = None,
+    weeks: int = 0,
+    days: int = 0,
+    hours: int = 0,
+    minutes: int = 0,
+    seconds: int = 0,
+    milliseconds: int = 0,
+    microseconds: int = 0,
+) -> datetime | None:
+    if dt is None:
+        return None
+    base = to_tz(dt, tz) if tz is not None else dt
+    return base + timedelta(
+        weeks=weeks,
+        days=days,
+        hours=hours,
+        minutes=minutes,
+        seconds=seconds,
+        milliseconds=milliseconds,
+        microseconds=microseconds,
+    )
 
 def to_iso(
     val: datetime | date | str | None,

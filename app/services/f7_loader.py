@@ -1,17 +1,15 @@
 # ruff: noqa: BLE001  – broad except blocks are intentional diagnostic catches
 """F7 OPTA feed loader - loads single match detailed results."""
 
-from datetime import datetime
-
 from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 
-from app.constants import RealMatchPeriod
-from app.models import Feed, RealMatch, RealMatchTeam, RealStanding
+from app.constants import DraftPositionConstants, RealMatchPeriod
+from app.models import Feed, RealMatch, RealMatchTeam, RealPlayer, RealStanding, RealTeam
 from app.services.f7_events import load_booking, load_goal, load_substitution
 from app.services.f7_parser import F7Parser
 from app.services.f7_standings import calc_player_points, process_events
-from app.utils.dt import utc_now
+from app.utils.dt import to_datetime, utc_now
 from app.utils.scalars import to_int
 from app.utils.tasks import Task
 
@@ -73,7 +71,7 @@ class F7Loader:
             return FLoader.log_feed_end(db, feed, result=task)
 
         # Phase 3: Persist based on mode
-        if quick_mode:
+        if quick_mode and False:
             s_task = F7Loader._save_quick_mode(db, foundation, processed_data)
         else:
             s_task = F7Loader._save_full_mode(db, foundation, processed_data)
@@ -247,7 +245,9 @@ class F7Loader:
         match_data = processed_data["match_data"]
 
         try:
-            F7Loader._update_match_quick_mode(db, match_ids, match_data)
+            F7Loader._update_match_quick_mode(
+                db, match_ids, match_data, foundation["teams_cache"]
+            )
             task.inc("matches_updated")
         except Exception as e:
             task.add_error(f"RealMatches update failed [{type(e).__name__}]: {e!s}")
@@ -309,14 +309,186 @@ class F7Loader:
         return task
 
     @staticmethod
-    def _save_full_mode(db: Session, _foundation: dict, _processed_data: dict) -> Task:
-        """Save data in Full mode (complete updates). Not yet implemented."""
+    def _save_full_mode(db: Session, foundation: dict, processed_data: dict) -> Task:
+        """Save data in Full mode — runs quick mode then applies additional updates.
+
+        Full mode adds on top of quick mode:
+        - RealTeams: name + timestamps
+        - RealPlayers: names, jersey number, position + timestamps (update existing;
+          insert new players not yet created by F42)
+        """
         task = Task(
             name="Save Full Mode", status=Task.RUNNING, status_on_error=Task.ERROR
         )
-        task.add_error("Full mode implementation pending")
-        task.close()
+        task.init_info("teams_updated", "players_updated", "players_inserted")
+
+        # Run quick mode first
+        q_task = F7Loader._save_quick_mode(db, foundation, processed_data)
+        task.add_subtask(q_task)
+
+        # Update RealTeams
+        try:
+            teams_result = F7Loader._update_teams_full_mode(
+                db,
+                foundation["teams_cache"],
+                foundation["parsed_data"]["teams"],
+            )
+            task.assign("teams_updated", teams_result.get("teams_updated", 0))
+        except Exception as e:
+            task.add_error(f"RealTeams update failed [{type(e).__name__}]: {e!s}")
+
+        # Update/insert RealPlayers
+        try:
+            players_result = F7Loader._update_players_full_mode(
+                db,
+                foundation["competition"],
+                foundation["teams_cache"],
+                foundation["players_cache"],
+                foundation["parsed_data"].get("players", {}),
+                foundation["parsed_data"]["match_data"].get("player_lineup", {}),
+            )
+            task.assign("players_updated", players_result.get("players_updated", 0))
+            task.assign("players_inserted", players_result.get("players_inserted", 0))
+        except Exception as e:
+            task.add_error(f"RealPlayers update failed [{type(e).__name__}]: {e!s}")
+
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
+
+    @staticmethod
+    def _update_teams_full_mode(
+        db: Session, teams_cache: dict, teams_data: dict
+    ) -> dict:
+        """Update RealTeams name and timestamps from F7 data."""
+        now = utc_now()
+        update_count = 0
+
+        for uid, team_info in teams_cache.items():
+            real_team_id = team_info.get("realTeamID")
+            if not real_team_id:
+                continue
+
+            # Prefer F7-parsed name; fall back to what was already in the DB cache
+            f7_name = teams_data.get(uid, {}).get("realTeamName") or team_info.get("realTeamName")
+
+            db.execute(
+                update(RealTeam)
+                .where(RealTeam.realTeamID == real_team_id)
+                .values(
+                    realTeamName=f7_name,
+                    lastF7Date=now,
+                    lastFDate=now,
+                    updatedIn=now,
+                )
+            )
+            update_count += 1
+
+        return {"teams_updated": update_count}
+
+    @staticmethod
+    def _update_players_full_mode(
+        db: Session,
+        competition: dict,
+        teams_cache: dict,
+        players_cache: dict,
+        players_data: dict,
+        player_lineup: dict,
+    ) -> dict:
+        """Update existing RealPlayers and insert new ones from F7 data.
+
+        UPDATE: names, position, jersey number, timestamps — draftPosition is
+        NOT changed (F42 is authoritative; it was set at insertion time).
+        INSERT: all required fields plus draftPosition calculated from position
+        at this moment (frozen for the season).
+        """
+        now = utc_now()
+        update_count = 0
+        insert_count = 0
+
+        for player_uid, player in players_cache.items():
+            player_team_uid = player.get("realTeamUID")
+            if not player_team_uid or player_team_uid not in teams_cache:
+                continue
+
+            team_info = teams_cache[player_team_uid]
+
+            # Prefer XML-parsed data; fall back to what's already in the cache
+            p_data = players_data.get(player_uid, {})
+            first_name = p_data.get("firstName") or player.get("firstName")
+            last_name = p_data.get("lastName") or player.get("lastName")
+            known_name = p_data.get("knownName") or player.get("knownName")
+            position = p_data.get("position") or player.get("position")
+            # Lineup Position is the match-specific role (realPosition)
+            real_position = player_lineup.get(player_uid, {}).get("position")
+            jersey_number = to_int(player.get("shirtNumber"))
+
+            if player.get("realPlayerID"):
+                # Existing player — update names/position/jersey/team; leave draftPosition alone
+                db.execute(
+                    update(RealPlayer)
+                    .where(RealPlayer.realPlayerID == player["realPlayerID"])
+                    .values(
+                        realTeamID=team_info["realTeamID"],
+                        realTeamUID=player_team_uid,
+                        baseRealTeamID=team_info.get("baseRealTeamID"),
+                        baseRealTeamUID=team_info.get("baseRealTeamUID"),
+                        baseRealTeamName=team_info.get("baseRealTeamName"),
+                        baseRealTeamShortName=team_info.get("baseRealTeamShortName"),
+                        firstName=first_name,
+                        lastName=last_name,
+                        knownName=known_name,
+                        position=position,
+                        realPosition=real_position,
+                        jerseyNumber=jersey_number,
+                        lastF7Date=now,
+                        lastFDate=now,
+                        updatedIn=now,
+                    )
+                )
+                update_count += 1
+            else:
+                # New player — calculate draftPosition once at insertion time
+                draft_position_order = DraftPositionConstants.get_order(
+                    position, real_position
+                )
+                draft_position = (
+                    DraftPositionConstants.get_position(draft_position_order)
+                    if draft_position_order
+                    else None
+                )
+                db.add(
+                    RealPlayer(
+                        realCompetitionID=competition["realCompetitionID"],
+                        realCompetitionUID=competition["realCompetitionUID"],
+                        realCompetitionSYMID=competition["realCompetitionSYMID"],
+                        realCompetitionSeasonId=competition["realCompetitionSeasonId"],
+                        baseRealCompetitionID=competition.get("baseRealCompetitionID"),
+                        extraRealCompetitionID=competition.get("extraRealCompetitionID"),
+                        realTeamID=team_info["realTeamID"],
+                        realTeamUID=player_team_uid,
+                        baseRealTeamID=team_info.get("baseRealTeamID"),
+                        baseRealTeamUID=team_info.get("baseRealTeamUID"),
+                        baseRealTeamName=team_info.get("baseRealTeamName"),
+                        baseRealTeamShortName=team_info.get("baseRealTeamShortName"),
+                        realPlayerUID=player_uid,
+                        firstName=first_name,
+                        lastName=last_name,
+                        knownName=known_name,
+                        position=position,
+                        realPosition=real_position,
+                        jerseyNumber=jersey_number,
+                        draftPosition=draft_position,
+                        draftPositionOrder=draft_position_order,
+                        isProcessedMember=0,
+                        lastF7Date=now,
+                        lastFDate=now,
+                        createdIn=now,
+                        updatedIn=now,
+                    )
+                )
+                insert_count += 1
+
+        return {"players_updated": update_count, "players_inserted": insert_count}
 
     @staticmethod
     def _get_real_competition(db: Session, competition: dict) -> dict:
@@ -380,7 +552,11 @@ class F7Loader:
                            `realTeamUID`,
                            `realTeamMemberKey`,
                            `realTeamName`,
-                           `realTeamShortName`
+                           `realTeamShortName`,
+                           `baseRealTeamID`,
+                           `baseRealTeamUID`,
+                           `baseRealTeamName`,
+                           `baseRealTeamShortName`
                     FROM `RealTeams`
                     WHERE `realCompetitionID` = :comp_id
                       AND (`realTeamUID` = :home_uid
@@ -403,6 +579,10 @@ class F7Loader:
                 "realTeamMemberKey": row["realTeamMemberKey"],
                 "realTeamName": row["realTeamName"],
                 "realTeamShortName": row["realTeamShortName"],
+                "baseRealTeamID": row["baseRealTeamID"],
+                "baseRealTeamUID": row["baseRealTeamUID"],
+                "baseRealTeamName": row["baseRealTeamName"],
+                "baseRealTeamShortName": row["baseRealTeamShortName"],
             }
 
         # Add score and side from match data
@@ -587,34 +767,8 @@ class F7Loader:
         return players_cache
 
     @staticmethod
-    def _fmt_date(raw: str | None) -> datetime | None:
-        """Convert OPTA date string to a naive datetime.
-
-        Handles the compact format used in F7 XML:
-            20260913T163000+0100  ->  datetime(2026, 9, 13, 16, 30, 0)
-            20260913T163000Z      ->  datetime(2026, 9, 13, 16, 30, 0)
-
-        The timezone offset is discarded; the value is stored as-is (local kick-off time).
-        """
-        if not raw or "T" not in raw:
-            return None
-        try:
-            date_part = raw.split("T")[0]
-            time_part = raw.split("T")[1].split("+")[0].split("-")[0].split("Z")[0]
-            return datetime(
-                int(date_part[:4]),
-                int(date_part[4:6]),
-                int(date_part[6:8]),
-                int(time_part[:2]),
-                int(time_part[2:4]),
-                int(time_part[4:6]),
-            )
-        except Exception:
-            return None
-
-    @staticmethod
     def _update_match_quick_mode(
-        db: Session, match_ids: dict, match_data: dict
+        db: Session, match_ids: dict, match_data: dict, teams_cache: dict
     ) -> dict:
         """Update RealMatches with F7 data in Quick mode.
 
@@ -622,6 +776,7 @@ class F7Loader:
             db: Database session
             match_ids: Dict with realMatchID from foundation layer
             match_data: Parsed match data from F7
+            teams_cache: Teams cache with team info and scores
 
         Returns:
             Dict with update status and count
@@ -633,8 +788,7 @@ class F7Loader:
         real_match_status = RealMatchPeriod.to_match_status(period)
         real_match_ended = RealMatchPeriod.to_match_ended(period)
 
-        # Normalize date: 20260913T163000+0100 -> 2026-09-13 16:30:00
-        match_date = F7Loader._fmt_date(match_data.get("realMatchDate"))
+        match_date = to_datetime(match_data.get("realMatchDate"))
 
         # Extract attendance (convert to int or None)
         attendance = None
@@ -645,6 +799,39 @@ class F7Loader:
             except (ValueError, TypeError):
                 pass
 
+        # Identify home/away teams
+        home_uid = next(
+            (uid for uid, d in teams_cache.items() if d.get("side") == "Home"), None
+        )
+        away_uid = next(
+            (uid for uid, d in teams_cache.items() if d.get("side") == "Away"), None
+        )
+        home_team = teams_cache.get(home_uid) if home_uid else None
+        away_team = teams_cache.get(away_uid) if away_uid else None
+
+        # Parse scores
+        home_score = away_score = None
+        try:
+            home_score = int(match_data.get("home_score")) if match_data.get("home_score") else None
+            away_score = int(match_data.get("away_score")) if match_data.get("away_score") else None
+        except (ValueError, TypeError):
+            pass
+
+        # Calculate per-team result/points/clean-sheet
+        first_result = second_result = first_points = second_points = None
+        first_clean = second_clean = None
+        if home_score is not None and away_score is not None:
+            if home_score > away_score:
+                first_result, first_points = 1, 3
+                second_result, second_points = -1, 0
+            elif home_score < away_score:
+                first_result, first_points = -1, 0
+                second_result, second_points = 1, 3
+            else:
+                first_result = second_result = 0
+                first_points = second_points = 1
+            first_clean = 1 if away_score == 0 else 0
+            second_clean = 1 if home_score == 0 else 0
 
         # Update RealMatches
         db.execute(
@@ -660,13 +847,33 @@ class F7Loader:
                 realMatchDateOffset=match_data.get("realMatchDateOffset"),
                 realMatchResultType=match_data.get("realMatchResultType"),
                 realMatchTime=to_int(match_data.get("realMatchTime")),
-                realMatchFirstHalfTime=to_int(
-                    match_data.get("realMatchFirstHalfTime")
-                ),
-                realMatchSecondHalfTime=to_int(
-                    match_data.get("realMatchSecondHalfTime")
-                ),
+                realMatchFirstHalfTime=to_int(match_data.get("realMatchFirstHalfTime")),
+                realMatchSecondHalfTime=to_int(match_data.get("realMatchSecondHalfTime")),
                 realMatchEnded=real_match_ended,
+                firstRealTeamMemberKey=home_team.get("realTeamMemberKey") if home_team else None,
+                firstRealTeamID=home_team.get("realTeamID") if home_team else None,
+                firstRealTeamUID=home_uid,
+                firstRealTeamName=home_team.get("realTeamName") if home_team else None,
+                firstRealTeamShortName=home_team.get("realTeamShortName") if home_team else None,
+                firstRealTeamScore=home_score,
+                firstRealTeamRealScore=home_score,
+                firstRealTeamSide="Home",
+                firstRealTeamCleanSheet=first_clean,
+                firstRealTeamResult=first_result,
+                firstRealTeamPoints=first_points,
+                firstRealTeamNumber=1,
+                secondRealTeamMemberKey=away_team.get("realTeamMemberKey") if away_team else None,
+                secondRealTeamID=away_team.get("realTeamID") if away_team else None,
+                secondRealTeamUID=away_uid,
+                secondRealTeamName=away_team.get("realTeamName") if away_team else None,
+                secondRealTeamShortName=away_team.get("realTeamShortName") if away_team else None,
+                secondRealTeamScore=away_score,
+                secondRealTeamRealScore=away_score,
+                secondRealTeamSide="Away",
+                secondRealTeamCleanSheet=second_clean,
+                secondRealTeamResult=second_result,
+                secondRealTeamPoints=second_points,
+                secondRealTeamNumber=2,
                 lastF7Date=now,
                 lastFDate=now,
                 updatedIn=now,
@@ -735,6 +942,12 @@ class F7Loader:
             else:
                 points, result = 1, 0  # Draw
 
+            clean_sheet = (
+                (1 if other_score == 0 else 0)
+                if my_score is not None and other_score is not None
+                else None
+            )
+
             # Update RealMatchTeams
             db.execute(
                 update(RealMatchTeam)
@@ -742,6 +955,7 @@ class F7Loader:
                 .values(
                     realTeamScore=my_score,
                     realTeamRealScore=my_score,
+                    realTeamCleanSheet=clean_sheet,
                     realTeamResult=result,
                     realTeamPoints=points,
                     updatedIn=now,
@@ -793,8 +1007,7 @@ class F7Loader:
         except (ValueError, TypeError):
             pass
 
-        # Get match date and status
-        match_date = F7Loader._fmt_date(match_data.get("realMatchDate"))
+        match_date = to_datetime(match_data.get("realMatchDate"))
         match_time = match_data.get("realMatchTime")
         match_status = RealMatchPeriod.to_match_status(
             match_data.get("realMatchPeriod")
@@ -902,8 +1115,7 @@ class F7Loader:
         """
         now = utc_now()
 
-        # Get match data
-        match_date = F7Loader._fmt_date(match_data.get("realMatchDate"))
+        match_date = to_datetime(match_data.get("realMatchDate"))
         match_time = match_data.get("realMatchTime")
         match_status = RealMatchPeriod.to_match_status(
             match_data.get("realMatchPeriod")

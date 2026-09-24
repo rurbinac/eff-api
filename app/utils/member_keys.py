@@ -6,6 +6,7 @@ from functools import cache
 from typing import Any, Final, TypeAlias, overload
 
 from app.constants import DraftPositionConstants
+from app.utils.scalars import to_int
 
 # Position constants
 GOALKEEPER = DraftPositionConstants.GOALKEEPER
@@ -85,12 +86,9 @@ class Keys(UserList):
         """
         k = key.strip()
         if len(k) > 1 and k.startswith((Keys.PLAYER, Keys.TEAM)):
-            try:
-                num = int(k[1:])
-                if num > 0:
-                    return (k[0:1], num)
-            except ValueError:
-                pass
+            num = to_int(k[1:])
+            if num is not None and num > 0:
+                return (k[0:1], num)
         return (None, None)
 
     @staticmethod
@@ -167,10 +165,14 @@ class Keys(UserList):
         keys = keys.strip()
         if len(keys) == 0:
             return []
-        elif not keys.endswith(Keys.SUFFIX):
-            return None
+        elif keys.endswith(Keys.SUFFIX):
+            # We have a packed list of keys
+            tmp_list = keys[:-1].split(Keys.SUFFIX)
+        else:
+            # Try a CSV
+            tmp_list = [k.strip() for k in keys.split(",")]
         result = []
-        for k in keys[:-1].split(Keys.SUFFIX):
+        for k in tmp_list:
             if not Keys.is_valid(k):
                 return None
             result.append(k)

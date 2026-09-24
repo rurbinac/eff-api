@@ -9,9 +9,7 @@ from app.constants import MatchDayStatusConstants, RealMatchPeriod
 from app.models import MatchDaysStatus
 from app.services.query import QueryService
 from app.utils.dt import (
-    add_days,
-    add_hours,
-    add_minutes,
+    add_to_datetime,
     next_midnight,
     utc_largest,
     utc_lowest,
@@ -382,7 +380,7 @@ class SaveMDS:
         Returns:
             datetime: _description_
         """
-        return add_minutes(self._mds[i]["minRealMatchDate"], -self.MINUTES_BEFORE_MATCH)
+        return add_to_datetime(self._mds[i]["minRealMatchDate"], minutes=-self.MINUTES_BEFORE_MATCH)
 
     def _finish_match_day(self, i: int) -> datetime:
         """_summary_
@@ -406,10 +404,7 @@ class SaveMDS:
         """
         if i == 0:
             return utc_lowest()
-        return add_hours(
-            add_days(self._mds[i - 1]["finishMatchDay"], self.BASE_MD_DAYS),
-            self.BASE_MD_HOURS,
-        )
+        return add_to_datetime(self._mds[i - 1]["finishMatchDay"], days=self.BASE_MD_DAYS, hours=self.BASE_MD_HOURS)
 
     def _finish_waivers_settle(self, i: int) -> datetime:
         """_summary_
@@ -422,7 +417,7 @@ class SaveMDS:
         """
         # startWaiversSettle = finishWaivers (set after add_dates loop body),
         # so compute directly from finishWaivers to avoid the ordering dependency.
-        return add_hours(self._mds[i]["finishWaivers"], self.PROCESS_HOURS)
+        return add_to_datetime(self._mds[i]["finishWaivers"], hours=self.PROCESS_HOURS)
 
     def _finish_waivers(self, i: int) -> datetime:
         """_summary_
@@ -433,7 +428,7 @@ class SaveMDS:
         Returns:
             datetime: _description_
         """
-        return add_days(self._mds[i]["startWaivers"], self.WAIVERS_DAYS).replace(
+        return add_to_datetime(self._mds[i]["startWaivers"], days=self.WAIVERS_DAYS).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
 
@@ -464,7 +459,7 @@ class SaveMDS:
         Returns:
             datetime: _description_
         """
-        return add_hours(self._mds[i]["finishMatch"], self.PROCESS_HOURS)
+        return add_to_datetime(self._mds[i]["finishMatch"], hours=self.PROCESS_HOURS)
 
     def _save_mds(self) -> None:
         """Insert or update MatchDaysStatus records.

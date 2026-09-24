@@ -1,7 +1,7 @@
 """JSON:API (https://jsonapi.org) serialization utilities for REST API responses."""
 
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from app.utils.dt import utc_now
 
@@ -11,12 +11,12 @@ class JsonApiSerializer:
 
     @staticmethod
     def serialize_single(
-        data: Dict[str, Any],
+        data: dict[str, Any],
         resource_type: str,
         resource_id: Optional[str | int] = None,
-        links: Optional[Dict[str, str]] = None,
-        meta: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        links: Optional[dict[str, str]] = None,
+        meta: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """Serialize a single resource to JSON:API format.
 
         Args:
@@ -50,12 +50,12 @@ class JsonApiSerializer:
 
     @staticmethod
     def serialize_collection(
-        items: List[Dict[str, Any]],
+        items: list[dict[str, Any]],
         resource_type: str,
         resource_id_key: str = 'id',
-        links: Optional[Dict[str, str]] = None,
-        meta: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        links: Optional[dict[str, str]] = None,
+        meta: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """Serialize a collection of resources to JSON:API format.
 
         Args:
@@ -94,7 +94,7 @@ class JsonApiSerializer:
         title: str,
         detail: Optional[str] = None,
         code: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Serialize an error response to JSON:API format.
 
         Args:
@@ -120,7 +120,7 @@ class JsonApiSerializer:
         return {'errors': [error]}
 
     @staticmethod
-    def add_timestamp(response: Dict[str, Any]) -> Dict[str, Any]:
+    def add_timestamp(response: dict[str, Any]) -> dict[str, Any]:
         """Add timestamp to response meta section.
 
         Args:
@@ -137,12 +137,12 @@ class JsonApiSerializer:
 
     @staticmethod
     def add_pagination(
-        response: Dict[str, Any],
+        response: dict[str, Any],
         total: int,
         page: int,
         page_size: int,
         base_url: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Add pagination info to response.
 
         Args:
