@@ -26,7 +26,9 @@ async def legacy_real_standings(
     realCompetitionID: int | None = Form(None),
     realCompetitionMatchDay: int | None = Form(None),
     divisionID: int | None = Form(None),
+    realTeamMemberKey: str | None = Form(None),
     type: str | None = Form(None, alias="_type"),
+    include: str | None = Form(None, alias="_include"),
 ):
     """Legacy PHP-compatible RealStandings endpoint."""
     RequestContext.set_datetime()
@@ -38,7 +40,15 @@ async def legacy_real_standings(
                     db,
                     real_competition_id=realCompetitionID,
                     real_competition_match_day=realCompetitionMatchDay,
-                    division_id=divisionID if type == "byDivisionID" else None,
+                    division_id=divisionID,
+                )
+            elif type == "byRealTeamMemberKey":
+                include_list = [f.strip() for f in include.split(",")] if include else None
+                items = RealStandingsReadListAction.execute_by_member_key(
+                    db,
+                    real_competition_id=realCompetitionID,
+                    real_team_member_key=realTeamMemberKey,
+                    include=include_list,
                 )
             else:
                 raise UnknownActionException(f, type)
