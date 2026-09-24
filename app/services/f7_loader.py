@@ -71,7 +71,8 @@ class F7Loader:
             return FLoader.log_feed_end(db, feed, result=task)
 
         # Phase 3: Persist based on mode
-        if quick_mode and False:
+        quick_mode = False
+        if quick_mode:
             s_task = F7Loader._save_quick_mode(db, foundation, processed_data)
         else:
             s_task = F7Loader._save_full_mode(db, foundation, processed_data)
@@ -423,6 +424,22 @@ class F7Loader:
             jersey_number = to_int(player.get("shirtNumber"))
 
             if player.get("realPlayerID"):
+                # Skip UPDATE if nothing substantive changed (timestamps are not checked)
+                if (
+                    team_info["realTeamID"] == player.get("db_realTeamID")
+                    and player_team_uid == player.get("db_realTeamUID")
+                    and team_info.get("baseRealTeamID") == player.get("db_baseRealTeamID")
+                    and team_info.get("baseRealTeamUID") == player.get("db_baseRealTeamUID")
+                    and team_info.get("baseRealTeamName") == player.get("db_baseRealTeamName")
+                    and team_info.get("baseRealTeamShortName") == player.get("db_baseRealTeamShortName")
+                    and first_name == player.get("db_firstName")
+                    and last_name == player.get("db_lastName")
+                    and known_name == player.get("db_knownName")
+                    and position == player.get("db_position")
+                    and real_position == player.get("db_realPosition")
+                    and jersey_number == player.get("db_jerseyNumber")
+                ):
+                    continue
                 # Existing player — update names/position/jersey/team; leave draftPosition alone
                 db.execute(
                     update(RealPlayer)
@@ -680,7 +697,19 @@ class F7Loader:
                         SELECT `realPlayerID`,
                                `realPlayerUID`,
                                `realTeamMemberKey`,
-                               `draftPosition`
+                               `draftPosition`,
+                               `realTeamID`,
+                               `realTeamUID`,
+                               `baseRealTeamID`,
+                               `baseRealTeamUID`,
+                               `baseRealTeamName`,
+                               `baseRealTeamShortName`,
+                               `firstName`,
+                               `lastName`,
+                               `knownName`,
+                               `position`,
+                               `realPosition`,
+                               `jerseyNumber`
                         FROM `RealPlayers`
                         WHERE `realCompetitionID` = :comp_id
                           AND `realPlayerUID` IN ({placeholders})
@@ -693,20 +722,28 @@ class F7Loader:
 
             for row in results:
                 player_uid = row["realPlayerUID"]
+                db_fields = {
+                    "realPlayerID": row["realPlayerID"],
+                    "realTeamMemberKey": row["realTeamMemberKey"],
+                    "draftPosition": row["draftPosition"],
+                    "db_realTeamID": row["realTeamID"],
+                    "db_realTeamUID": row["realTeamUID"],
+                    "db_baseRealTeamID": row["baseRealTeamID"],
+                    "db_baseRealTeamUID": row["baseRealTeamUID"],
+                    "db_baseRealTeamName": row["baseRealTeamName"],
+                    "db_baseRealTeamShortName": row["baseRealTeamShortName"],
+                    "db_firstName": row["firstName"],
+                    "db_lastName": row["lastName"],
+                    "db_knownName": row["knownName"],
+                    "db_position": row["position"],
+                    "db_realPosition": row["realPosition"],
+                    "db_jerseyNumber": row["jerseyNumber"],
+                }
                 if player_uid in players_cache:
-                    players_cache[player_uid]["realPlayerID"] = row["realPlayerID"]
-                    players_cache[player_uid]["realTeamMemberKey"] = row[
-                        "realTeamMemberKey"
-                    ]
-                    players_cache[player_uid]["draftPosition"] = row["draftPosition"]
+                    players_cache[player_uid].update(db_fields)
                 else:
                     # Player from database not yet in cache, add them
-                    players_cache[player_uid] = {
-                        "realPlayerUID": player_uid,
-                        "realPlayerID": row["realPlayerID"],
-                        "realTeamMemberKey": row["realTeamMemberKey"],
-                        "draftPosition": row["draftPosition"],
-                    }
+                    players_cache[player_uid] = {"realPlayerUID": player_uid, **db_fields}
 
         # Enrich with PlayerLineUp data
         if player_lineup:
