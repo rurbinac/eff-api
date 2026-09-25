@@ -104,6 +104,128 @@ class SyncRealService:
         return task
 
     @staticmethod
+    def sync_new_real_players(db: Session, real_competition_id: int, new_ids: list[int]) -> None:
+        if not new_ids:
+            return
+        SyncRealService._sync_real_players(db, real_competition_id, new_ids)
+        SyncRealService._sync_new_player_standings(db, new_ids)
+
+    @staticmethod
+    def _sync_new_player_standings(db: Session, new_ids: list[int]) -> Task:
+        """Insert RealStandings rows for newly added players across all match days.
+
+        Called after _sync_real_players has created the RealTeamMembers rows.
+        Creates one RealStandings row per match day per new player, with zero stats
+        but full match context pulled from RealMatchTeams. Skips any match day where
+        a row already exists (LEFT JOIN / IS NULL guard).
+
+        Args:
+            db: Database session.
+            new_ids: realPlayerIDs of the newly inserted players.
+
+        Returns:
+            Task with queries_executed and rows_affected counts.
+        """
+        task = Task(
+            name="_sync_new_player_standings",
+            status=Task.RUNNING,
+            status_on_error=Task.ERROR,
+        )
+        task.init_info("queries_executed", "rows_affected", default=0)
+
+        if not new_ids:
+            task.close(status=Task.COMPLETED)
+            return task
+
+        member_keys = [f"P{pid}" for pid in new_ids]
+        placeholders = ", ".join(f":mk_{i}" for i in range(len(member_keys)))
+        id_params = {f"mk_{i}": k for i, k in enumerate(member_keys)}
+
+        try:
+            SyncRealService._exec(
+                db,
+                task,
+                "to_RealStandings(ins)",
+                f"""
+                INSERT INTO `RealStandings` (
+                    `realTeamMemberID`, `realTeamMemberKey`, `prevRealTeamMemberKey`, `nextRealTeamMemberKey`,
+                    `realCompetitionID`, `realCompetitionUID`, `realCompetitionSYMID`, `realCompetitionSeasonId`,
+                    `realCompetitionMatchDay`, `realCompetitionLastMatchDay`,
+                    `baseRealCompetitionID`, `extraRealCompetitionID`,
+                    `isTeam`, `isPlayer`,
+                    `baseMatchDay`,
+                    `realMatchID`, `realMatchTeamID`,
+                    `realMatchDate`, `realMatchTime`, `realMatchStatus`,
+                    `realTeamID`, `realTeamUID`, `realTeamName`,
+                    `realTeamShortName`, `realTeamScore`, `realTeamSide`,
+                    `oppositeRealTeamID`, `oppositeRealTeamUID`, `oppositeRealTeamName`,
+                    `oppositeRealTeamShortName`, `oppositeRealTeamScore`,
+                    `realPlayerID`, `realPlayerUID`, `firstName`, `lastName`,
+                    `knownName`, `name`, `sortName`,
+                    `position`, `draftPosition`, `draftPositionOrder`,
+                    `timePlayed`, `gamePlayed`, `goals`, `assists`, `yellowCards`, `redCards`, `goalsConceded`, `cleanSheet`,
+                    `matchTimePlayed`, `matchGamePlayed`, `matchGoals`, `matchAssists`, `matchYellowCards`, `matchRedCards`, `matchGoalsConceded`, `matchCleanSheet`,
+                    `matchDayPlayed`,
+                    `matchWon`, `matchDraw`, `matchLost`,
+                    `played`, `won`, `draw`, `lost`, `goalsFor`, `goalsAgainst`, `place`,
+                    `playedHome`, `wonHome`, `drawHome`, `lostHome`, `goalsForHome`, `goalsAgainstHome`, `placeHome`,
+                    `playedAway`, `wonAway`, `drawAway`, `lostAway`, `goalsForAway`, `goalsAgainstAway`, `placeAway`,
+                    `matchPointsL1Played`, `matchPointsL1GoalsAllowed`, `matchPointsL1CleanSheet`, `matchPointsL1Cards`,
+                    `matchPointsL1Goals`, `matchPointsL1Assists`, `matchPointsL1OwnGoals`, `matchPointsL1`,
+                    `pointsL1Played`, `pointsL1GoalsAllowed`, `pointsL1CleanSheet`, `pointsL1Cards`,
+                    `pointsL1Goals`, `pointsL1Assists`, `pointsL1OwnGoals`, `pointsL1`, `livePointsL1`,
+                    `ranking`, `processed`,
+                    `createdIn`, `updatedIn`
+                )
+                SELECT
+                    `rtm`.`realTeamMemberID`, `rtm`.`realTeamMemberKey`, `rtm`.`prevRealTeamMemberKey`, `rtm`.`nextRealTeamMemberKey`,
+                    `rm`.`realCompetitionID`, `rm`.`realCompetitionUID`, `rm`.`realCompetitionSYMID`, `rm`.`realCompetitionSeasonId`,
+                    `rm`.`realCompetitionMatchDay`, `rm`.`realCompetitionLastMatchDay`,
+                    `rm`.`baseRealCompetitionID`, `rm`.`extraRealCompetitionID`,
+                    0, 1,
+                    `rm`.`realCompetitionMatchDay`,
+                    `rm`.`realMatchID`, `rmt`.`realMatchTeamID`,
+                    `rm`.`realMatchDate`, `rm`.`realMatchTime`, `rm`.`realMatchStatus`,
+                    `rmt`.`realTeamID`, `rmt`.`realTeamUID`, `rmt`.`realTeamName`,
+                    `rmt`.`realTeamShortName`, `rmt`.`realTeamScore`, `rmt`.`realTeamSide`,
+                    `op_rmt`.`realTeamID`, `op_rmt`.`realTeamUID`, `op_rmt`.`realTeamName`,
+                    `op_rmt`.`realTeamShortName`, `op_rmt`.`realTeamScore`,
+                    `rtm`.`realPlayerID`, `rtm`.`realPlayerUID`, `rtm`.`firstName`, `rtm`.`lastName`,
+                    `rtm`.`knownName`, `rtm`.`name`, `rtm`.`sortName`,
+                    `rtm`.`position`, `rtm`.`draftPosition`, `rtm`.`draftPositionOrder`,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    0,
+                    NULL, NULL, NULL,
+                    NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                    NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                    NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                    0, 0, 0, 0,
+                    0, 0, 0, 0,
+                    0, 0, 0, 0,
+                    0, 0, 0, 0, 0,
+                    NULL, 1,
+                    NOW(), NOW()
+                FROM `RealTeamMembers` `rtm`
+                INNER JOIN `RealMatchTeams` `rmt` ON `rmt`.`realTeamID` = `rtm`.`realTeamID`
+                INNER JOIN `RealMatches` `rm` ON `rm`.`realMatchID` = `rmt`.`realMatchID`
+                INNER JOIN `RealMatchTeams` `op_rmt` ON `op_rmt`.`realMatchID` = `rm`.`realMatchID`
+                    AND `op_rmt`.`realMatchTeamID` <> `rmt`.`realMatchTeamID`
+                LEFT OUTER JOIN `RealStandings` `rs` ON `rs`.`realTeamMemberKey` = `rtm`.`realTeamMemberKey`
+                    AND `rs`.`realCompetitionMatchDay` = `rm`.`realCompetitionMatchDay`
+                    AND `rs`.`realCompetitionID` = `rm`.`realCompetitionID`
+                WHERE `rtm`.`realTeamMemberKey` IN ({placeholders})
+                  AND `rs`.`realStandingID` IS NULL
+            """,
+                id_params,
+            )
+        except Exception as e:
+            task.add_error(str(e))
+
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+        return task
+
+    @staticmethod
     def _sync_real_competitions(db: Session) -> Task:
         """Internal: cross-link RealCompetitions and propagate changes to RealTeams and RealMatches.
 
@@ -454,7 +576,7 @@ class SyncRealService:
         return task
 
     @staticmethod
-    def _sync_real_players(db: Session, real_competition_id: int) -> Task:
+    def _sync_real_players(db: Session, real_competition_id: int, new_ids: list[int] = []) -> Task:
         """Sync RealPlayers and the player rows in RealTeamMembers.
 
         Runs six queries in order:
@@ -477,13 +599,21 @@ class SyncRealService:
         )
         task.init_info("queries_executed", "rows_affected", default=0)
 
+        if new_ids:
+            placeholders = ", ".join(f":new_id_{i}" for i in range(len(new_ids)))
+            and_new_ids = f" AND `p`.`realPlayerID` IN ({placeholders})"
+            id_params = {f"new_id_{i}": v for i, v in enumerate(new_ids)}
+        else:
+            and_new_ids = ""
+            id_params = {}
+
         try:
             # Query #1: Set base fields
             SyncRealService._exec(
                 db,
                 task,
                 "base_fields(upd)",
-                """
+                f"""
                 UPDATE `RealPlayers` `p`
                    LEFT OUTER JOIN `RealPlayers` `p1`
                       ON `p`.`baseRealCompetitionID` = `p1`.`realCompetitionID`
@@ -491,8 +621,9 @@ class SyncRealService:
                    SET `p`.`baseRealPlayerID` = `p1`.`realPlayerID`,
                        `p`.`realTeamMemberKey` = CONCAT('P', `p1`.`realPlayerID`)
                    WHERE `p`.`realCompetitionID` = :realCompetitionID
+                     {and_new_ids}
             """,
-                {"realCompetitionID": real_competition_id},
+                {"realCompetitionID": real_competition_id, **id_params},
             )
 
             # Query #2: Sync from RealTeams
@@ -500,7 +631,7 @@ class SyncRealService:
                 db,
                 task,
                 "from_RealTeams(upd)",
-                """
+                f"""
                 UPDATE `RealPlayers` `p`
                    LEFT OUTER JOIN `RealTeams` `t` ON `t`.`realTeamID` = `p`.`realTeamID`
                    SET `p`.`realCompetitionID` = `t`.`realCompetitionID`,
@@ -515,8 +646,9 @@ class SyncRealService:
                        `p`.`baseRealTeamName` = `t`.`baseRealTeamName`,
                        `p`.`baseRealTeamShortName` = `t`.`baseRealTeamShortName`
                    WHERE `p`.`realCompetitionID` = :realCompetitionID
+                     {and_new_ids}
             """,
-                {"realCompetitionID": real_competition_id},
+                {"realCompetitionID": real_competition_id, **id_params},
             )
 
             # Query #3: Update prev and next
@@ -524,7 +656,7 @@ class SyncRealService:
                 db,
                 task,
                 "prev_and_next(upd)",
-                """
+                f"""
                 UPDATE `RealPlayers` `p`
                    LEFT OUTER JOIN `RealCompetitions` `c` ON `p`.`realCompetitionID` = `c`.`realCompetitionID`
                    LEFT OUTER JOIN `RealPlayers` `p_p`
@@ -536,8 +668,9 @@ class SyncRealService:
                    SET `p`.`prevRealPlayerID` = `p_p`.`realPlayerID`,
                        `p`.`nextRealPlayerID` = `p_n`.`realPlayerID`
                    WHERE `p`.`realCompetitionID` = :realCompetitionID
+                     {and_new_ids}
             """,
-                {"realCompetitionID": real_competition_id},
+                {"realCompetitionID": real_competition_id, **id_params},
             )
 
             # Query #4: Insert new RealPlayers to RealTeamMembers
@@ -545,7 +678,7 @@ class SyncRealService:
                 db,
                 task,
                 "to_RealTeamMembers(ins)",
-                """
+                f"""
                 INSERT INTO `RealTeamMembers`
                     (`realTeamMemberKey`, `prevRealTeamMemberKey`, `nextRealTeamMemberKey`,
                      `baseRealCompetitionID`, `extraRealCompetitionID`,
@@ -589,6 +722,7 @@ class SyncRealService:
                   AND `m`.`realTeamMemberID` IS null
                   AND `p`.`draftPosition` IN (:dp_1, :dp_2, :dp_3, :dp_4)
                   AND `p`.`realCompetitionID` = :realCompetitionID
+                  {and_new_ids}
             """,
                 {
                     "realCompetitionID": real_competition_id,
@@ -596,6 +730,7 @@ class SyncRealService:
                     "dp_2": DraftPositionConstants.DEFENDER,
                     "dp_3": DraftPositionConstants.MIDFIELDER,
                     "dp_4": DraftPositionConstants.STRIKER,
+                    **id_params,
                 },
             )
 
@@ -604,70 +739,72 @@ class SyncRealService:
                 db,
                 task,
                 "from_realTeamMemberID(upd)",
-                """
+                f"""
                 UPDATE `RealPlayers` `p`
                    LEFT OUTER JOIN `RealTeamMembers` `m` ON `m`.`realTeamMemberKey` = CONCAT('P', `p`.`baseRealPlayerID`)
                    SET `p`.`realTeamMemberID` = `m`.`realTeamMemberID`
                    WHERE `p`.`realCompetitionID` = :realCompetitionID
+                     {and_new_ids}
             """,
-                {"realCompetitionID": real_competition_id},
+                {"realCompetitionID": real_competition_id, **id_params},
             )
 
-            # Query #6: Update old RealPlayers to RealTeamMembers
+            # Query #6: Update RealTeamMembers from RealPlayers
             SyncRealService._exec(
                 db,
                 task,
                 "from_RealTeamMembers(upd)",
-                """
+                f"""
                 UPDATE `RealTeamMembers` `m`
-                   INNER JOIN `RealPlayers` `p` ON `m`.`realTeamMemberKey` = `p`.`realTeamMemberKey`
-                   SET `m`.`realTeamMemberID` = `p`.`realTeamMemberID`,
-                       `m`.`realTeamMemberKey` = `p`.`realTeamMemberKey`,
-                       `m`.`prevRealTeamMemberKey` = IF(`p`.`prevRealPlayerID` IS null, null, CONCAT('P', `p`.`prevRealPlayerID`)),
-                       `m`.`nextRealTeamMemberKey` = IF(`p`.`nextRealPlayerID` IS null, null, CONCAT('P', `p`.`nextRealPlayerID`)),
-                       `m`.`baseRealCompetitionID` = `p`.`baseRealCompetitionID`,
-                       `m`.`extraRealCompetitionID` = `p`.`extraRealCompetitionID`,
-                       `m`.`isTeam` = 0,
-                       `m`.`isPlayer` = 1,
-                       `m`.`realTeamID` = `p`.`realTeamID`,
-                       `m`.`realTeamUID` = `p`.`realTeamUID`,
-                       `m`.`realTeamName` = `p`.`baseRealTeamName`,
-                       `m`.`realTeamShortName` = `p`.`baseRealTeamShortName`,
-                       `m`.`realPlayerID` = `p`.`realPlayerID`,
-                       `m`.`realPlayerUID` = `p`.`realPlayerUID`,
-                       `m`.`firstName` = `p`.`firstName`,
-                       `m`.`lastName` = `p`.`lastName`,
-                       `m`.`knownName` = `p`.`knownName`,
-                       `m`.`name` = IFNULL(`p`.`knownName`, CONCAT(`p`.`firstName`, ' ', `p`.`lastName`)),
-                       `m`.`sortName` = IFNULL(`p`.`knownName`, CONCAT(`p`.`lastName`, ' ', `p`.`firstName`)),
-                       `m`.`position` = IF(`m`.`draftPosition` IS null, `p`.`position`, `m`.`position`),
-                       `m`.`draftPosition` = IF(`m`.`draftPosition` IS null, `p`.`draftPosition`, `m`.`draftPosition`),
-                       `m`.`draftPositionOrder` = IF(`m`.`draftPosition` IS null, `p`.`draftPositionOrder`, `m`.`draftPositionOrder`),
-                       `m`.`birthDate` = `p`.`birthDate`,
-                       `m`.`weight` = `p`.`weight`,
-                       `m`.`height` = `p`.`height`,
-                       `m`.`jerseyNumber` = `p`.`jerseyNumber`,
-                       `m`.`last_played` = null,
-                       `m`.`last_won` = null,
-                       `m`.`last_draw` = null,
-                       `m`.`last_lost` = null,
-                       `m`.`last_goalsFor` = null,
-                       `m`.`last_goalsAgainst` = null,
-                       `m`.`played` = null,
-                       `m`.`won` = null,
-                       `m`.`draw` = null,
-                       `m`.`lost` = null,
-                       `m`.`goalsFor` = null,
-                       `m`.`goalsAgainst` = null,
-                       `m`.`lastF7Date` = `p`.`lastF7Date`,
-                       `m`.`lastF42Date` = `p`.`lastF42Date`,
-                       `m`.`lastFDate` = `p`.`lastFDate`,
-                       `m`.`createdIn` = `p`.`createdIn`,
-                       `m`.`updatedIn` = `p`.`updatedIn`
-                   WHERE `p`.`realPlayerID` = `p`.`baseRealPlayerID`
-                     AND `p`.`realCompetitionID` = :realCompetitionID
+                INNER JOIN `RealPlayers` `p` ON `m`.`realTeamMemberKey` = `p`.`realTeamMemberKey`
+                SET `m`.`realTeamMemberID` = `p`.`realTeamMemberID`,
+                    `m`.`realTeamMemberKey` = `p`.`realTeamMemberKey`,
+                    `m`.`prevRealTeamMemberKey` = IF(`p`.`prevRealPlayerID` IS null, null, CONCAT('P', `p`.`prevRealPlayerID`)),
+                    `m`.`nextRealTeamMemberKey` = IF(`p`.`nextRealPlayerID` IS null, null, CONCAT('P', `p`.`nextRealPlayerID`)),
+                    `m`.`baseRealCompetitionID` = `p`.`baseRealCompetitionID`,
+                    `m`.`extraRealCompetitionID` = `p`.`extraRealCompetitionID`,
+                    `m`.`isTeam` = 0,
+                    `m`.`isPlayer` = 1,
+                    `m`.`realTeamID` = `p`.`realTeamID`,
+                    `m`.`realTeamUID` = `p`.`realTeamUID`,
+                    `m`.`realTeamName` = `p`.`baseRealTeamName`,
+                    `m`.`realTeamShortName` = `p`.`baseRealTeamShortName`,
+                    `m`.`realPlayerID` = `p`.`realPlayerID`,
+                    `m`.`realPlayerUID` = `p`.`realPlayerUID`,
+                    `m`.`firstName` = `p`.`firstName`,
+                    `m`.`lastName` = `p`.`lastName`,
+                    `m`.`knownName` = `p`.`knownName`,
+                    `m`.`name` = IFNULL(`p`.`knownName`, CONCAT(`p`.`firstName`, ' ', `p`.`lastName`)),
+                    `m`.`sortName` = IFNULL(`p`.`knownName`, CONCAT(`p`.`lastName`, ' ', `p`.`firstName`)),
+                    `m`.`position` = IF(`m`.`draftPosition` IS null, `p`.`position`, `m`.`position`),
+                    `m`.`draftPosition` = IF(`m`.`draftPosition` IS null, `p`.`draftPosition`, `m`.`draftPosition`),
+                    `m`.`draftPositionOrder` = IF(`m`.`draftPosition` IS null, `p`.`draftPositionOrder`, `m`.`draftPositionOrder`),
+                    `m`.`birthDate` = `p`.`birthDate`,
+                    `m`.`weight` = `p`.`weight`,
+                    `m`.`height` = `p`.`height`,
+                    `m`.`jerseyNumber` = `p`.`jerseyNumber`,
+                    `m`.`last_played` = null,
+                    `m`.`last_won` = null,
+                    `m`.`last_draw` = null,
+                    `m`.`last_lost` = null,
+                    `m`.`last_goalsFor` = null,
+                    `m`.`last_goalsAgainst` = null,
+                    `m`.`played` = null,
+                    `m`.`won` = null,
+                    `m`.`draw` = null,
+                    `m`.`lost` = null,
+                    `m`.`goalsFor` = null,
+                    `m`.`goalsAgainst` = null,
+                    `m`.`lastF7Date` = `p`.`lastF7Date`,
+                    `m`.`lastF42Date` = `p`.`lastF42Date`,
+                    `m`.`lastFDate` = `p`.`lastFDate`,
+                    `m`.`createdIn` = `p`.`createdIn`,
+                    `m`.`updatedIn` = `p`.`updatedIn`
+                WHERE `p`.`realPlayerID` = `p`.`baseRealPlayerID`
+                    AND `p`.`realCompetitionID` = :realCompetitionID
+                    {and_new_ids}
             """,
-                {"realCompetitionID": real_competition_id},
+                {"realCompetitionID": real_competition_id, **id_params},
             )
 
         except Exception as e:
@@ -1626,7 +1763,7 @@ class SyncRealService:
 
     @staticmethod
     def _exec(
-        db: Session, task: Task, name: str, sql: str, params: dict | None = None
+        db: Session, task: Task | None, name: str, sql: str, params: dict | None = None
     ) -> None:
         """Execute one SQL statement and record its rowcount in the task.
 
@@ -1643,5 +1780,6 @@ class SyncRealService:
         if not params:
             params = {}
         result = db.execute(text(sql), params)
-        task.inc("queries_executed")
-        task.inc("rows_affected", task.assign(name, result.rowcount))
+        if task:
+            task.inc("queries_executed")
+            task.inc("rows_affected", task.assign(name, result.rowcount))

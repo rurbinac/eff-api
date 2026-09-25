@@ -308,19 +308,16 @@ class F7Loader:
     def _save(db: Session, foundation: dict, processed_data: dict) -> Task:
         """Persist all F7 data: match, standings, teams, and players.
 
-        Runs quick-mode sub-tasks first (match + standings), then updates
-        RealTeams and upserts RealPlayers (skipping player rows where nothing changed).
+        Order matters: RealTeams and RealPlayers (+ RealTeamMembers/RealStandings for new
+        players) are written first so that when quick-mode standings UPDATEs run, the rows
+        for newly inserted players already exist and can be stamped with match performance.
         """
         task = Task(
             name="Save Full Mode", status=Task.RUNNING, status_on_error=Task.ERROR
         )
         task.init_info("teams_updated", "players_updated", "players_inserted")
 
-        # Run quick mode first
-        q_task = F7Loader._save_quick_mode(db, foundation, processed_data)
-        task.add_subtask(q_task)
-
-        # Update RealTeams
+        # 1. Update RealTeams
         try:
             teams_result = F7Loader._update_teams_full_mode(
                 db,
@@ -331,7 +328,8 @@ class F7Loader:
         except Exception as e:
             task.add_error(f"RealTeams update failed [{type(e).__name__}]: {e!s}")
 
-        # Update/insert RealPlayers
+        # 2. Update/insert RealPlayers
+        new_player_ids: list[int] = []
         try:
             players_result = F7Loader._update_players_full_mode(
                 db,
@@ -343,8 +341,32 @@ class F7Loader:
             )
             task.assign("players_updated", players_result.get("players_updated", 0))
             task.assign("players_inserted", players_result.get("players_inserted", 0))
+            new_player_ids = players_result.get("new_player_ids", [])
         except Exception as e:
             task.add_error(f"RealPlayers update failed [{type(e).__name__}]: {e!s}")
+
+        # 3. Sync newly inserted players into RealTeamMembers + RealStandings
+        #    Must run before quick mode so standings UPDATE can find the new rows.
+        if new_player_ids and not task.errors:
+            try:
+                from app.services.sync_real import SyncRealService  # lazy — avoids circular import
+                SyncRealService.sync_new_real_players(
+                    db,
+                    real_competition_id=foundation["competition"]["realCompetitionID"],
+                    new_ids=new_player_ids,
+                )
+                # Backfill realTeamMemberKey in players_cache so quick-mode standings UPDATE
+                # can find the newly created RealStandings rows (base competition: key = 'P{id}').
+                new_id_set = set(new_player_ids)
+                for player_data in foundation["players_cache"].values():
+                    if player_data.get("realPlayerID") in new_id_set:
+                        player_data["realTeamMemberKey"] = f"P{player_data['realPlayerID']}"
+            except Exception as e:
+                task.add_error(f"sync_new_real_players failed [{type(e).__name__}]: {e!s}")
+
+        # 4. Quick mode: RealMatches, RealMatchTeams, RealStandings (teams + players)
+        q_task = F7Loader._save_quick_mode(db, foundation, processed_data)
+        task.add_subtask(q_task)
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
@@ -398,6 +420,7 @@ class F7Loader:
         now = utc_now()
         update_count = 0
         insert_count = 0
+        new_players: list[RealPlayer] = []
 
         for player_uid, player in players_cache.items():
             player_team_uid = player.get("realTeamUID")
@@ -466,39 +489,48 @@ class F7Loader:
                     if draft_position_order
                     else None
                 )
-                db.add(
-                    RealPlayer(
-                        realCompetitionID=competition["realCompetitionID"],
-                        realCompetitionUID=competition["realCompetitionUID"],
-                        realCompetitionSYMID=competition["realCompetitionSYMID"],
-                        realCompetitionSeasonId=competition["realCompetitionSeasonId"],
-                        baseRealCompetitionID=competition.get("baseRealCompetitionID"),
-                        extraRealCompetitionID=competition.get("extraRealCompetitionID"),
-                        realTeamID=team_info["realTeamID"],
-                        realTeamUID=player_team_uid,
-                        baseRealTeamID=team_info.get("baseRealTeamID"),
-                        baseRealTeamUID=team_info.get("baseRealTeamUID"),
-                        baseRealTeamName=team_info.get("baseRealTeamName"),
-                        baseRealTeamShortName=team_info.get("baseRealTeamShortName"),
-                        realPlayerUID=player_uid,
-                        firstName=first_name,
-                        lastName=last_name,
-                        knownName=known_name,
-                        position=position,
-                        realPosition=real_position,
-                        jerseyNumber=jersey_number,
-                        draftPosition=draft_position,
-                        draftPositionOrder=draft_position_order,
-                        isProcessedMember=0,
-                        lastF7Date=now,
-                        lastFDate=now,
-                        createdIn=now,
-                        updatedIn=now,
-                    )
+                new_player = RealPlayer(
+                    realCompetitionID=competition["realCompetitionID"],
+                    realCompetitionUID=competition["realCompetitionUID"],
+                    realCompetitionSYMID=competition["realCompetitionSYMID"],
+                    realCompetitionSeasonId=competition["realCompetitionSeasonId"],
+                    baseRealCompetitionID=competition.get("baseRealCompetitionID"),
+                    extraRealCompetitionID=competition.get("extraRealCompetitionID"),
+                    realTeamID=team_info["realTeamID"],
+                    realTeamUID=player_team_uid,
+                    baseRealTeamID=team_info.get("baseRealTeamID"),
+                    baseRealTeamUID=team_info.get("baseRealTeamUID"),
+                    baseRealTeamName=team_info.get("baseRealTeamName"),
+                    baseRealTeamShortName=team_info.get("baseRealTeamShortName"),
+                    realPlayerUID=player_uid,
+                    firstName=first_name,
+                    lastName=last_name,
+                    knownName=known_name,
+                    position=position,
+                    realPosition=real_position,
+                    jerseyNumber=jersey_number,
+                    draftPosition=draft_position,
+                    draftPositionOrder=draft_position_order,
+                    isProcessedMember=0,
+                    lastF7Date=now,
+                    lastFDate=now,
+                    createdIn=now,
+                    updatedIn=now,
                 )
+                db.add(new_player)
+                new_players.append(new_player)
                 insert_count += 1
 
-        return {"players_updated": update_count, "players_inserted": insert_count}
+        # Flush to obtain auto-generated realPlayerIDs for newly inserted players
+        if new_players:
+            db.flush()
+
+        new_player_ids = [p.realPlayerID for p in new_players if p.realPlayerID]
+        return {
+            "players_updated": update_count,
+            "players_inserted": insert_count,
+            "new_player_ids": new_player_ids,
+        }
 
     @staticmethod
     def _get_real_competition(db: Session, competition: dict) -> dict:
