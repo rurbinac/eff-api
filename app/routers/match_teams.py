@@ -22,10 +22,8 @@ from app.exceptions import (
 from app.guards import (
     require_authentication,
     require_in_list,
-    require_league_member,
     require_pos_int,
     require_pos_ints,
-    require_team_owner,
     require_value,
 )
 from app.utils import JsonApiSerializer
@@ -63,8 +61,7 @@ async def legacy_match_teams(
         if f == "ReadList":
             if type == "byTeamID":
                 teamID = require_pos_int(teamID, "teamID", f)
-                require_league_member(db, current_user, team_id=teamID)
-                items = MatchTeamsReadListAction.execute(db, team_id=teamID)
+                items = MatchTeamsReadListAction.execute(db, team_id=teamID, user_id=current_user)
             else:
                 raise UnknownActionException(f, type)
             return return_many_legacy("MatchTeams", items)
@@ -76,7 +73,6 @@ async def legacy_match_teams(
             return return_many_legacy("MatchTeams", result)
         elif f == "GetLineupByCompetitionType":
             teamID = require_pos_int(teamID, "teamID", f)
-            require_league_member(db, current_user, team_id=teamID)
             competitionMatchDay = require_pos_int(competitionMatchDay, "competitionMatchDay", f)
             competitionType = require_pos_int(competitionType, "competitionType", f)
             competitionType = require_in_list(competitionType, CompetitionTypeConstants.valid_values(), "competitionType", f)
@@ -85,11 +81,11 @@ async def legacy_match_teams(
                 team_id=teamID,
                 competition_type=competitionType,
                 competition_match_day=competitionMatchDay,
+                user_id=current_user,
             )
             return return_many_legacy("MatchTeams", result or [])
         elif f == "SetLineupByCompetitionType":
             teamID = require_pos_int(teamID, "teamID", f)
-            require_team_owner(db, current_user, teamID)
             competitionMatchDay = require_pos_int(competitionMatchDay, "competitionMatchDay", f)
             competitionType = require_pos_int(competitionType, "competitionType", f)
             competitionType = require_in_list(competitionType, CompetitionTypeConstants.valid_values(), "competitionType", f)
@@ -104,6 +100,7 @@ async def legacy_match_teams(
                 real_team_id=realTeamID,
                 real_player_ids=realPlayerIDs,
                 substitute_real_player_ids=substituteRealPlayerIDs,
+                user_id=current_user,
             )
             if result is None:
                 raise NotFoundException("Lineup", teamID)
@@ -155,8 +152,7 @@ async def rest_match_teams(
     RequestContext.set_datetime()
     try:
         require_authentication(current_user)
-        require_league_member(db, current_user, team_id=payload.matchID)
-        items = MatchTeamsReadListAction.execute(db, team_id=payload.matchID)
+        items = MatchTeamsReadListAction.execute(db, team_id=payload.matchID, user_id=current_user)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='match-teams',

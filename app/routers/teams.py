@@ -2,21 +2,23 @@ from fastapi import APIRouter, Form, Query
 from pydantic import BaseModel
 
 from app.actions.teams import (
+    TeamsFranchiseWishListDetailAction,
     TeamsGetCurrentMembersAction,
     TeamsGetRealMembersRankingAction,
     TeamsReadListAction,
+    TeamsSetFranchiseWishListAction,
+    TeamsSetRealMembersRankingAction,
     TeamsUpdateAction,
     TeamsWaiverMembersDetailAction,
     TeamsWishListDetailAction,
+    TeamsWishListSetAction,
 )
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
 from app.exceptions import EFFException, UnknownActionException
 from app.guards import (
     require_authentication,
-    require_league_member,
     require_pos_int,
-    require_team_owner,
 )
 from app.utils import JsonApiSerializer
 from app.utils.legacy_returns import return_error, return_many_legacy, return_one_legacy
@@ -34,6 +36,9 @@ async def legacy_teams(
     teamID: int | None = Form(None),
     teamName: str | None = Form(None),
     notes: str | None = Form(None),
+    memberKeys: str | None = Form(None),
+    wishListKeys: str | None = Form(None),
+    franchiseWishListKeys: str | None = Form(None),
     type: str | None = Form(None, alias="_type"),
 ):
     """Legacy PHP-compatible endpoint for Teams actions."""
@@ -41,41 +46,26 @@ async def legacy_teams(
 
     try:
         require_authentication(current_user)
+
         if f == "ReadList":
             if type == "byLeagueID":
                 require_pos_int(leagueID, "leagueID", f"{f}({type})")
-                require_league_member(db, current_user, league_id=leagueID)
-                items = TeamsReadListAction.execute(db, user_id=current_user, league_id=leagueID)
+                items = TeamsReadListAction.execute(
+                    db, user_id=current_user, league_id=leagueID
+                )
+
             elif type == "byDivisionID":
                 require_pos_int(divisionID, "divisionID", f"{f}({type})")
-                require_league_member(db, current_user, division_id=divisionID)
-                items = TeamsReadListAction.execute(db, user_id=current_user, division_id=divisionID)
+                items = TeamsReadListAction.execute(
+                    db, user_id=current_user, division_id=divisionID
+                )
+
             else:
                 raise UnknownActionException(f, type)
             return return_many_legacy("Teams", items)
-        elif f == "GetCurrentMembers":
-            require_pos_int(teamID, "teamID", f)
-            require_league_member(db, current_user, team_id=teamID)
-            items = TeamsGetCurrentMembersAction.execute(db, teamID, current_user)
-            return return_many_legacy("RealTeamMembers", items)
-        elif f == "GetRealMembersRanking":
-            require_pos_int(teamID, "teamID", f)
-            require_league_member(db, current_user, team_id=teamID)
-            items = TeamsGetRealMembersRankingAction.execute(db, teamID, current_user)
-            return return_many_legacy("RealTeamMembers", items)
-        elif f == "WaiverMembersDetail":
-            require_pos_int(teamID, "teamID", f)
-            require_league_member(db, current_user, team_id=teamID)
-            items = TeamsWaiverMembersDetailAction.execute(db, teamID, current_user)
-            return return_many_legacy("WaiverMembers", items)
-        elif f == "WishListDetail":
-            require_pos_int(teamID, "teamID", f)
-            require_league_member(db, current_user, team_id=teamID)
-            items = TeamsWishListDetailAction.execute(db, teamID, current_user)
-            return return_many_legacy("WishList", items)
+
         elif f == "Update":
             require_pos_int(teamID, "teamID", f)
-            require_team_owner(db, current_user, teamID)
             values = TeamsUpdateAction.execute(
                 db,
                 team_id=teamID,
@@ -84,8 +74,62 @@ async def legacy_teams(
                 notes=notes,
             )
             return return_one_legacy("Teams", values)
+
+        elif f == "GetCurrentMembers":
+            require_pos_int(teamID, "teamID", f)
+            items = TeamsGetCurrentMembersAction.execute(db, teamID, current_user)
+            return return_many_legacy("RealTeamMembers", items)
+
+        elif f == "WaiverMembersDetail":
+            require_pos_int(teamID, "teamID", f)
+            items = TeamsWaiverMembersDetailAction.execute(db, teamID, current_user)
+            return return_many_legacy("WaiverMembers", items)
+
+        elif f == "GetRealMembersRanking":
+            require_pos_int(teamID, "teamID", f)
+            items = TeamsGetRealMembersRankingAction.execute(db, teamID, current_user)
+            return return_many_legacy("RealTeamMembers", items)
+
+        elif f == "SetRealMembersRanking":
+            require_pos_int(teamID, "teamID", f)
+            values = TeamsSetRealMembersRankingAction.execute(
+                db, team_id=teamID, user_id=current_user, member_keys_str=memberKeys
+            )
+            return return_one_legacy("Teams", values)
+
+        elif f == "WishListDetail":
+            require_pos_int(teamID, "teamID", f)
+            items = TeamsWishListDetailAction.execute(db, teamID, current_user)
+            return return_many_legacy("WishList", items)
+
+        elif f == "WishListSet":
+            require_pos_int(teamID, "teamID", f)
+            values = TeamsWishListSetAction.execute(
+                db,
+                team_id=teamID,
+                user_id=current_user,
+                wish_list_keys_str=wishListKeys,
+            )
+            return return_one_legacy("Teams", values)
+
+        elif f == "FranchiseWishListDetail":
+            require_pos_int(teamID, "teamID", f)
+            items = TeamsFranchiseWishListDetailAction.execute(db, teamID, current_user)
+            return return_many_legacy("FranchiseWishList", items)
+
+        elif f == "SetFranchiseWishList":
+            require_pos_int(teamID, "teamID", f)
+            values = TeamsSetFranchiseWishListAction.execute(
+                db,
+                team_id=teamID,
+                user_id=current_user,
+                franchise_wish_list_keys_str=franchiseWishListKeys,
+            )
+            return return_one_legacy("Teams", values)
+
         else:
             raise UnknownActionException(f)
+
     except EFFException as e:
         return return_error(e)
     finally:

@@ -90,7 +90,6 @@ async def legacy_divisions(
             return return_many_legacy("Divisions", items)
         elif f == "Update":
             require_pos_int(divisionID, "divisionID", f)
-            require_division_commissioner(db, current_user, division_id=divisionID)
             values = DivisionsUpdateAction.execute(
                 db,
                 division_id=divisionID,
@@ -102,12 +101,10 @@ async def legacy_divisions(
             return return_one_legacy("Divisions", values)
         elif f == "TransactionsDetail":
             require_pos_int(divisionID, "divisionID", f)
-            require_league_member(db, current_user, division_id=divisionID)
             items = DivisionsTransactionsDetailAction.execute(db, divisionID, current_user)
             return return_many_legacy("TransactionsDetail", items)
         elif f == "DraftResult":
             require_pos_int(divisionID, "divisionID", f)
-            require_league_member(db, current_user, division_id=divisionID)
             items = DraftResultAction.execute(db, divisionID, user_id=current_user)
             return return_many_legacy("DraftResult", items)
         elif f == "DraftSituation":

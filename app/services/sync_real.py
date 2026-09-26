@@ -104,9 +104,26 @@ class SyncRealService:
         return task
 
     @staticmethod
-    def sync_new_real_players(db: Session, real_competition_id: int, new_ids: list[int]) -> None:
+    def sync_new_real_players(db: Session, real_competition_id: int, new_ids: list[int]) -> Task | None:
         if not new_ids:
             return
+        task = Task(name="sync_new_real_players", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task.init_info("queries_executed", "rows_affected", default=0)
+
+        sub = SyncRealService._sync_real_players(db, real_competition_id, new_ids)
+        task.add_subtask(sub)
+        task.inc("queries_executed", sub.info.get("queries_executed") or 0)
+        task.inc("rows_affected", sub.info.get("rows_affected") or 0)
+
+        if len(sub.errors) == 0:
+            sub = SyncRealService._sync_new_player_standings(db, new_ids)
+            task.add_subtask(sub)
+            task.inc("queries_executed", sub.info.get("queries_executed") or 0)
+            task.inc("rows_affected", sub.info.get("rows_affected") or 0)
+
+        task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+        return task
+
         SyncRealService._sync_real_players(db, real_competition_id, new_ids)
         SyncRealService._sync_new_player_standings(db, new_ids)
 
@@ -147,7 +164,7 @@ class SyncRealService:
                 task,
                 "to_RealStandings(ins)",
                 f"""
-                INSERT INTO `RealStandings` (
+                INSERT IGNORE INTO `RealStandings` (
                     `realTeamMemberID`, `realTeamMemberKey`, `prevRealTeamMemberKey`, `nextRealTeamMemberKey`,
                     `realCompetitionID`, `realCompetitionUID`, `realCompetitionSYMID`, `realCompetitionSeasonId`,
                     `realCompetitionMatchDay`, `realCompetitionLastMatchDay`,
@@ -211,11 +228,7 @@ class SyncRealService:
                 INNER JOIN `RealMatches` `rm` ON `rm`.`realMatchID` = `rmt`.`realMatchID`
                 INNER JOIN `RealMatchTeams` `op_rmt` ON `op_rmt`.`realMatchID` = `rm`.`realMatchID`
                     AND `op_rmt`.`realMatchTeamID` <> `rmt`.`realMatchTeamID`
-                LEFT OUTER JOIN `RealStandings` `rs` ON `rs`.`realTeamMemberKey` = `rtm`.`realTeamMemberKey`
-                    AND `rs`.`realCompetitionMatchDay` = `rm`.`realCompetitionMatchDay`
-                    AND `rs`.`realCompetitionID` = `rm`.`realCompetitionID`
                 WHERE `rtm`.`realTeamMemberKey` IN ({placeholders})
-                  AND `rs`.`realStandingID` IS NULL
             """,
                 id_params,
             )
@@ -576,7 +589,7 @@ class SyncRealService:
         return task
 
     @staticmethod
-    def _sync_real_players(db: Session, real_competition_id: int, new_ids: list[int] = []) -> Task:
+    def _sync_real_players(db: Session, real_competition_id: int, new_ids: list[int] | None = None) -> Task:
         """Sync RealPlayers and the player rows in RealTeamMembers.
 
         Runs six queries in order:
@@ -594,6 +607,8 @@ class SyncRealService:
         Returns:
             Task with queries_executed and rows_affected counts.
         """
+        if new_ids is None:
+            new_ids = []
         task = Task(
             name="_sync_real_players", status=Task.RUNNING, status_on_error=Task.ERROR
         )

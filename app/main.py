@@ -9,7 +9,6 @@ from app.routers import (
     auth,
     division_notes,
     divisions,
-    gaming_api,
     leagues,
     legacy,
     lookups,
@@ -51,7 +50,6 @@ app.include_router(real_standings.router)
 app.include_router(matches.router)
 app.include_router(match_teams.router)
 app.include_router(real_team_standings.router)
-app.include_router(gaming_api.router)
 app.include_router(team_member_transfers.router)
 app.include_router(xml_feeds.router)
 app.include_router(pusher_auth.router)

@@ -44,11 +44,12 @@ async def legacy_leagues(
         require_authentication(current_user)
         if f == "ReadList":
             if type == "byUserID":
-
                 items = LeaguesReadListAction.execute(db, current_user, season)
-                return return_many_legacy("Leagues", items)
+
             else:
                 raise UnknownActionException(f, type)
+
+            return return_many_legacy("Leagues", items)
 
         elif f == "Build":
             user = db.query(User).filter(User.userID == current_user).first()
@@ -71,6 +72,7 @@ async def legacy_leagues(
             return return_one_legacy("Leagues", league_data)
 
         elif f == "Join":
+
             team_data = LeaguesJoinAction.execute(
                 db=db,
                 user_id=current_user,

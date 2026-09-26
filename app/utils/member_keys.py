@@ -146,10 +146,10 @@ class Keys(UserList):
     def to_list(keys: str | list[str] | Keys | None) -> list[str] | None:
         """Parse keys into a flat list of key strings.
 
-        Accepts a packed string (e.g. 'P1.P2.T3.'), a list of key strings,
-        a Keys instance, or None. Returns an empty list for None or an empty
-        input, and None if any key is invalid or the string format is wrong.
-        Always returns a copy — mutating the result does not affect the source.
+        Accepts any key string format: dot-separated ('P1.P2.T3.'), comma-separated,
+        space-separated, concatenated ('P1P2T3'), or mixed — as well as a list of key
+        strings, a Keys instance, or None. Returns an empty list for None or empty
+        input, and None if any key is invalid. Always returns a copy.
         """
         if keys is None:
             return []
@@ -162,15 +162,10 @@ class Keys(UserList):
             return keys.copy()
         elif not isinstance(keys, str):
             return None
-        keys = keys.strip()
-        if len(keys) == 0:
+        stripped = keys.strip().replace(".", "").replace(",", "").replace(" ", "")
+        if not stripped:
             return []
-        elif keys.endswith(Keys.SUFFIX):
-            # We have a packed list of keys
-            tmp_list = keys[:-1].split(Keys.SUFFIX)
-        else:
-            # Try a CSV
-            tmp_list = [k.strip() for k in keys.split(",")]
+        tmp_list = stripped.replace("P", " P").replace("T", " T")[1:].split(" ")
         result = []
         for k in tmp_list:
             if not Keys.is_valid(k):

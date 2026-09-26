@@ -110,11 +110,23 @@ class SignInAction:
 
 
 class SignOutAction:
-    """Sign out a user (token invalidation handled on client side)."""
+    """Sign out a user by blacklisting their token."""
 
     @staticmethod
-    def execute(user_id: int) -> dict:
-        """Sign out successful response (pure data)."""
+    def execute(db: Session, token: str | None) -> dict:
+        """Blacklist the token so it cannot be reused."""
+        if token:
+            from datetime import datetime, timezone
+
+            from app.models import TokenBlacklist
+            payload = decode_token(token)
+            if payload:
+                jti = payload.get("jti")
+                exp = payload.get("exp")
+                if jti and exp:
+                    expires_in = datetime.fromtimestamp(exp, tz=timezone.utc).replace(tzinfo=None)
+                    db.merge(TokenBlacklist(jti=jti, expiresIn=expires_in))
+                    db.commit()
         return {"success": True}
 
 

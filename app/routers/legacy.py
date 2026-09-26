@@ -33,7 +33,7 @@ async def legacy_users(
             }
 
         elif f == "SignOut":
-            result = SignOutAction.execute(0)
+            result = SignOutAction.execute(db, token)
             return {
                 "table": "success",
                 "values": result,
@@ -78,10 +78,10 @@ async def legacy_signin(
 
 
 @router.post("/eff/eff_api/SignOut.php")
-async def legacy_signout():
+async def legacy_signout(db: DbSession, token: CurrentToken):
     """Legacy SignOut endpoint (shortcut)."""
     RequestContext.set_datetime()
-    result = SignOutAction.execute(0)
+    result = SignOutAction.execute(db, token)
     response = {
         "table": "success",
         "values": result,

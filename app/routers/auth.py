@@ -32,6 +32,6 @@ def rest_signinfo(db: DbSession, token: CurrentToken) -> dict:
 
 
 @router.post("/sign_out")
-def rest_signout() -> dict:
+def rest_signout(db: DbSession, token: CurrentToken) -> dict:
     """REST endpoint: Sign out user."""
-    return SignOutAction.execute(0)
+    return SignOutAction.execute(db, token)

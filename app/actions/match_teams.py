@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.constants import MatchStatusConstants
 from app.context import RequestContext
+from app.guards import require_league_member, require_team_owner
 from app.models import Match, MatchTeam
 from app.services.query import QueryService
 from app.utils.dt import to_iso
@@ -17,8 +18,9 @@ class MatchTeamsReadListAction:
     """Handle MatchTeams ReadList requests."""
 
     @staticmethod
-    def execute(db: Session, team_id: int) -> dict:
+    def execute(db: Session, team_id: int, user_id: int | None = None) -> dict:
         """Get match teams for a team (matches where the team participated)."""
+        require_league_member(db, user_id, team_id=team_id)
         match_teams = (
             db.query(MatchTeam)
             .filter(MatchTeam.teamID == team_id)
@@ -178,7 +180,9 @@ class GetLineupByCompetitionTypeAction:
         team_id: int,
         competition_type: int,
         competition_match_day: int,
+        user_id: int | None = None,
     ) -> dict | None:
+        require_league_member(db, user_id, team_id=team_id)
         return GetLineupAction._execute(
             db,
             team_id=team_id,
@@ -199,7 +203,9 @@ class SetLineupByCompetitionTypeAction(GetLineupAction):
         real_team_id: int,
         real_player_ids: list[int],
         substitute_real_player_ids: list[int],
+        user_id: int | None = None,
     ) -> dict | None:
+        require_team_owner(db, user_id, team_id)
         new_lineup = Lineup.from_ids(
             real_team_id, real_player_ids, substitute_real_player_ids
         )

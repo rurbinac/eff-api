@@ -5,7 +5,14 @@ from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 
 from app.constants import DraftPositionConstants, RealMatchPeriod
-from app.models import Feed, RealMatch, RealMatchTeam, RealPlayer, RealStanding, RealTeam
+from app.models import (
+    Feed,
+    RealMatch,
+    RealMatchTeam,
+    RealPlayer,
+    RealStanding,
+    RealTeam,
+)
 from app.services.f7_events import load_booking, load_goal, load_substitution
 from app.services.f7_parser import F7Parser
 from app.services.f7_standings import calc_player_points, process_events
@@ -349,12 +356,14 @@ class F7Loader:
         #    Must run before quick mode so standings UPDATE can find the new rows.
         if new_player_ids and not task.errors:
             try:
-                from app.services.sync_real import SyncRealService  # lazy — avoids circular import
-                SyncRealService.sync_new_real_players(
+                from app.services.sync_real import SyncRealService  # lazy — avoids circular import  # noqa: I001
+                sync_task = SyncRealService.sync_new_real_players(
                     db,
                     real_competition_id=foundation["competition"]["realCompetitionID"],
                     new_ids=new_player_ids,
                 )
+                if sync_task:
+                    task.add_subtask(sync_task)
                 # Backfill realTeamMemberKey in players_cache so quick-mode standings UPDATE
                 # can find the newly created RealStandings rows (base competition: key = 'P{id}').
                 new_id_set = set(new_player_ids)

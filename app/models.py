@@ -713,3 +713,10 @@ class Feed(SQLModel, table=True):
     compressedName: str | None = Field(default=None, max_length=128)
     createdIn: datetime = Field(default_factory=datetime.utcnow, sa_type=UTCDateTime())
     updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
+
+
+class TokenBlacklist(SQLModel, table=True):
+    __tablename__ = "TokenBlacklist"
+
+    jti: str = Field(max_length=36, primary_key=True)
+    expiresIn: datetime = Field(sa_type=UTCDateTime(), index=True)

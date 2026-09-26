@@ -1,4 +1,5 @@
 import os
+import uuid
 from datetime import timedelta
 
 import bcrypt
@@ -32,6 +33,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     else:
         expire = now + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     to_encode.update({
+        "jti": str(uuid.uuid4()),
         "iat": now.timestamp(),
         "exp": expire.timestamp()
     })

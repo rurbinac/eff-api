@@ -5,7 +5,7 @@ from app.actions.team_standings import TeamStandingsReadListAction
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
 from app.exceptions import EFFException, UnknownActionException
-from app.guards import require_authentication
+from app.guards import require_authentication, require_pos_int
 from app.utils import JsonApiSerializer
 from app.utils.legacy_returns import return_error, return_many_legacy
 
@@ -32,6 +32,7 @@ async def legacy_team_standings(
         require_authentication(current_user)
         if f == "ReadList":
             if type == "byLeagueID":
+                require_pos_int(leagueID, "leagueID", f"{f}({type})")
                 items = TeamStandingsReadListAction.execute(
                     db, user_id=current_user, team_id=teamID, league_id=leagueID
                 )

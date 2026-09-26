@@ -22,6 +22,7 @@
 @season-status = 1
 @teams-per-division = 8,10
 @division-id = 130
+@division-note-id = 1
 @team-id = 1187
 @match-team-id = 16971
 @competition-type = 1
@@ -29,6 +30,7 @@
 @match-id = 8486
 @match-ids = 8486,8487
 @real-team-id = 23
+@real-team-member-key = P1
 @real-player-ids = 234,4234,234234,23
 @substitute-real-player-ids = 234,2347
 
@@ -280,6 +282,42 @@ Authorization: Bearer {{access-token}}
 _format={{format}}
 &_type=byDivisionID
 &divisionID={{division-id}}
+
+### 04.02 -> DivisionNotes - Create - {{team-id}}
+
+POST {{base-url}}/DivisionNotes.php?f=Create
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+&title=Test note
+&notes=Note content
+&divisionNoteType=B
+
+### 04.03 -> DivisionNotes - Update - {{division-note-id}}
+
+POST {{base-url}}/DivisionNotes.php?f=Update
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&divisionNoteID={{division-note-id}}
+&title=Updated title
+&notes=Updated content
+
+### 04.04 -> DivisionNotes - Delete - {{division-note-id}}
+
+POST {{base-url}}/DivisionNotes.php?f=Delete
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&divisionNoteID={{division-note-id}}
+
 
 #
 #   05    => Teams
@@ -562,6 +600,18 @@ _format={{format}}
 &realCompetitionID={{real-competition-id}}
 &realCompetitionMatchDay={{real-competition-match-day}}
 &divisionID={{division-id}}
+
+### 11.02 -> RealStandings - ReadList - byRealTeamMemberKey - {{real-competition-id}},{{real-team-member-key}}
+
+POST {{base-url}}/RealStandings.php?f=ReadList
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&_type=byRealTeamMemberKey
+&realCompetitionID={{real-competition-id}}
+&realTeamMemberKey={{real-team-member-key}}
 
 
 #

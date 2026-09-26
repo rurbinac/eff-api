@@ -1,12 +1,13 @@
+from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Header
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlmodel import SQLModel
 
 from app.config import settings
-from app.security import get_current_token, get_current_user
+from app.security import decode_token, get_current_token
 
 if settings.db_host:
     # Local dev: direct MySQL connection, no Cloud SQL Connector needed
@@ -45,6 +46,24 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def get_current_user(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> int | None:
+    """Decode the Bearer token, check the blacklist, and return the user ID."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    payload = decode_token(authorization[7:])
+    if payload is None:
+        return None
+    jti = payload.get("jti")
+    if jti:
+        from app.models import TokenBlacklist
+        if db.get(TokenBlacklist, jti) is not None:
+            return None
+    return int(payload["sub"])
 
 
 DbSession = Annotated[Session, Depends(get_db)]
