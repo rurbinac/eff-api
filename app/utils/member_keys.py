@@ -43,7 +43,7 @@ LOWEST_EPL_TEAM = DraftPositionConstants.LOWEST_EPL_TEAM
 # Aggregate position labels
 PLAYER = DraftPositionConstants.PLAYER
 MEMBER = DraftPositionConstants.MEMBER
-DP_UNKNOWN = DraftPositionConstants.DP_UNKNOWN
+UNKNOWN = DraftPositionConstants.UNKNOWN
 
 GroupData: TypeAlias = list[str]
 PackedData: TypeAlias = list[GroupData]
@@ -84,7 +84,7 @@ class Keys(UserList):
 
         Returns (prefix, id) on success, (None, None) if the key is invalid.
         """
-        k = key.strip()
+        k = key.strip(" " + Keys.SUFFIX)
         if len(k) > 1 and k.startswith((Keys.PLAYER, Keys.TEAM)):
             num = to_int(k[1:])
             if num is not None and num > 0:
@@ -1082,7 +1082,7 @@ class BaseMembers:
 
         Args:
             keys: One or more member keys to classify. None/empty returns {}.
-            allow_unknown: When True, unrecognised keys are grouped under DP_UNKNOWN
+            allow_unknown: When True, unrecognised keys are grouped under UNKNOWN
                 instead of causing a None return.
 
         Returns:
@@ -1098,7 +1098,7 @@ class BaseMembers:
             dp = self.get_dp(key)
             if dp is None:
                 if allow_unknown:
-                    dp = DP_UNKNOWN
+                    dp = UNKNOWN
                 else:
                     return None
             if dp not in by_dp:

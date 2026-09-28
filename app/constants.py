@@ -186,7 +186,7 @@ class DraftPositionConstants:
     # Aggregate position labels
     PLAYER: Final[str] = "Player"
     MEMBER: Final[str] = "Member"
-    DP_UNKNOWN: Final[str] = ""
+    UNKNOWN: Final[str] = "Unknown"
 
     # Min constraints
     MIN_EPL_TEAM: Final[int] = 2
@@ -477,6 +477,32 @@ class CompetitionTypeConstants:
             CompetitionTypeConstants.DIVISION_ROUND_ROBIN,
             CompetitionTypeConstants.DIVISION_KNOCK_OUT,
             CompetitionTypeConstants.LEAGUE_KNOCK_OUT,
+        )
+
+
+class TeamMemberTransfersStatusConstants:
+    REQUESTED: Final[int] = 1
+    ACCEPTED: Final[int] = 2
+    REJECTED: Final[int] = 3
+    WITHDRAWN: Final[int] = 4
+    CANCELLED: Final[int] = 5
+
+    @staticmethod
+    def is_valid(value: Any) -> bool:
+        return isinstance(TeamMemberTransfersStatusConstants.verify(value), int)
+
+    @staticmethod
+    def verify(value: Any) -> int | None:
+        return _verify_int(value, TeamMemberTransfersStatusConstants.valid_values())
+
+    @staticmethod
+    def valid_values() -> tuple[int, ...]:
+        return (
+            TeamMemberTransfersStatusConstants.REQUESTED,
+            TeamMemberTransfersStatusConstants.ACCEPTED,
+            TeamMemberTransfersStatusConstants.REJECTED,
+            TeamMemberTransfersStatusConstants.WITHDRAWN,
+            TeamMemberTransfersStatusConstants.CANCELLED,
         )
 
 

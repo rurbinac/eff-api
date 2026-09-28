@@ -24,7 +24,7 @@ from app.exceptions import (
     UnauthorizedException,
 )
 from app.models import Division, League, Team
-from app.utils.member_keys import Keys
+from app.utils.rtm_keys import Keys
 
 # ---------------------------------------------------------------------------
 # Bool checks
@@ -429,10 +429,11 @@ def require_league(db: Session, league_id: int | None) -> League:
     raise NotFoundException(object_name="League", object_id=league_id)
 
 
-def require_team_owner(db: Session, user_id: int, team_id: int | None) -> None:
+def require_team_owner(db: Session, user_id: int, team_id: int | None) -> Team:
     row = require_team(db, team_id)
-    if not user_owns_team(db, user_id, team=row):
-        raise NotYourTeamException()
+    if user_owns_team(db, user_id, team=row):
+        return row
+    raise NotYourTeamException()
 
 
 def require_division_member(

@@ -11,12 +11,12 @@ def return_one_legacy(table: str, value: dict) -> dict:
     }
 
 
-def return_many_legacy(table: str, values: list[dict]) -> dict:
+def return_many_legacy(table: str, values: list[dict]  | None) -> dict:
     return {
         "success": True,
         "timestamp": RequestContext.get_datetime_iso(),
         "table": table,
-        "items": [{"values": item} for item in values],
+        "items": [{"values": item} for item in values] if values else [],
     }
 
 def return_error(ex: EFFException, table: str | None = None) -> dict:

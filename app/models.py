@@ -675,6 +675,10 @@ class TeamMemberTransfers(SQLModel, table=True):
     __tablename__ = "TeamMemberTransfers"
 
     teamMemberTransferID: int | None = Field(default=None, primary_key=True)
+    teamID: int | None = None
+    otherTeamID: int | None = None
+    transferStatus: int | None = None
+    memberKeys: str | None = Field(default=None, max_length=500)
     createdIn: datetime = Field(sa_type=UTCDateTime())
     updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
