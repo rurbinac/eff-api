@@ -3,8 +3,9 @@ from fastapi import APIRouter, Form, Query, Request
 from app.actions.sign import SignInAction, SignInfoAction, SignOutAction
 from app.actions.top_epl import TopEPLAction
 from app.context import RequestContext
-from app.database import CurrentToken, DbSession
+from app.database import CurrentToken, CurrentUser, DbSession
 from app.exceptions import EFFException, UnknownActionException
+from app.guards import require_authentication
 from app.utils.legacy_returns import return_error, return_many_legacy, return_one_legacy
 
 router = APIRouter(tags=["legacy"])
@@ -62,12 +63,11 @@ async def legacy_signout(db: DbSession, token: CurrentToken):
 
 
 @router.post("/eff/eff_api/SignInfo.php")
-async def legacy_signinfo(db: DbSession, token: CurrentToken):
+async def legacy_signinfo(db: DbSession, current_user: CurrentUser, token: CurrentToken):
     """Legacy SignInfo endpoint (shortcut)."""
     RequestContext.set_datetime()
     try:
-        if token is None:
-            return {"error": "Missing or invalid token"}
+        require_authentication(current_user)
         session_data = SignInfoAction.execute_with_token(db, token)
         return return_one_legacy("Session", session_data)
     finally:
