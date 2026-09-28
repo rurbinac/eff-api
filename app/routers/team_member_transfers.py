@@ -31,16 +31,20 @@ async def legacy_team_member_transfers(
     RequestContext.set_datetime()
 
     try:
+
         require_authentication(current_user)
+
         if f == "GetPendingByTeamID":
             if type == "byLeagueID":
                 require_pos_int(teamID, "teamID", f)
-                items = TeamMemberTransfersGetPendingByTeamIDAction.execute(db, teamID, current_user)
+                items = TeamMemberTransfersGetPendingByTeamIDAction.execute(db, current_user, teamID)
                 return return_many_legacy("TeamMemberTransfers", items)
             else:
                 raise UnknownActionException(f, type)
+
         else:
             raise UnknownActionException(f)
+
     except EFFException as e:
         return return_error(e)
     finally:
@@ -58,7 +62,7 @@ def rest_team_member_transfers_pending(
     try:
         if payload.teamID is None:
             return JsonApiSerializer.serialize_error(400, "Bad Request", "teamID is required")
-        items = TeamMemberTransfersGetPendingByTeamIDAction.execute(db, payload.teamID, current_user)
+        items = TeamMemberTransfersGetPendingByTeamIDAction.execute(db, current_user, payload.teamID)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type='team-member-transfers',

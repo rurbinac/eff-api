@@ -5,7 +5,7 @@ from app.actions.real_standings import RealStandingsReadListAction
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
 from app.exceptions import EFFException, UnknownActionException
-from app.guards import require_authentication
+from app.guards import require_authentication, require_keys, require_pos_int
 from app.utils import JsonApiSerializer
 from app.utils.legacy_returns import return_error, return_many_legacy
 
@@ -33,9 +33,14 @@ async def legacy_real_standings(
     """Legacy PHP-compatible RealStandings endpoint."""
     RequestContext.set_datetime()
     try:
+
         require_authentication(current_user)
+
         if f == "ReadList":
             if type == "byDivisionID":
+                require_pos_int(realCompetitionID, "realCompetitionID", f"{f}({type})")
+                require_pos_int(realCompetitionMatchDay, "realCompetitionMatchDay", f"{f}({type})")
+                require_pos_int(divisionID, "divisionID", f"{f}({type})")
                 items = RealStandingsReadListAction.execute(
                     db,
                     real_competition_id=realCompetitionID,
@@ -43,6 +48,8 @@ async def legacy_real_standings(
                     division_id=divisionID,
                 )
             elif type == "byRealTeamMemberKey":
+                require_pos_int(realCompetitionID, "realCompetitionID", f"{f}({type})")
+                require_keys(realTeamMemberKey, f"{f}({type})")
                 include_list = [f.strip() for f in include.split(",")] if include else None
                 items = RealStandingsReadListAction.execute_by_member_key(
                     db,
@@ -53,8 +60,10 @@ async def legacy_real_standings(
             else:
                 raise UnknownActionException(f, type)
             return return_many_legacy("RealStandings", items)
+
         else:
             raise UnknownActionException(f)
+
     except EFFException as e:
         return return_error(e)
     finally:

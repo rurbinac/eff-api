@@ -29,7 +29,9 @@ async def legacy_real_matches(
     """Legacy PHP-compatible RealMatches endpoint."""
     RequestContext.set_datetime()
     try:
+
         require_authentication(current_user)
+
         if f == "ReadList":
             if type == "byMatchDay":
                 require_pos_int(realCompetitionID, "realCompetitionID", f"{f}({type})")
@@ -42,8 +44,10 @@ async def legacy_real_matches(
             else:
                 raise UnknownActionException(f, type)
             return return_many_legacy("RealMatches", items)
+
         else:
             raise UnknownActionException(f)
+
     except EFFException as e:
         return return_error(e)
     finally:

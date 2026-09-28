@@ -29,7 +29,9 @@ async def legacy_team_standings(
     """Legacy PHP-compatible TeamStandings endpoint."""
     RequestContext.set_datetime()
     try:
+
         require_authentication(current_user)
+
         if f == "ReadList":
             if type == "byLeagueID":
                 require_pos_int(leagueID, "leagueID", f"{f}({type})")
@@ -38,9 +40,11 @@ async def legacy_team_standings(
                 )
             else:
                 raise UnknownActionException(f, type)
+
             return return_many_legacy("TeamStandings", items)
         else:
             raise UnknownActionException(f)
+
     except EFFException as e:
         return return_error(e)
     finally:

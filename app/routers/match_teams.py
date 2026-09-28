@@ -57,7 +57,9 @@ async def legacy_match_teams(
     """Legacy PHP-compatible MatchTeams endpoint."""
     RequestContext.set_datetime()
     try:
+
         require_authentication(current_user)
+
         if f == "ReadList":
             if type == "byTeamID":
                 teamID = require_pos_int(teamID, "teamID", f)
@@ -65,12 +67,14 @@ async def legacy_match_teams(
             else:
                 raise UnknownActionException(f, type)
             return return_many_legacy("MatchTeams", items)
+
         elif f == "GetLineupByMatchTeamID":
             matchTeamID = require_value(matchTeamID, "matchTeamID", f)
             result = GetLineupByMatchTeamIDAction.execute(db, match_team_id=matchTeamID)
             if result is None:
                 raise NotFoundException("Lineup", matchTeamID)
             return return_many_legacy("MatchTeams", result)
+
         elif f == "GetLineupByCompetitionType":
             teamID = require_pos_int(teamID, "teamID", f)
             competitionMatchDay = require_pos_int(competitionMatchDay, "competitionMatchDay", f)
@@ -83,7 +87,8 @@ async def legacy_match_teams(
                 competition_match_day=competitionMatchDay,
                 user_id=current_user,
             )
-            return return_many_legacy("MatchTeams", result or [])
+            return return_many_legacy("MatchTeams", result)
+
         elif f == "SetLineupByCompetitionType":
             teamID = require_pos_int(teamID, "teamID", f)
             competitionMatchDay = require_pos_int(competitionMatchDay, "competitionMatchDay", f)
@@ -105,6 +110,7 @@ async def legacy_match_teams(
             if result is None:
                 raise NotFoundException("Lineup", teamID)
             return return_many_legacy("MatchTeams", result)
+
         elif f == "ClearLineupByMatchTeamID":
             require_value(matchTeamID, "matchTeamID", f)
             try:
@@ -114,6 +120,7 @@ async def legacy_match_teams(
             if result is None:
                 raise NotFoundException("Lineup", matchTeamID)
             return return_one_legacy("MatchTeams", result)
+
         elif f == "GetScoresByMatchDay":
             require_in_list(competitionType, CompetitionTypeConstants.valid_values(), "competitionType", f)
             require_value(competitionMatchDay, "competitionMatchDay", f)
@@ -128,14 +135,17 @@ async def legacy_match_teams(
             if result is None:
                 raise NotFoundException("Scores", competitionMatchDay)
             return return_many_legacy("MatchTeams", result)
+
         elif f == "GetScoresByMatchIDs":
             ids = require_pos_ints(matchIDs, "matchIDs", f)
             result = GetScoresByMatchIDsAction.execute(db, match_ids=ids)
             if result is None:
                 raise NotFoundException("Scores", None)
             return return_many_legacy("MatchTeams", result)
+
         else:
             raise UnknownActionException(f)
+
     except EFFException as e:
         return return_error(e)
     finally:

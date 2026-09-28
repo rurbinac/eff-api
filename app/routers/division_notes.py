@@ -81,6 +81,7 @@ async def legacy_division_notes(
 
         else:
             raise UnknownActionException(f)
+
     except EFFException as e:
         return return_error(e)
     finally:

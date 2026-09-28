@@ -83,8 +83,7 @@ async def legacy_divisions(
         if f == "ReadList":
             if type == "byLeagueID":
                 require_pos_int(leagueID, "leagueID", f"{f}({type})")
-                require_league_member(db, current_user, league_id=leagueID)
-                items = DivisionsReadListAction.execute(db, leagueID)
+                items = DivisionsReadListAction.execute(db, leagueID, user_id=current_user)
             else:
                 raise UnknownActionException(f, type)
             return return_many_legacy("Divisions", items)
@@ -145,7 +144,7 @@ async def legacy_divisions(
 
 
 @router.get("/api/v1/divisions")
-def rest_divisions(db: DbSession, leagueID: int | None = None):
+def rest_divisions(db: DbSession, current_user: CurrentUser, leagueID: int | None = None):
     """REST endpoint: Get divisions for league (JSON:API format)."""
     RequestContext.set_datetime()
     try:
@@ -153,7 +152,7 @@ def rest_divisions(db: DbSession, leagueID: int | None = None):
             return JsonApiSerializer.serialize_error(
                 400, "Bad Request", "leagueID is required"
             )
-        items = DivisionsReadListAction.execute(db, leagueID)
+        items = DivisionsReadListAction.execute(db, leagueID, user_id=current_user)
         response = JsonApiSerializer.serialize_collection(
             items,
             resource_type="divisions",

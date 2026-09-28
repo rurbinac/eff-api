@@ -22,15 +22,18 @@ async def legacy_lookups(
     """Legacy PHP-compatible Lookups endpoint."""
     RequestContext.set_datetime()
     try:
+
         if f == "ReadList":
             if type == "byLookupNum":
                 require_pos_int(lookupNum, "lookupNum", f"{f}({type})")
                 items = LookupsReadListAction.execute(db, lookup_num=lookupNum)
             else:
                 raise UnknownActionException(f, type)
+
         else:
             raise UnknownActionException(f)
         return return_many_legacy("Lookups", items)
+
     except EFFException as e:
         return return_error(e)
     finally:
