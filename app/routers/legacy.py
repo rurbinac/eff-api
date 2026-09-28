@@ -14,7 +14,6 @@ router = APIRouter(tags=["legacy"])
 async def legacy_users(
     db: DbSession,
     request: Request,
-    token: CurrentToken,
     f: str = Query(..., description="Action name"),
     userEmail: str = Form(None),
     userPassword: str = Form(None),
@@ -25,16 +24,6 @@ async def legacy_users(
     try:
         if f == "SignIn":
             session_data = SignInAction.execute(db, userEmail, userPassword, _client_ip(request))
-            return return_one_legacy("Session", session_data)
-
-        elif f == "SignOut":
-            result = SignOutAction.execute(db, token)
-            return return_one_legacy("success", result)
-
-        elif f == "SignInfo":
-            if token is None:
-                return {"error": "Missing or invalid token"}
-            session_data = SignInfoAction.execute_with_token(db, token)
             return return_one_legacy("Session", session_data)
 
         else:
