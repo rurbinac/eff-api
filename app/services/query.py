@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any, ClassVar
 
+from sqlalchemy import bindparam, select, text
 from sqlalchemy.orm import Session
 from sqlmodel import SQLModel
 
@@ -254,6 +255,47 @@ class QueryService:
             include.append("startPreMatch")
             include.append("startPostMatch")
         return QueryService._to_dict(mds, include=include, head=head, tail=tail)
+
+    @staticmethod
+    def get_member_stats_by_keys(
+        db: Session, real_competition_id: int, keys: list[str]
+    ) -> dict[str, dict]:
+        """Batch-fetch RealStandings for keys at their base competition's last match day.
+
+        Returns a dict keyed by realTeamMemberKey for O(1) lookup.
+        """
+        if not keys:
+            return {}
+        try:
+            rows = db.scalars(
+                select(RealStanding).where(
+                    RealStanding.realTeamMemberKey.in_(keys),
+                    RealStanding.realCompetitionID == real_competition_id,
+                    RealStanding.realCompetitionID == RealStanding.baseRealCompetitionID,
+                    RealStanding.realCompetitionMatchDay == RealStanding.realCompetitionLastMatchDay,
+                )
+            ).all()
+            return {r.realTeamMemberKey: r.model_dump() for r in rows}
+        except Exception:  # noqa: BLE001
+            return {}
+
+    @staticmethod
+    def get_real_team_members_by_keys(
+        db: Session, keys: list[str]
+    ) -> dict[str, dict]:
+        """Batch-fetch RealTeamMembers rows for a list of keys.
+
+        Returns a dict keyed by realTeamMemberKey for O(1) lookup.
+        Keys are season-scoped so no competition filter is needed.
+        """
+        if not keys:
+            return {}
+        rows = db.execute(
+            text("SELECT * FROM `RealTeamMembers` WHERE `realTeamMemberKey` IN :keys")
+            .bindparams(bindparam("keys", expanding=True)),
+            {"keys": keys},
+        ).mappings().all()
+        return {row["realTeamMemberKey"]: dict(row) for row in rows}
 
     @staticmethod
     def _to_dict(
@@ -828,3 +870,40 @@ class QueryService:
             "matchStatus",
         ]
         return QueryService._to_dict(result, include=include)
+
+    @staticmethod
+    def get_real_standings_by_keys(
+        db: Session,
+        real_competition_id: int,
+        real_competition_match_day: int,
+        keys: list[str],
+    ) -> list[dict]:
+        """Batch-fetch RealStandings rows for a list of member keys."""
+        if not keys:
+            return []
+        rows = db.execute(
+            text(
+                "SELECT * FROM `RealStandings`"
+                " WHERE `realCompetitionID` = :rc_id"
+                "   AND `realCompetitionMatchDay` = :rc_md"
+                "   AND `realTeamMemberKey` IN :keys"
+            ).bindparams(bindparam("keys", expanding=True)),
+            {"rc_id": real_competition_id, "rc_md": real_competition_match_day, "keys": keys},
+        ).mappings().all()
+        include = [
+            "realTeamMemberKey", "realTeamMemberID", "realMatchID", "realMatchStatus",
+            "realTeamID", "realTeamUID", "realTeamName", "realTeamShortName", "realTeamSide",
+            "oppositeRealTeamID", "oppositeRealTeamUID", "oppositeRealTeamName",
+            "oppositeRealTeamShortName", "realPlayerID", "realPlayerUID",
+            "firstName", "lastName", "knownName", "name", "sortName",
+            "draftPosition", "draftPositionOrder", "timePlayed", "gamePlayed",
+            "goals", "assists", "yellowCards", "redCards", "goalsConceded", "cleanSheet",
+            "matchDayPlayed", "played", "won", "draw", "lost", "goalsFor", "goalsAgainst",
+            "matchPointsL1", "pointsL1", "livePointsL1",
+            "matchTeamMemberRole", "matchTeamMemberPlayed", "matchTeamID", "teamID", "matchStatus",
+        ]
+        return [
+            {k: dict(row).get(k) for k in include}
+            for row in rows
+        ]
+

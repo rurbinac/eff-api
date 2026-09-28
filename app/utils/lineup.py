@@ -1,19 +1,15 @@
+from __future__ import annotations
+
 import re
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from typing import Any, ClassVar, Final
 
-from sqlalchemy import text
-from sqlalchemy.engine import RowMapping
-from sqlalchemy.orm import Session
-
 from app.constants import (
-    CompetitionTypeConstants,
     DraftPositionConstants,
     LineupConstants,
-    MatchStatusConstants,
-    RealMatchStatus,
 )
-from app.utils.member_keys import GetKeyData, GroupData, MKeys, PackedData
+from app.utils.readers import RSReader
+from app.utils.rtm_keys import KeyGroups, Keys
 
 
 class Formations:
@@ -115,15 +111,14 @@ class Formations:
 Formations.load_valid_formations(LineupConstants.VALID_FORMATIONS)
 
 
-class Lineup(MKeys):
+class Lineup(KeyGroups):
     """
     Manages football lineup data including players, teams, and substitutions.
 
-    This class extends MKeys to handle lineup-specific operations including:
-    - Cleaning and reorganizing lineup strings
-    - Validating formations
-    - Managing substitutions
-    - Loading lineup data from database
+    Inherits from KeyGroups (3 fixed slots):
+      slot 0 — starters + first EPL team
+      slot 1 — substitute bench players
+      slot 2 — additional EPL teams
     """
 
     FLAG: Final[str] = "!"
@@ -146,35 +141,43 @@ class Lineup(MKeys):
         Returns:
             Formatted lineup string or None if any input is None
         """
-        t_ids = MKeys.from_team_ids(team_ids)
-        p_ids = MKeys.from_player_ids(player_ids)
-        s_ids = MKeys.from_player_ids(sub_player_ids)
+        t_ids = Keys.to_str(
+            Keys.build_team_keys(team_ids) if team_ids is not None else None
+        )
+        p_ids = Keys.to_str(
+            Keys.build_player_keys(player_ids) if player_ids is not None else None
+        )
+        s_ids = Keys.to_str(
+            Keys.build_player_keys(sub_player_ids)
+            if sub_player_ids is not None
+            else None
+        )
         if t_ids is not None and p_ids is not None and s_ids is not None:
             if t_ids:
                 # Split teams into first (group 0) and second (group 2)
-                t_0, t_1 = t_ids.split(MKeys.SUFFIX, 1)
-                t_0 += MKeys.SUFFIX
+                t_0, t_1 = t_ids.split(Keys.SUFFIX, 1)
+                t_0 += Keys.SUFFIX
             else:
                 t_0, t_1 = "", ""
             # Format: players + first team | substitutes | second team
-            return p_ids + t_0 + MKeys.DELIM + s_ids + MKeys.DELIM + t_1
+            return p_ids + t_0 + KeyGroups.DELIM + s_ids + KeyGroups.DELIM + t_1
         return None
 
     @staticmethod
-    def is_empty(value: str | list | MKeys | None) -> bool:
+    def is_empty(value: str | list | KeyGroups | None) -> bool:
         """
         Check if a lineup value is empty or contains no meaningful data.
 
         Args:
-            value: The value to check (string, list, MKeys, or None)
+            value: The value to check (string, list, KeyGroups, or None)
 
         Returns:
             True if empty, False otherwise
         """
         if value is None:
             return True
-        elif isinstance(value, MKeys):
-            return len(value) == 0 and value.size == 3
+        elif isinstance(value, KeyGroups):
+            return value.count() == 0 and len(value) == 3
         elif isinstance(value, list):
             if len(value) == 0:
                 return True
@@ -190,7 +193,7 @@ class Lineup(MKeys):
                     return False
             return True
         elif isinstance(value, str):
-            return value == "" or value == MKeys.DELIM * 2
+            return value == "" or value == KeyGroups.DELIM * 2
         else:
             return False
 
@@ -219,391 +222,62 @@ class Lineup(MKeys):
         """
         # Handle empty input
         if Lineup.is_empty(lineup_txt):
-            return MKeys.DELIM * 2
+            return KeyGroups.DELIM * 2
         # Validate delimiter count (should be exactly 3 groups)
-        if lineup_txt.count(MKeys.DELIM) != 2:
+        if lineup_txt.count(KeyGroups.DELIM) != 2:
             return None
 
         first_team = True
         txt: list[str] = ["", "", ""]
 
-        for i, t in enumerate(lineup_txt.split(MKeys.DELIM)):
+        for i, t in enumerate(lineup_txt.split(KeyGroups.DELIM)):
             if t == "":
                 continue
             # Each item must end with SUFFIX
-            if not t.endswith(MKeys.SUFFIX):
+            if not t.endswith(Keys.SUFFIX):
                 return None
 
-            for k in t[:-1].split(MKeys.SUFFIX):
-                prefix, _ = MKeys.split_key(k)
+            for k in t[:-1].split(Keys.SUFFIX):
+                prefix, _ = Keys.split(k)
                 match prefix:
-                    case MKeys.PLAYER:
+                    case Keys.PLAYER:
                         # Players go to group 0 or 1 based on source group
                         n = 0 if i == 0 else 1
-                    case MKeys.TEAM:
+                    case Keys.TEAM:
                         # First team goes to group 0, subsequent teams to group 2
                         n = 0 if i == 0 and first_team else 2
                         first_team = False
                     case _:
                         return None
                 # Add the processed item to the appropriate bucket (with SUFFIX)
-                txt[n] += k + MKeys.SUFFIX
+                txt[n] += k + Keys.SUFFIX
 
         # Return the reorganized string with three DELIM-separated groups
-        return MKeys.DELIM.join(txt)
+        return KeyGroups.DELIM.join(txt)
 
-    def __init__(self, db: Session, get_key_data: GetKeyData):
-        """
-        Initialize the Lineup instance.
-
-        Args:
-            db: SQLAlchemy database session
-            get_key_data: Function to retrieve data about a key
-        """
-        super().__init__(False)
-        self._db = db
-        self._get_key_data = get_key_data
+    def __init__(
+        self,
+        reader: RSReader,
+        match_started: bool = True,
+    ):
+        super().__init__(3, allow_dups=False)
+        self._reader = reader
+        self._match_started = match_started
         self._substitutes: list[str] = []
-        self._team_members: GroupData = []
-        # Core lineup data
-        self._match_team_id: int | None = None
-        self._match_id: int | None = None
-        self._team_id: int | None = None
-        self._user_id: int | None = None
-        self._db_lineup: str | None = None
-        self._match_team_num: int | None = None
-        self._real_competition_id: int | None = None
-        self._real_competition_match_day: int | None = None
-        self._competition_type: int | None = None
-        self._competition_match_day: int | None = None
-        self._match_day_map_key: str | None = None
-        self._chosen_match_status: int | None = None
-        self._db_match_status: int | None = None
-        self._lineup_txt: str = MKeys.DELIM * 2
+        self._team_members: list[str] | None = None
 
     @property
-    def match_team_id(self) -> int | None:
-        """Get the match team ID."""
-        return self._match_team_id
+    def before_match(self) -> bool:
+        return self._match_started and isinstance(self._team_members, list)
 
     @property
-    def match_id(self) -> int | None:
-        """Get the match ID."""
-        return self._match_id
+    def in_match(self) -> bool:
+        return not self._match_started and isinstance(self._team_members, list)
 
     @property
-    def team_id(self) -> int | None:
-        """Get the team ID."""
-        return self._team_id
+    def after_match(self) -> bool:
+        return not isinstance(self._team_members, list)
 
-    @property
-    def user_id(self) -> int | None:
-        """Get the user ID."""
-        return self._user_id
-
-    @property
-    def match_team_num(self) -> int | None:
-        """Get the match team num."""
-        return self._match_team_num
-
-    @property
-    def real_competition_id(self) -> int | None:
-        """Get the real competition id."""
-        return self._real_competition_id
-
-    @property
-    def real_competition_match_day(self) -> int | None:
-        """Get the real competition match day."""
-        return self._real_competition_match_day
-
-    @property
-    def competition_type(self) -> int | None:
-        """Get the competition type."""
-        return self._competition_type
-
-    @property
-    def competition_match_day(self) -> int | None:
-        """Get the competition match day."""
-        return self._competition_match_day
-
-    @property
-    def match_day_map_key(self) -> str | None:
-        return self._match_day_map_key
-
-    @property
-    def lineup_changed(self) -> bool:
-        """Checks if the lineup has changed (compared to what is in the db)."""
-        return self.pack() != self._lineup_txt
-
-    @property
-    def match_status(self) -> int | None:
-        """
-        Get the match status, preferring chosen status over database status.
-
-        Returns:
-            The chosen match status if set, otherwise the database match status
-        """
-        return (
-            self._chosen_match_status
-            if self._chosen_match_status is not None
-            else self._db_match_status
-        )
-
-    @property
-    def chosen_match_status(self) -> int | None:
-        """Get the chosen match status (overrides database status)."""
-        return self._chosen_match_status
-
-    @property
-    def db_match_status(self) -> int | None:
-        """Get the database match status."""
-        return self._db_match_status
-
-    def read_by_match_team(self, match_team_id: int) -> RowMapping | None:
-        """
-        Read MatchTeam (+Match+Team) data by match team ID.
-
-        Args:
-            match_team_id: ID of the match team
-
-        Returns:
-            A RowMapping object if successfully, None otherwise
-        """
-        sql = """
-              SELECT `mt`.`matchTeamID`,
-                     `mt`.`matchID`,
-                     `mt`.`userID`,
-                     `mt`.`teamID`,
-                     `mt`.`matchTeamNum`,
-                     `m`.`realCompetitionID`,
-                     `m`.`realCompetitionMatchDay`,
-                     `m`.`realCompetitionMatchDaySort`,
-                     `m`.`matchStatus`,
-                     `m`.`competitionType`,
-                     `m`.`competitionMatchDay`,
-                     `mt`.`matchDayMapKey`,
-                     `mt`.`lineup`,
-                     `t`.`teamMembers`
-                 FROM `MatchTeams` `mt`
-                 INNER JOIN `Matches` `m` ON `m`.`matchID` = `mt`.`matchID`
-                 LEFT OUTER JOIN `Teams` `t` ON `t`.`teamID` = `mt`.`teamID`
-                 WHERE `mt`.`matchTeamID` = :matchTeamID
-            """
-        return (
-            self._db.execute(text(sql), {"matchTeamID": match_team_id})
-            .mappings()
-            .first()
-        )
-
-    def read_by_team_id(
-        self,
-        team_id: int,
-        competition_type: int,
-        competition_match_day: int,
-    ) -> RowMapping | None:
-        """
-        Read MatchTeam (+Match+Team) data by team ID, competition type, and match day.
-
-        Args:
-            team_id: ID of the team
-            competition_type: Type of competition
-            competition_match_day: Match day in the competition
-
-        Returns:
-            A RowMapping object if successfully, None otherwise
-        """
-        sql = """
-              SELECT `mt`.`matchTeamID`,
-                     `mt`.`matchID`,
-                     `mt`.`userID`,
-                     `mt`.`teamID`,
-                     `mt`.`matchTeamNum`,
-                     `m`.`realCompetitionID`,
-                     `m`.`realCompetitionMatchDay`,
-                     `m`.`realCompetitionMatchDaySort`,
-                     `m`.`matchStatus`,
-                     `m`.`competitionType`,
-                     `m`.`competitionMatchDay`,
-                     `mt`.`matchDayMapKey`,
-                     `mt`.`lineup`,
-                     `t`.`teamMembers`
-                 FROM `MatchTeams` `mt`
-                 INNER JOIN `Matches` `m` ON `m`.`matchID` = `mt`.`matchID`
-                 LEFT OUTER JOIN `Teams` `t` ON `t`.`teamID` = `mt`.`teamID`
-                 WHERE `mt`.`teamID` = :teamID
-                   AND `m`.`competitionType` = :competitionType
-                   AND `m`.`competitionMatchDay` = :competitionMatchDay
-            """
-        return (
-            self._db.execute(
-                text(sql),
-                {
-                    "teamID": team_id,
-                    "competitionType": competition_type,
-                    "competitionMatchDay": competition_match_day,
-                },
-            )
-            .mappings()
-            .first()
-        )
-
-    def load_by_match_team(
-        self,
-        match_team_id: int,
-        match_status: int | None = None,
-        new_lineup: str | None = None,
-    ) -> bool:
-        """
-        Load lineup data by match team ID.
-
-        Args:
-            match_team_id: ID of the match team
-            match_status: Optional match status override
-            new_lineup: Optional new lineup string
-
-        Returns:
-            True if loaded successfully, False otherwise
-        """
-        return self.load(
-            self.read_by_match_team(match_team_id), match_status, new_lineup
-        )
-
-    def load_by_team_id(
-        self,
-        team_id: int,
-        competition_type: int,
-        competition_match_day: int,
-        match_status: int | None = None,
-        new_lineup: str | None = None,
-    ) -> bool:
-        """
-        Load lineup data by team ID, competition type, and match day.
-
-        Args:
-            team_id: ID of the team
-            competition_type: Type of competition
-            competition_match_day: Match day in the competition
-            match_status: Optional match status override
-            new_lineup: Optional new lineup string
-
-        Returns:
-            True if loaded successfully, False otherwise
-        """
-        return self.load(
-            self.read_by_team_id(team_id, competition_type, competition_match_day),
-            match_status,
-            new_lineup,
-        )
-
-    def load(
-        self,
-        match_team: RowMapping | None,
-        match_status: int | None = None,
-        new_lineup: str | None = None,
-    ) -> bool:
-        """
-        Load lineup data from a match team record.
-
-        Args:
-            match_team: Database row mapping for the match team
-            match_status: Optional match status override
-            new_lineup: Optional new lineup string
-
-        Returns:
-            True if loaded successfully, False otherwise
-
-        This method orchestrates the loading process:
-        1. Set base values from the match team
-        2. Load team members
-        3. Process the lineup data
-        4. Handle formation validation and substitution calculations
-        """
-        if not self._set_values(match_team, match_status):
-            return self._set_values()
-        if not self._set_team_members(match_team):
-            return self._set_values()
-        if not self._process_lineup(match_team, new_lineup):
-            return self._set_values()
-
-        # For non-finished matches, validate and calculate formation
-        if self.match_status != MatchStatusConstants.FINISHED:
-            self._substitutes = []
-            self._check_team_members()
-            dp_count = self._calc_formation()
-            if self.match_status == MatchStatusConstants.PLAYING:
-                self._calc_substitutes(dp_count)
-        return True
-
-    def save_lineup(self, force: bool = False) -> bool:
-        """_summary_
-
-        Args:
-            force (bool, optional): _description_. Defaults to False.
-
-        Returns:
-            bool: _description_
-        """
-        if self._match_team_id is None:
-            return False
-        lineup = self.pack()
-        if not force and lineup == self._lineup_txt:
-            return False
-        self._db.execute(
-            text(
-                "UPDATE `MatchTeams` SET `lineup` = :lineup WHERE `matchTeamID` = :matchTeamID"
-            ),
-            {"lineup": lineup, "matchTeamID": self._match_team_id},
-        )
-        self._lineup_txt = lineup
-        return True
-
-    def save_match_status(
-        self, match_status: int | None = None, force: bool = False
-    ) -> bool:
-        """_summary_
-
-        Args:
-            match_status (int | None, optional): _description_. Defaults to None.
-            force (bool, optional): _description_. Defaults to False.
-
-        Returns:
-            bool: _description_
-        """
-        if self._match_id is None:
-            return False
-        match_status = MatchStatusConstants.verify(
-            match_status if match_status is not None else self.match_status
-        )
-        if match_status is None:
-            return False
-        if not force and match_status == self._db_match_status:
-            return False
-        self._db.execute(
-            text(
-                "UPDATE `Matches` SET `matchStatus` = :matchStatus WHERE `matchID` = :matchID"
-            ),
-            {"matchStatus": match_status, "matchID": self._match_id},
-        )
-        self._db_match_status = match_status
-        return True
-
-    def get_key_data(self, key: str) -> dict[str, Any]:
-        """
-        Get data for a specific key with normalized draft position.
-
-        Args:
-            key: The key to look up
-
-        Returns:
-            Dictionary containing key data with normalized draft position
-        """
-        data = self._get_key_data(key)
-        if not isinstance(data, dict):
-            data = {}
-        data["draftPosition"] = DraftPositionConstants.normalize(
-            data.get("draftPosition")
-        )
-        return data
 
     @property
     def substitutes(self) -> list[str]:
@@ -615,59 +289,66 @@ class Lineup(MKeys):
         """
         return self._substitutes
 
-    def unpack(self, data: str | PackedData | None = None) -> bool:
-        """
-        Unpack lineup data from a string or PackedData object.
+    def is_equal(self, lineup: str | Lineup) -> bool:
+        return self.pack() == (lineup.pack() if isinstance(lineup, Lineup) else lineup)
 
-        Args:
-            data: The data to unpack (string, PackedData, or None)
-
-        Returns:
-            True if unpacked successfully, False otherwise
-
-        This method handles the FLAG marker for substitutes and extracts
-        the substitution information.
-        """
+    def unpack(
+        self,
+        data: str | KeyGroups | Lineup | None = None,
+        team_members: str | list[str] | Keys | None = None,
+    ) -> bool:
         self._substitutes = []
+        self._team_members = None
         if isinstance(data, str):
-            # Handle the self.FLAG by temporarily removing it
             old_data = data
-            data = data.replace(self.FLAG + MKeys.SUFFIX, MKeys.SUFFIX)
-
-        if super().unpack(data, 3):
-            if isinstance(data, str):
-                # Add the flagged keys to substitutes
-                for i in (0, 1):
-                    for key in self._groups[i]:
-                        if key.startswith(MKeys.PLAYER) and key + self.FLAG in old_data:
-                            self._substitutes.append(key)
-            elif isinstance(data, Lineup):
-                # Copy substitutes from the source lineup
-                self._substitutes = data.substitutes
-            return True
-        return False
+            data = data.replace(self.FLAG + Keys.SUFFIX, Keys.SUFFIX)
+            if not super().unpack(data):
+                return False
+            for i in (0, 1):
+                for key in self._keys[i]:
+                    if key.startswith(Keys.PLAYER) and key + self.FLAG in old_data:
+                        self._substitutes.append(key)
+        elif isinstance(data, Lineup):
+            if not super().unpack(data):
+                return False
+            self._substitutes = list(data.substitutes)
+        elif isinstance(data, KeyGroups):
+            if len(data) != 3 or not super().unpack(data):
+                return False
+        elif data is None:
+            self.reset()
+        else:
+            return False
+        if not self.after_match:
+            parsed = Keys.to_list(team_members)
+            if parsed is None:
+                return False
+            self._team_members = parsed
+            self._check_team_members()
+            dp_count = self._calc_formation()
+            if self.in_match:
+                self._calc_substitutes(dp_count)
+        return True
 
     def pack(self) -> str:
-        """
-        Pack the lineup data into a string with substitute flags.
-
-        Returns:
-            String representation of the lineup with flags for substitutes
-        """
         txt = super().pack()
         for s in self.substitutes:
-            # Add the flag to the keys in self._substitutes
-            txt = txt.replace(s + MKeys.SUFFIX, s + self.FLAG + MKeys.SUFFIX)
+            txt = txt.replace(s + Keys.SUFFIX, s + self.FLAG + Keys.SUFFIX)
         return txt
 
-    def get_members(self) -> Iterator[dict[str, Any]]:
-        for g, keys in enumerate(self._groups):
-            for key in keys:
-                data = dict(self.get_key_data(key))
+    def score(self) -> int:
+        return sum(self._reader.get_score(k) for k in self.get_playing_keys())
+
+    def get_playing_keys(self) -> Generator[str, None, None]:
+        yield from (k for k in self._keys[0].data if k not in self._substitutes)
+        yield from (k for k in self._keys[1].data if k in self._substitutes)
+
+    def get_members(self, **kwargs) -> Iterator[dict[str, Any]]:
+        for g, slot in enumerate(self._keys):
+            for key in slot:
+                data = dict(self._reader.get_row(key))
                 data["realTeamMemberKey"] = key
-                data["matchTeamID"] = self.match_team_id
-                data["teamID"] = self.team_id
-                data["matchStatus"] = self.match_status
+                data.update(kwargs)
                 data["matchTeamMemberRole"] = g + 1
                 if key in self._substitutes:
                     data["matchTeamMemberPlayed"] = 1 if g == 1 else 0
@@ -675,157 +356,6 @@ class Lineup(MKeys):
                     data["matchTeamMemberPlayed"] = 1 if g == 0 else 0
 
                 yield data
-
-    def _set_values(
-        self,
-        match_team: RowMapping | None = None,
-        match_status: int | None = None,
-    ) -> bool:
-        """
-        Set base values from the match team data.
-
-        Args:
-            match_team: Database row mapping for the match team
-            match_status: Optional match status override
-
-        Returns:
-            True if match_team is not None, False otherwise
-        """
-        self._team_members = []
-        self._substitutes: list[str] = []
-        self._lineup_txt = MKeys.DELIM * 2
-        self._match_team_id = match_team["matchTeamID"] if match_team else None
-        self._match_id = match_team["matchID"] if match_team else None
-        self._team_id = match_team["teamID"] if match_team else None
-        self._user_id = match_team["userID"] if match_team else None
-        self._db_lineup = match_team["lineup"] if match_team else None
-        self._match_team_num = match_team["matchTeamNum"] if match_team else None
-        self._real_competition_id = (
-            match_team["realCompetitionID"] if match_team else None
-        )
-        self._real_competition_match_day = (
-            match_team["realCompetitionMatchDay"] if match_team else None
-        )
-        self._competition_type = CompetitionTypeConstants.verify(
-            match_team["competitionType"] if match_team else None
-        )
-        self._competition_match_day = (
-            match_team["competitionMatchDay"] if match_team else None
-        )
-        self._match_day_map_key = match_team["matchDayMapKey"] if match_team else None
-        self._db_match_status = MatchStatusConstants.verify(
-            match_team["matchStatus"] if match_team else None
-        )
-        self._chosen_match_status = MatchStatusConstants.verify(match_status)
-        return match_team is not None
-
-    def _set_team_members(self, match_team: RowMapping | None = None) -> bool:
-        """
-        Set team members based on match status.
-
-        Args:
-            match_team: Database row mapping for the match team
-
-        Returns:
-            True if team members were set successfully, False otherwise
-
-        Team members are only loaded for matches that haven't finished,
-        as finished matches don't need active roster data.
-        """
-        if self.match_status in (
-            MatchStatusConstants.NOT_STARTED,
-            MatchStatusConstants.PLAYING,
-        ):
-            self._team_members = MKeys.to_list(match_team["teamMembers"] or "", True)
-            if not isinstance(self._team_members, list) or len(self._team_members) <= 0:
-                self._team_members = []
-                return self._set_values()
-        elif self.match_status != MatchStatusConstants.FINISHED:
-            return self._set_values()
-        return True
-
-    def _process_lineup(
-        self, match_team: RowMapping | None = None, new_lineup: str | None = None
-    ) -> bool:
-        """
-        Process and clean the lineup data.
-
-        Args:
-            match_team: Database row mapping for the match team
-            new_lineup: Optional new lineup string
-
-        Returns:
-            True if lineup was processed successfully, False otherwise
-
-        This method handles:
-        1. Using a new lineup if provided (only for NOT_STARTED matches)
-        2. Falling back to previous lineup if current is empty
-        3. Cleaning up the lineup data
-        4. Unpacking the cleaned data
-        """
-        if new_lineup is not None:
-            # A request to change the lineup
-            if self.match_status == MatchStatusConstants.NOT_STARTED:
-                lineup_txt = new_lineup
-            else:
-                return self._set_values()
-        elif (
-            Lineup.is_empty(match_team["lineup"])
-            and self.match_status != MatchStatusConstants.FINISHED
-        ):
-            # Handle empty lineup
-            lineup_txt = self._get_prev_lineup()
-        else:
-            # Get the current lineup
-            lineup_txt = match_team["lineup"] or ""
-
-        lineup_txt = self.clean_up(lineup_txt)
-        if lineup_txt is None:
-            return self._set_values()
-
-        if not self.unpack(lineup_txt):
-            return self._set_values()
-        self._lineup_txt = lineup_txt
-        return True
-
-    def _get_prev_lineup(self) -> str:
-        """
-        Retrieve the previous lineup for the same team in the competition.
-
-        Returns:
-            The previous lineup string or empty lineup if none found
-        """
-        sql = """
-              SELECT `lineup`
-                 FROM `MatchTeams` `mt`
-                 INNER JOIN `Matches` `m` ON `m`.`matchID` = `mt`.`matchID`
-                 WHERE `mt`.`teamID` = :teamID
-                   AND `m`.`competitionType` = :competitionType
-                   AND `m`.`competitionMatchDay` < :competitionMatchDay
-                 ORDER BY `m`.`competitionMatchDay` DESC
-              """
-        rows = (
-            self._db.execute(
-                text(sql),
-                {
-                    "teamID": self._team_id,
-                    "competitionType": self._competition_type,
-                    "competitionMatchDay": self._competition_match_day,
-                },
-            )
-            .mappings()
-            .all()
-        )
-
-        # Find the first non-empty lineup from previous match days
-        for row in rows:
-            if not Lineup.is_empty(row["lineup"]):
-                lineup_txt = self.clean_up(row["lineup"])
-                if lineup_txt is not None:
-                    return lineup_txt
-
-        # Return empty lineup if no previous lineup found
-        return MKeys.DELIM * 2
 
     def _calc_formation(self) -> dict[str, int]:
         """
@@ -838,7 +368,7 @@ class Lineup(MKeys):
         moving additional players to their correct groups.
         """
         dp_count, formation = self._check_formation()
-        if self.match_status == MatchStatusConstants.PLAYING:
+        if self.before_match:
             dp_count = self._finish_formation(dp_count, formation)
         return dp_count
 
@@ -855,12 +385,11 @@ class Lineup(MKeys):
         players to other groups.
         """
         formation: str | None = None
-        group_0: GroupData = []
+        group_0: list[str] = []
         dp_count: dict[str, int] = {}
 
-        # Process players in group 0
-        for k in self._groups[0]:
-            dp = self.get_key_data(k).get("draftPosition")
+        for k in self._keys[0]:
+            dp = self._reader.get_dp(k)
             if dp is None:
                 continue
             elif formation is None:
@@ -870,11 +399,11 @@ class Lineup(MKeys):
                     if isinstance(form, str):
                         formation = form
                     continue
-            # Move invalid players to appropriate groups
-            g = 1 if k.startswith(MKeys.PLAYER) else 2
-            self._groups[g].append(k)
+            # Move overflow to subs (1) or teams (2); bypass dup-check since key is still in slot 0
+            g = 1 if k.startswith(Keys.PLAYER) else 2
+            self._keys[g].data.append(k)
 
-        self._groups[0] = group_0
+        self._keys[0].data = group_0
         return dp_count, formation
 
     def _finish_formation(
@@ -894,20 +423,20 @@ class Lineup(MKeys):
         to group 0 when they fit the formation.
         """
         for g in (1, 2):
-            group = []
-            for k in self._groups[g]:
-                dp = self.get_key_data(k).get("draftPosition")
+            remaining = []
+            for k in self._keys[g]:
+                dp = self._reader.get_dp(k)
                 if dp is None:
                     continue
                 elif formation is None:
                     valid, form, dp_count = Formations.formation_found(dp_count, dp)
                     if valid:
-                        self._groups[0].append(k)
+                        self._keys[0].data.append(k)
                         if isinstance(form, str):
                             formation = form
                         continue
-                group.append(k)
-            self._groups[g] = group
+                remaining.append(k)
+            self._keys[g].data = remaining
         return dp_count
 
     def _calc_substitutes(self, dp_count: dict[str, int]) -> None:
@@ -957,13 +486,9 @@ class Lineup(MKeys):
             for players who have finished their match and are eligible for substitution
         """
         ready_to_exit: dict[str, str] = {}
-        for k in self._groups[0]:
-            if k.startswith(MKeys.PLAYER):
-                data = self.get_key_data(k)
-                if data.get("realMatchStatus") == RealMatchStatus.FINISHED and data.get(
-                    "matchDayPlayed"
-                ):
-                    ready_to_exit[k] = data.get("draftPosition")
+        for k in self._keys[0]:
+            if Keys.is_player(k) and self._reader.real_played(k):
+                ready_to_exit[k] = self._reader.get_dp(k)
         return ready_to_exit
 
     def _next_substitute(
@@ -989,13 +514,13 @@ class Lineup(MKeys):
         This method tries to find a valid substitution that maintains
         formation validity.
         """
-        for k_in in self._groups[1]:
+        for k_in in self._keys[1]:
             if k_in in self._substitutes:
                 # Player already substituted
                 continue
             if k_in not in ready_to_enter:
                 # Cache the draft position
-                ready_to_enter[k_in] = self.get_key_data(k_in).get("draftPosition")
+                ready_to_enter[k_in] = self._reader.get_dp(k_in)
 
             dp_in = ready_to_enter[k_in]
             if dp_in is None or dp_in not in dp_count:
@@ -1030,176 +555,12 @@ class Lineup(MKeys):
         2. All team_members are included in the appropriate groups
         3. Players go to group 1, teams go to group 2
         """
-        # Remove keys not in team_members
         tm = set(self._team_members)
-        for i in range(self.size):
-            self._groups[i] = [x for x in self._groups[i] if x in tm]
+        for slot in self._keys:
+            slot.data = [x for x in slot if x in tm]
 
-        # Add missing team_members
-        keys = {k for _, k in self.keys()}
+        keys = {key for slot in self._keys for key in slot}
         for k in self._team_members:
             if k not in keys:
-                # Players go to group 1, Teams to group 2
-                g = 1 if k.startswith(MKeys.PLAYER) else 2
-                self._groups[g].append(k)
-
-
-class Scores:
-    def __init__(self, db: Session, get_key_data: GetKeyData):
-        self._db: Session = db
-        self._get_key_data = get_key_data
-        self._matches: list[dict[str, Any]] = []
-
-    def read_by_match_ids(self, match_ids: list[int]) -> list[RowMapping]:
-        params = {f"id{i}": v for i, v in enumerate(match_ids)}
-        placeholders = ",".join(f":id{i}" for i in range(len(match_ids)))
-        condition = f"`m`.`matchID` IN ({placeholders})"
-        return self._read(condition, params)
-
-    def read_by_match_day(
-        self,
-        competition_type: int,
-        competition_match_day: int,
-        league_id: int,
-        division_id: int | None = None,
-    ) -> list[RowMapping]:
-        condition = "`m`.`competitionType` = :competitionType"
-        condition += " AND `m`.`competitionMatchDay` = :competitionMatchDay"
-        condition += " AND `m`.`leagueID` = :leagueID"
-        params = {
-            "competitionType": competition_type,
-            "competitionMatchDay": competition_match_day,
-            "leagueID": league_id,
-        }
-        if competition_type != CompetitionTypeConstants.LEAGUE_KNOCK_OUT:
-            condition += " AND `m`.`divisionID` = :divisionID"
-            params["divisionID"] = division_id
-        return self._read(condition, params)
-
-    def load_by_match_ids(
-        self,
-        match_ids: list[int],
-        match_status: int | None = None,
-    ) -> bool:
-        return self.load(self.read_by_match_ids(match_ids), match_status)
-
-    def load_by_match_day(
-        self,
-        competition_type: int,
-        competition_match_day: int,
-        league_id: int,
-        division_id: int | None = None,
-        match_status: int | None = None,
-    ) -> bool:
-        return self.load(
-            self.read_by_match_day(
-                competition_type,
-                competition_match_day,
-                league_id,
-                division_id,
-            ),
-            match_status,
-        )
-
-    def load(
-        self,
-        match_teams: list[RowMapping] | None,
-        match_status: int | None = None,
-        add_detail: bool = True,
-    ) -> bool:
-        """
-        Load and process all match teams, building the scored match list.
-
-        Returns:
-            True if any match teams were loaded, False if the list was empty or None
-        """
-        self._matches = []
-        if not match_teams:
-            return False
-        for match_team in match_teams:
-            match = self._get_match(match_team, match_status, add_detail)
-            self._matches.append(match)
-        return True
-
-    def _read(self, condition: str, params: dict[str, Any]) -> list[RowMapping]:
-        sql = f"""
-               SELECT `mt`.`matchTeamID`,
-                      `mt`.`matchID`,
-                      `m`.`leagueID`,
-                      `m`.`divisionID`,
-                      `mt`.`userID`,
-                      `mt`.`teamID`,
-                      `mt`.`matchTeamNum`,
-                      `m`.`realCompetitionID`,
-                      `m`.`realCompetitionMatchDay`,
-                      `m`.`realCompetitionMatchDaySort`,
-                      `m`.`matchStatus`,
-                      `m`.`competitionType`,
-                      `m`.`competitionMatchDay`,
-                      `mt`.`matchDayMapKey`,
-                      `t`.`teamName`,
-                      `mt`.`teamScore`,
-                      `mt`.`lineup`,
-                      `t`.`teamMembers`
-                  FROM `MatchTeams` `mt`
-                  INNER JOIN `Matches` `m` ON `m`.`matchID` = `mt`.`matchID`
-                  LEFT OUTER JOIN `Teams` `t` ON `t`.`teamID` = `mt`.`teamID`
-                  WHERE {condition}
-                 ORDER BY `m`.`matchID`,
-                          `mt`.`matchTeamID`
-        """
-        return list(self._db.execute(text(sql), params).mappings().all())
-
-    def get_members(self) -> Iterator[dict[str, Any]]:
-        yield from self._matches
-
-    def _get_match(
-        self, match_team: RowMapping, match_status: int, add_detail: bool
-    ) -> dict[str, Any]:
-        """
-        Add lineup details to a row.
-
-        Args:
-            row: The row to add lineup details to
-            add_detail: Whether to add detailed lineup information
-
-        Returns:
-            The updated row with lineup details and calculated team score
-        """
-        lineup = Lineup(self._db, self._get_key_data)
-        lineup.load(match_team, match_status)
-        match: dict[str, Any] = {
-            "matchTeamID": match_team["matchTeamID"],
-            "matchID": match_team["matchID"],
-            "userID": match_team["userID"],
-            "teamID": match_team["teamID"],
-            "matchTeamNum": match_team["matchTeamNum"],
-            "realCompetitionID": match_team["realCompetitionID"],
-            "realCompetitionMatchDay": match_team["realCompetitionMatchDay"],
-            "matchStatus": match_team["matchStatus"],
-            "teamName": match_team["teamName"],
-            "teamScore": match_team["teamScore"],
-            "teamScoreCalc": 0,
-        }
-        for member in lineup.get_members():
-            if add_detail:
-                if "lineupDetail" not in match:
-                    match["lineupDetail"] = []
-                match["lineupDetail"].append(
-                    {
-                        "realTeamMemberKey": member["realTeamMemberKey"],
-                        "name": member["name"],
-                        "draftPosition": member["draftPosition"],
-                        "realTeamShortName": member["realTeamShortName"],
-                        "matchPointsL1": member["matchPointsL1"],
-                        "matchDayPlayed": member["matchDayPlayed"],
-                        "realMatchStatus": member["realMatchStatus"],
-                        "realMatchDateEnd": None,
-                        "matchTeamMemberRole": member["matchTeamMemberRole"],
-                        "matchTeamMemberPlayed": member["matchTeamMemberPlayed"],
-                    }
-                )
-            if member["matchTeamMemberPlayed"] == 1:
-                match["teamScoreCalc"] += member.get("matchPointsL1") or 0
-        match["teamScore"] = match["teamScoreCalc"]
-        return match
+                g = 1 if k.startswith(Keys.PLAYER) else 2
+                self._keys[g].data.append(k)
