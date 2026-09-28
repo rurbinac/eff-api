@@ -10,15 +10,16 @@ from app.guards import (
 )
 from app.services import QueryService
 from app.utils.dt import to_iso, utc_now
-from app.utils.member_keys import Keys
+from app.utils.rtm_keys import Keys
 
 
 class DivisionsReadListAction:
     """Get all divisions for a league."""
 
     @staticmethod
-    def execute(db: Session, league_id: int) -> list[dict]:
+    def execute(db: Session, league_id: int, user_id: int | None = None) -> list[dict]:
         """Get divisions for a league (pure data, no wrapper)."""
+        require_league_member(db, user_id, league_id=league_id)
         return QueryService.get_divisions_by_league(db, league_id)
 
 
@@ -81,7 +82,7 @@ class DivisionsTransactionsDetailAction:
             row.pop("otherMembersBefore", None)
             row.pop("otherMembersAfter", None)
 
-            stats = DivisionsTransactionsDetailAction._get_member_stats(
+            stats = QueryService.get_member_stats_by_keys(
                 db, row.get("realCompetitionID"), splitted.pop("all")
             )
 
@@ -189,32 +190,3 @@ class DivisionsTransactionsDetailAction:
 
         return added, dropped
 
-    @staticmethod
-    def _get_member_stats(
-        db: Session, real_competition_id: int, keys: list[str]
-    ) -> dict[str, dict]:
-        """Query RealStandings for all keys in one query; returns dict keyed by realTeamMemberKey."""
-        if not keys:
-            return {}
-        try:
-            placeholders = ", ".join(f":key_{i}" for i in range(len(keys)))
-            params = {f"key_{i}": k for i, k in enumerate(keys)}
-            params["realCompetitionID"] = real_competition_id
-            rows = (
-                db.execute(
-                    text(f"""
-                     SELECT *
-                        FROM `RealStandings`
-                        WHERE `realTeamMemberKey` IN ({placeholders})
-                          AND `realCompetitionID` = :realCompetitionID
-                          AND `realCompetitionID` = `baseRealCompetitionID`
-                          AND `realCompetitionMatchDay` = `realCompetitionLastMatchDay`
-                """),
-                    params,
-                )
-                .mappings()
-                .all()
-            )
-            return {row["realTeamMemberKey"]: dict(row) for row in rows}
-        except Exception:  # noqa: BLE001
-            return {}

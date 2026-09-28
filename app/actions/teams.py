@@ -1,4 +1,4 @@
-from sqlalchemy import bindparam, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.context import RequestContext
@@ -7,8 +7,9 @@ from app.guards import (
     require_team_owner,
 )
 from app.models import Team
+from app.services import QueryService
 from app.utils.dt import to_iso, utc_now
-from app.utils.member_keys import KeyGroups, Keys
+from app.utils.rtm_keys import KeyGroups, Keys
 
 
 class TeamsReadListAction:
@@ -161,31 +162,8 @@ class TeamsGetCurrentMembersAction:
         if not keys:
             return []
 
-        # Create dict with keys in order, initialized to None
-        my_dict = dict.fromkeys(keys, None)
-
-        # Query real team members — use expanding bindparam so the list is
-        # unpacked into individual placeholders: IN (:keys_0, :keys_1, ...)
-        members_stmt = text("""
-            SELECT *
-            FROM `RealTeamMembers`
-            WHERE `baseRealCompetitionID` = :baseRealCompetitionID
-              AND `realTeamMemberKey` IN :keys
-        """).bindparams(bindparam("keys", expanding=True))
-        members_result = db.execute(
-            members_stmt, {"baseRealCompetitionID": base_competition_id, "keys": keys}
-        )
-
-        # Populate dict with members
-        for row in members_result.mappings():
-            member_dict = dict(row)
-            member_key = member_dict.get("realTeamMemberKey")
-            if member_key in my_dict:
-                my_dict[member_key] = member_dict
-
-        # Return non-None values in order
-        result = [v for v in my_dict.values() if v is not None]
-        return result
+        members_by_key = QueryService.get_real_team_members_by_keys(db, keys)
+        return [members_by_key[k] for k in keys if k in members_by_key]
 
 
 class TeamsWaiverMembersDetailAction:
@@ -238,7 +216,7 @@ class TeamsWaiverMembersDetailAction:
         real_competition_id = mds_row.get("realCompetitionID")
         real_competition_match_day = mds_row.get("realCompetitionMatchDay")
 
-        kg = KeyGroups.unpack(members_waivers_str)
+        kg = KeyGroups.to_list(members_waivers_str)
         if not kg:
             return []
 
@@ -427,22 +405,8 @@ def _get_member_keys_field(db: Session, team_id: int, field: str) -> list[dict]:
     base_competition_id = team_row.get("baseRealCompetitionID")
     if not keys or not base_competition_id:
         return []
-    my_dict = dict.fromkeys(keys, None)
-    members_result = db.execute(
-        text("""
-            SELECT *
-            FROM `RealTeamMembers`
-            WHERE `baseRealCompetitionID` = :baseRealCompetitionID
-              AND `realTeamMemberKey` IN :keys
-        """).bindparams(bindparam("keys", expanding=True)),
-        {"baseRealCompetitionID": base_competition_id, "keys": keys},
-    )
-    for row in members_result.mappings():
-        member_dict = dict(row)
-        key = member_dict.get("realTeamMemberKey")
-        if key in my_dict:
-            my_dict[key] = member_dict
-    return [v for v in my_dict.values() if v is not None]
+    members_by_key = QueryService.get_real_team_members_by_keys(db, keys)
+    return [members_by_key[k] for k in keys if k in members_by_key]
 
 
 def _set_member_keys_field(

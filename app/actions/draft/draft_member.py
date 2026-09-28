@@ -20,7 +20,7 @@ from app.utils.match_day_map_keys import (
     division_map_days_map_key,
     split_map_days_map_key,
 )
-from app.utils.member_keys import DraftTeamMembers, MKeys
+from app.utils.rtm_keys import DraftingKeys, Keys
 
 
 class DraftMember(DraftBase):
@@ -61,16 +61,16 @@ class DraftMember(DraftBase):
             and team.get("userID") != self._dh.user_id
         ):
             raise NotYourTurnException()
-        dtm = DraftTeamMembers(get_dp=dv.get_dp)
-        dtm.unpack(team.get("teamMembers") or "")
+        dtm = DraftingKeys(dv.get_dp)
+        dtm.unpack(team.get("teamMembers"))
         available_positions = dtm.available_dp(draft_lowest=True)
 
         if not available_positions:
             raise NotAvailableDraftPositionsException()
 
         for key in self._next_member_key(available_positions):
-            dtm.add_member(key)
-            if dtm.is_valid():
+            dtm.append(key)
+            if dtm.is_valid:
                 self._selected_key = key
                 dv.set_member_team_id(key, team.get("teamID"), freeze_values=True)
                 return
@@ -209,11 +209,9 @@ class DraftMember(DraftBase):
             # Pick up one key automatically
             if self._use_ranking:
                 ranking = self.team.get("membersRanking") or ""
-                m_keys = MKeys()
-                if m_keys.unpack(ranking):
-                    for key in m_keys.keys(group=0):
-                        if self._is_available(key, available_positions):
-                            yield key
+                for key in Keys.to_list(ranking) or []:
+                    if self._is_available(key, available_positions):
+                        yield key
 
             for key in self._dh.draft_values.get_member_keys():
                 if self._is_available(key, available_positions):
@@ -248,7 +246,7 @@ class DraftMember(DraftBase):
                AND `teamID` <> :teamID
         """)
         self._dh.db.execute(sql, {
-            "key": self._selected_key + MKeys.SUFFIX,
+            "key": self._selected_key + Keys.SUFFIX,
             "matchDayMapKey": d.get("matchDayMapKey"),
             "leagueMatches": d.get("leagueMatches"),
             "divisionMatches": d.get("divisionMatches"),

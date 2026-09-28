@@ -2,9 +2,20 @@ from sqlalchemy.orm import Session
 
 from app.exceptions import NotFoundException
 from app.guards import require_league_member, require_team_owner
-from app.models import DivisionNotes, Team, User
+from app.models import DivisionNotes, User
 from app.services import QueryService
 from app.utils.dt import utc_now
+
+
+class DivisionNotesReadListAction:
+    """Get all notes for a division."""
+
+    @staticmethod
+    def execute(db: Session, division_id: int, user_id: int) -> list[dict]:
+        """Get notes for a division."""
+        require_league_member(db, user_id, division_id=division_id)
+        # Query all notes for division
+        return QueryService.get_division_notes(db, division_id)
 
 
 class DivisionNotesCreateAction:
@@ -21,10 +32,7 @@ class DivisionNotesCreateAction:
         parent_division_note_id: int | None = None,
     ) -> dict:
 
-        require_team_owner(db, user_id, team_id)
-        team = db.get(Team, team_id)
-        if not team:
-            raise NotFoundException("Team", team_id)
+        team = require_team_owner(db, user_id, team_id)
 
         user = db.get(User, user_id)
 
@@ -131,12 +139,3 @@ class DivisionNotesDeleteAction:
         return {"divisionNoteID": division_note_id}
 
 
-class DivisionNotesReadListAction:
-    """Get all notes for a division."""
-
-    @staticmethod
-    def execute(db: Session, division_id: int, user_id: int) -> list[dict]:
-        """Get notes for a division."""
-        require_league_member(db, user_id, division_id=division_id)
-        # Query all notes for division
-        return QueryService.get_division_notes(db, division_id)

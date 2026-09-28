@@ -1,7 +1,8 @@
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.guards import require_league_member
+from app.models import Match, MatchTeam, Team
 
 
 class TeamStandingsReadListAction:
@@ -14,63 +15,57 @@ class TeamStandingsReadListAction:
         team_id: int | None = None,
         league_id: int | None = None,
     ) -> list[dict]:
-        base_query = """
-            SELECT `mt`.`matchTeamID` AS `teamStandingID`,
-                   `t`.`leagueID`,
-                   `t`.`divisionID`,
-                   `t`.`teamID`,
-                   `t`.`userID`,
-                   `t`.`season`,
-                   `t`.`seasonNum`,
-                   `t`.`matchDayMapKey`,
-                   `m`.`realCompetitionID`,
-                   `m`.`realCompetitionMatchDay`,
-                   `m`.`competitionMatchDay`,
-                   `m`.`competitionLastMatchDay`,
-                   `t`.`teamName`,
-                   `mt`.`place`,
-                   `mt`.`won`,
-                   `mt`.`draw`,
-                   `mt`.`lost`,
-                   `mt`.`scoreFor`,
-                   `mt`.`scoreAgainst`,
-                   `mt`.`points`,
-                   `mt`.`wonHome`,
-                   `mt`.`drawHome`,
-                   `mt`.`lostHome`,
-                   `mt`.`scoreForHome`,
-                   `mt`.`scoreAgainstHome`,
-                   `mt`.`pointsHome`,
-                   `mt`.`wonAway`,
-                   `mt`.`drawAway`,
-                   `mt`.`lostAway`,
-                   `mt`.`scoreForAway`,
-                   `mt`.`scoreAgainstAway`,
-                   `mt`.`pointsAway`,
-                   `mt`.`createdBy`,
-                   `mt`.`createdIn`,
-                   `mt`.`updatedBy`,
-                   `mt`.`updatedIn`
-            FROM `MatchTeams` `mt`
-            INNER JOIN `Matches` `m` ON `m`.`matchID` = `mt`.`matchID`
-            INNER JOIN `Teams` `t` ON `t`.`teamID` = `mt`.`teamID`
-            WHERE 1=1
-        """
-
-        params = {}
+        stmt = (
+            select(
+                MatchTeam.matchTeamID.label("teamStandingID"),
+                Team.leagueID,
+                Team.divisionID,
+                Team.teamID,
+                Team.userID,
+                Team.season,
+                Team.seasonNum,
+                Team.matchDayMapKey,
+                Match.realCompetitionID,
+                Match.realCompetitionMatchDay,
+                Match.competitionMatchDay,
+                Match.competitionLastMatchDay,
+                Team.teamName,
+                MatchTeam.place,
+                MatchTeam.won,
+                MatchTeam.draw,
+                MatchTeam.lost,
+                MatchTeam.scoreFor,
+                MatchTeam.scoreAgainst,
+                MatchTeam.points,
+                MatchTeam.wonHome,
+                MatchTeam.drawHome,
+                MatchTeam.lostHome,
+                MatchTeam.scoreForHome,
+                MatchTeam.scoreAgainstHome,
+                MatchTeam.pointsHome,
+                MatchTeam.wonAway,
+                MatchTeam.drawAway,
+                MatchTeam.lostAway,
+                MatchTeam.scoreForAway,
+                MatchTeam.scoreAgainstAway,
+                MatchTeam.pointsAway,
+                MatchTeam.createdBy,
+                MatchTeam.createdIn,
+                MatchTeam.updatedBy,
+                MatchTeam.updatedIn,
+            )
+            .join(Match, Match.matchID == MatchTeam.matchID)
+            .join(Team, Team.teamID == MatchTeam.teamID)
+            .order_by(MatchTeam.place.asc())
+        )
 
         if team_id is not None:
             require_league_member(db, user_id, team_id=team_id)
-            base_query += " AND `mt`.`teamID` = :teamID"
-            params["teamID"] = team_id
+            stmt = stmt.where(MatchTeam.teamID == team_id)
         elif league_id is not None:
             require_league_member(db, user_id, league_id=league_id)
-            base_query += " AND `t`.`leagueID` = :leagueID"
-            params["leagueID"] = league_id
+            stmt = stmt.where(Team.leagueID == league_id)
         else:
             return []
 
-        base_query += " ORDER BY `mt`.`place` ASC"
-
-        result = db.execute(text(base_query), params)
-        return [dict(row) for row in result.mappings().all()]
+        return [dict(row) for row in db.execute(stmt).mappings().all()]

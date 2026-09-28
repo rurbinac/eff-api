@@ -9,7 +9,7 @@ from app.constants import DraftPositionConstants
 from app.exceptions import CannotSaveException
 from app.models import Division, Team
 from app.utils import optimistic_update
-from app.utils.member_keys import MKeys
+from app.utils.rtm_keys import Keys
 
 EPL_TEAM = DraftPositionConstants.EPL_TEAM
 
@@ -111,7 +111,7 @@ class DraftValues:
             for team in self._teams:
                 team_id = team.get("teamID")
                 if team_id is not None and team.get("teamMembers", "") != "":
-                    for key in team["teamMembers"].split(MKeys.SUFFIX):
+                    for key in (Keys.to_list(team.get("teamMembers")) or []):
                         if key in self._members:
                             self._members[key][1] = team_id
             return True
@@ -148,7 +148,7 @@ class DraftValues:
                         self.freeze_team_values(
                             "teamMembers", "draftMembers", f"cnt{dp}"
                         )
-                    teamMembers = team.get("teamMembers", "") + key + MKeys.SUFFIX
+                    teamMembers = team.get("teamMembers", "") + key + Keys.SUFFIX
                     team["teamMembers"] = teamMembers
                     team["draftMembers"] = teamMembers
                     team[f"cnt{dp}"] += 1
