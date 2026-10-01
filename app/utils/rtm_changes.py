@@ -1,4 +1,6 @@
-from sqlalchemy import text
+from datetime import datetime
+
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.constants import (
@@ -8,7 +10,8 @@ from app.constants import (
 )
 from app.exceptions import CannotSaveException
 from app.guards import require_team, require_team_owner
-from app.models import Team, TeamMemberLog, TeamMemberTransfers
+from app.models import MatchDaysStatus, Team, TeamMemberLog, TeamMemberTransfers
+from app.services import QueryService
 from app.utils.dt import utc_now
 from app.utils.readers import KeysReader
 from app.utils.rtm_keys import KeyGroups, Keys, MemberKeys
@@ -87,7 +90,7 @@ class AddDrop(RTMChange):
         self, team: Team, add_drop: Keys
     ) -> tuple[MemberKeys, list[str], list[str]]:
         members = MemberKeys(self._reader)
-        members.unpack(team.teamMembers)
+        members.unpack(team.teamMembesr)
         to_add, to_drop = members.get_add_drops(add_drop)
         return members, to_add, to_drop
 
@@ -107,6 +110,37 @@ class AddDrop(RTMChange):
 
 
 class Transfer(AddDrop):
+    @staticmethod
+    def pack(requested, offered, add_drop, other_add_drop=None) -> tuple[str, str]:
+        req = Keys.to_list(requested)
+        off = Keys.to_list(offered)
+        a_d = Keys.to_list(add_drop)
+        other_a_d = Keys.to_list(other_add_drop) if other_add_drop is not None else []
+        if req is None:
+            return "Incorrect requested keys", ""
+        if off is None:
+            return "Incorrect offered keys", ""
+        if a_d is None:
+            return "Incorrect add_drop keys", ""
+        if other_a_d is None:
+            return "Incorrect other_add_drop keys", ""
+        return "", KeyGroups.DELIM.join([
+            Keys.to_str(req) or "",
+            Keys.to_str(off) or "",
+            Keys.to_str(a_d) or "",
+            Keys.to_str(other_a_d) or "",
+        ])
+
+    @staticmethod
+    def unpack(keys) -> tuple[str, Keys, Keys, Keys, Keys]:
+        unpacked = KeyGroups.create(keys)
+        if not isinstance(unpacked, KeyGroups):
+            return "Cannot unpack the transfer keys", None, None, None, None
+        if len(unpacked) != 4:
+            return f"There are {len(unpacked)} groups of transfer keys instead of 4", None, None, None, None
+        return "", unpacked[0], unpacked[1], unpacked[2], unpacked[3]
+
+
     def __init__(self, db: Session, reader: KeysReader):
         super().__init__(db, reader)
         self._team: Team | None = None
@@ -280,8 +314,102 @@ class SettleWaivers(AddDrop):
     def __init__(self, db: Session, reader: KeysReader):
         super().__init__(db, reader)
 
-    def execute(self, division_id: int) -> bool:
-        pass
+    def _iter_teams(self, base_competition_id: int, now):
+        eligible_keys = (
+            select(MatchDaysStatus.matchDayMapKey)
+            .where(
+                MatchDaysStatus.baseRealCompetitionID == base_competition_id,
+                MatchDaysStatus.startWaiversSettle <= now,
+                MatchDaysStatus.finishBaseMatchDay > now,
+            )
+        )
+        yield from self._db.execute(
+            select(Team)
+            .where(
+                Team.baseRealCompetitionID == base_competition_id,
+                Team.matchDayMapKey.in_(eligible_keys),
+            )
+            .order_by(Team.divisionID, Team.waiversOrder)
+        ).scalars()
+
+    def _iter_divisions(self, base_competition_id: int, now):
+        teams: list[Team] = []
+        for team in self._iter_teams(base_competition_id, now):
+            if len(teams) > 0 and teams[0].divisionID != team.divisionID:
+                yield teams
+                teams = []
+            teams.append(team)
+        if len(teams) > 0:
+            yield teams
+
+    def _get_keys(self, teams: list[Team]) -> list[dict]:
+        div_keys = set()
+        teams_keys:list[dict] = []
+        for team in teams:
+            members = MemberKeys(self._reader)
+            members.unpack(team.teamMembers)
+            team_keys = {"members": members,
+                         "waivers": KeyGroups.to_list(team.membersWaivers)}
+            teams_keys.append(team_keys)
+            for key in team_keys["members"]:
+                div_keys.add(key)
+        return self._clean_keys(div_keys, teams_keys)
+
+    def _clean_keys(self, div_keys: set[str], teams_keys: list[dict]) -> list[dict]:
+        for i, team_keys in enumerate(teams_keys):
+            waivers = []
+            for keys in team_keys["waivers"]:
+                valid = True
+                add = 0
+                for key in keys:
+                    if key not in team_keys["members"]:
+                        if key in div_keys:
+                            valid = False
+                        else:
+                            add += 1
+                if valid and add == 1:
+                    waivers.append(keys)
+            teams_keys[i]["waivers"] = waivers
+        return teams_keys
+
+    def _process_division(self, teams: list[Team]) -> None:
+        teams_keys = self._get_keys(teams)
+        used = set()
+        for n in range(3):
+            changes = 0
+            for i, team in enumerate(teams):
+                while len(teams_keys[i]["waivers"]) > 0:
+                    keys = teams_keys[i]["waivers"].pop(0)
+                    if any(k in used for k in keys):
+                        continue
+                    to_add, to_drop = teams_keys[i]["members"].get_add_drops(keys)
+                    prev_members = team.teamMembers
+                    self._reader.load(keys=teams_keys[i]["members"] + to_add)
+                    if teams_keys[i]["members"].try_change(to_add, to_drop):
+                        changes += 1
+                        team.teamMembers = teams_keys[i]["members"].pack()
+                        team.membersWaivers = KeyGroups.to_str(teams_keys[i]["waivers"])
+                        team.cntAdd += len(to_add)
+                        team.cntDrop += len(to_drop)
+                        team.updatedIn = utc_now()
+                        for k in keys:
+                            used.add(k)
+                        _save_log(self._db, TeamMemberLogConstants.WAIVER, team, prev_members)
+                        break
+            if changes:
+                self._db.commit()
+        self._db.execute(
+            text("UPDATE Teams SET membersWaivers = '' WHERE divisionID = :div"),
+            {"div": teams[0].divisionID},
+        )
+        self._db.commit()
+
+
+    def execute(self, competition_id: int | None = None, now: datetime | None = None) -> bool:
+        base_competition_id = QueryService.get_base_competition_id(self._db, competition_id)
+        now = utc_now() if now is None else now
+        for teams in self._iter_divisions(base_competition_id, now):
+            self._process_division(teams)
 
 
 def _save_log(
