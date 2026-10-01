@@ -1,13 +1,14 @@
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.actions.teams import TeamsAddAndDropMembersAction
 from app.constants import TeamMemberTransfersStatusConstants
 from app.exceptions import NotFoundException
-from app.guards import require_team_owner
-from app.models import TeamMemberTransfers
+from app.guards import require_record, require_team_owner
+from app.models import Team, TeamMemberTransfers
 from app.services import QueryService
 from app.utils.dt import utc_now
+from app.utils.readers import RTMReader
+from app.utils.rtm_changes import AcceptTransfer
 from app.utils.rtm_keys import KeyGroups, Keys
 
 
@@ -124,11 +125,9 @@ class TeamMemberTransfersRequestAction:
 
 
 def _require_transfer(db: Session, transfer_id: int) -> TeamMemberTransfers:
-    transfer = db.get(TeamMemberTransfers, transfer_id)
-    if transfer is None:
-        raise NotFoundException(object_name="TeamMemberTransfer", object_id=transfer_id)
+    transfer = require_record(db, TeamMemberTransfers, transfer_id)
     if transfer.transferStatus != TeamMemberTransfersStatusConstants.REQUESTED:
-        raise NotFoundException(object_name="TeamMemberTransfer", object_id=transfer_id)
+        raise NotFoundException(object_name=TeamMemberTransfers.__name__, object_id=transfer_id)
     return transfer
 
 
@@ -138,16 +137,9 @@ class TeamMemberTransfersAcceptAction:
     @staticmethod
     def execute(db: Session, transfer_id: int, user_id: int, add_drop: Keys) -> dict:
         transfer = _require_transfer(db, transfer_id)
-        team = db.query(Team).filter(Team.teamID == transfer.teamID).first()
+        team = require_record(db, Team, transfer.teamID)
         other_team = require_team_owner(db, user_id, transfer.otherTeamID)
-        team_members = TeamsAddAndDropMembersAction._calc_team_members(db, team, add_drop)
-        TeamsAddAndDropMembersAction._check_team_members(db, team_members)
-        team.teamMembers = team_members.pack()
-        team.updatedBy = user_id
-        team.updatedIn = utc_now()
-        transfer.transferStatus = TeamMemberTransfersStatusConstants.ACCEPTED
-        transfer.updatedIn = utc_now()
-        db.commit()
+        AcceptTransfer(db, RTMReader(db)).execute(user_id, team, other_team, add_drop, transfer)
         return {"teamMemberTransferID": transfer.teamMemberTransferID, "transferStatus": transfer.transferStatus}
 
 

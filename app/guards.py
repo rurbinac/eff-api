@@ -28,7 +28,8 @@ from app.exceptions import (
     RequiredValueException,
     UnauthorizedException,
 )
-from app.models import Division, League, Team
+from app.constants import TeamMemberTransfersStatusConstants
+from app.models import Division, League, Team, TeamMemberTransfers
 from app.utils.rtm_keys import KeyGroups, Keys
 
 # ---------------------------------------------------------------------------
@@ -432,6 +433,13 @@ def require_division(db: Session, division_id: int | None) -> Division:
 
 def require_league(db: Session, league_id: int | None) -> League:
     return require_record(db, League, league_id)
+
+
+def require_transfer(db: Session, transfer_id: int | None) -> TeamMemberTransfers:
+    transfer = require_record(db, TeamMemberTransfers, transfer_id)
+    if transfer.transferStatus != TeamMemberTransfersStatusConstants.REQUESTED:
+        raise NotFoundException(object_name=TeamMemberTransfers.__name__, object_id=transfer_id)
+    return transfer
 
 
 def require_team_owner(db: Session, user_id: int, team_id: int | None) -> Team:

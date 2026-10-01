@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import UserList
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
     from app.utils.readers import KeysReader
@@ -21,10 +21,10 @@ class Keys(UserList):
     Also provides static helpers for parsing, building, and serialising keys.
     """
 
-    PLAYER: Final[str] = "P"
-    TEAM: Final[str] = "T"
-    SUFFIX: Final[str] = "."
-    _SUFFIX: Final[str] = ","
+    PLAYER: ClassVar[str] = "P"
+    TEAM: ClassVar[str] = "T"
+    SUFFIX: ClassVar[str] = "."
+    _SUFFIX: ClassVar[str] = ","
 
     @staticmethod
     def is_valid(key: str) -> bool:
@@ -309,8 +309,8 @@ class KeyGroups:
     Cross-group duplicates are always rejected (raises ValueError in GroupedKeys).
     """
 
-    DELIM: Final[str] = ":"
-    _DELIM: Final[str] = ";"
+    DELIM: ClassVar[str] = ":"
+    _DELIM: ClassVar[str] = ";"
 
     def __init__(self, size: int, allow_dups: bool | None = False):
         self._allow_dups = allow_dups
