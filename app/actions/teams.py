@@ -1,15 +1,20 @@
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.constants import WaiversConstants
 from app.context import RequestContext
+from app.exceptions import CannotSaveException, RequiredValueException
 from app.guards import (
+    require_division_commissioner,
     require_league_member,
+    require_team,
     require_team_owner,
 )
 from app.models import Team
 from app.services import QueryService
 from app.utils.dt import to_iso, utc_now
-from app.utils.rtm_keys import KeyGroups, Keys
+from app.utils.readers import RTMReader
+from app.utils.rtm_keys import KeyGroups, Keys, MemberKeys
 
 
 class TeamsReadListAction:
@@ -251,6 +256,26 @@ class TeamsWaiverMembersDetailAction:
         return members
 
 
+class TeamsWaiversRequestAction:
+    """Set or deletes team's waivers request."""
+
+    @staticmethod
+    def execute(db: Session, team_id: int, user_id: int, keys: KeyGroups) -> dict:
+        team = require_team_owner(db, user_id, team_id)
+        team_members: set[str] = set(Keys.to_list(team.teamMembers or "") or [])
+        for group in keys:
+            if not group:
+                continue
+            add, *drops = group
+            if add in team_members:
+                raise RequiredValueException("membersWaivers", "WaiversRequest")
+            for drop in drops:
+                if drop not in team_members:
+                    raise RequiredValueException("membersWaivers", "WaiversRequest")
+        keys.compress()
+        return _set_member_keys_field(db, team_id, "membersWaivers", keys)
+
+
 class TeamsGetRealMembersRankingAction:
     """Get real members ranking for a team."""
 
@@ -334,10 +359,81 @@ class TeamsSetRealMembersRankingAction:
     """Set real members ranking for a team."""
 
     @staticmethod
-    def execute(db: Session, team_id: int, user_id: int, member_keys_str: str) -> dict:
+    def execute(db: Session, team_id: int, user_id: int, keys: Keys) -> dict:
         """Set team's member ranking (pure data, no wrapper)."""
         require_team_owner(db, user_id, team_id)
-        return _set_member_keys_field(db, team_id, "membersRanking", member_keys_str)
+        return _set_member_keys_field(db, team_id, "membersRanking", keys)
+
+
+class TeamsAddAndDropMembersAction:
+    """Toggle team members: keys already in teamMembers are dropped, others are added."""
+
+    @staticmethod
+    def execute(db: Session, team_id: int, user_id: int, keys: Keys) -> dict:
+        team = require_team_owner(db, user_id, team_id)
+        reader = RTMReader(db)
+        member_keys = MemberKeys(reader)
+        member_keys.unpack(team.teamMembers)
+
+        to_add, to_drop = member_keys.get_add_drops(keys)
+
+        if to_add:
+            div_keys = TeamsAddAndDropMembersAction._read_division_keys(db, team)
+            for key in to_add:
+                if key in div_keys:
+                    raise CannotSaveException("teamMembers", f"{key} is already taken in the division")
+
+        if isinstance(WaiversConstants.MAX_ADD, int) and len(to_add) > WaiversConstants.MAX_ADD:
+            raise CannotSaveException("teamMembers", f"too many adds (max {WaiversConstants.MAX_ADD})")
+        if isinstance(WaiversConstants.MAX_DROP, int) and len(to_drop) > WaiversConstants.MAX_DROP:
+            raise CannotSaveException("teamMembers", f"too many drops (max {WaiversConstants.MAX_DROP})")
+
+        reader.load(keys=member_keys + to_add)
+
+        if not member_keys.try_change(to_add, to_drop):
+            raise CannotSaveException("teamMembers", "invalid team composition after changes")
+
+        packed = member_keys.pack()
+        team.teamMembers = packed
+        team.cntAdd += len(to_add)
+        team.cntDrop += len(to_drop)
+        team.updatedBy = user_id
+        team.updatedIn = utc_now()
+        db.commit()
+        return {"teamID": team.teamID, "teamMembers": packed}
+
+    @staticmethod
+    def _read_division_keys(db: Session, team: Team) -> Keys:
+        rows = (
+            db.execute(
+                text(
+                    "SELECT `teamMembers` FROM `Teams` WHERE `divisionID` = :div AND `teamID` != :tid"
+                ),
+                {"div": team.divisionID, "tid": team.teamID},
+            )
+            .mappings()
+            .all()
+        )
+        division_keys = Keys(allow_dups=None)
+        for row in rows:
+            for key in Keys.to_list(row.get("teamMembers") or "") or []:
+                division_keys.append(key)
+        return division_keys
+
+
+class TeamsMakeCommissionerAction:
+    """Grant or revoke co-commissioner status on a team (division commissioner only)."""
+
+    @staticmethod
+    def execute(db: Session, team_id: int, user_id: int, make: bool) -> dict:
+        team = require_team(db, team_id)
+        require_division_commissioner(db, user_id, team_id=team_id)
+        team.isCommissioner = 1 if make else 0
+        team.updatedBy = user_id
+        team.updatedIn = utc_now()
+        db.commit()
+        db.refresh(team)
+        return {"teamID": team.teamID, "isCommissioner": team.isCommissioner}
 
 
 class TeamsWishListDetailAction:
@@ -354,14 +450,10 @@ class TeamsWishListSetAction:
     """Set team's wish list."""
 
     @staticmethod
-    def execute(
-        db: Session, team_id: int, user_id: int, wish_list_keys_str: str
-    ) -> dict:
+    def execute(db: Session, team_id: int, user_id: int, keys: Keys) -> dict:
         """Set team's wish list (pure data, no wrapper)."""
         require_team_owner(db, user_id, team_id)
-        return _set_member_keys_field(
-            db, team_id, "membersWishList", wish_list_keys_str
-        )
+        return _set_member_keys_field(db, team_id, "membersWishList", keys)
 
 
 class TeamsFranchiseWishListDetailAction:
@@ -378,14 +470,10 @@ class TeamsSetFranchiseWishListAction:
     """Set team's franchise wish list."""
 
     @staticmethod
-    def execute(
-        db: Session, team_id: int, user_id: int, franchise_wish_list_keys_str: str
-    ) -> dict:
+    def execute(db: Session, team_id: int, user_id: int, keys: Keys) -> dict:
         """Set team's franchise wish list (pure data, no wrapper)."""
         require_team_owner(db, user_id, team_id)
-        return _set_member_keys_field(
-            db, team_id, "franchiseWishList", franchise_wish_list_keys_str
-        )
+        return _set_member_keys_field(db, team_id, "franchiseWishList", keys)
 
 
 def _get_member_keys_field(db: Session, team_id: int, field: str) -> list[dict]:
@@ -410,12 +498,9 @@ def _get_member_keys_field(db: Session, team_id: int, field: str) -> list[dict]:
 
 
 def _set_member_keys_field(
-    db: Session, team_id: int, field: str, keys_str: str
+    db: Session, team_id: int, field: str, keys: Keys | KeyGroups
 ) -> dict:
-    key_list = Keys.to_list(keys_str)
-    if not key_list:
-        raise Exception(f"Invalid keys for {field}")
-    packed = Keys(key_list).to_str()
+    packed = keys.pack()
     db.execute(
         text(f"UPDATE `Teams` SET `{field}` = :value WHERE `teamID` = :teamID"),
         {"value": packed, "teamID": team_id},

@@ -12,8 +12,13 @@ Usage in a handler:
     if user_in_division(db, current_user, division_id): ... # branch on membership
 """
 
+from typing import TypeVar
+
 from sqlalchemy import RowMapping
 from sqlalchemy.orm import Session
+from sqlmodel import SQLModel
+
+_T = TypeVar("_T", bound=SQLModel)
 
 from app.exceptions import (
     NotACommissionerException,
@@ -24,7 +29,7 @@ from app.exceptions import (
     UnauthorizedException,
 )
 from app.models import Division, League, Team
-from app.utils.rtm_keys import Keys
+from app.utils.rtm_keys import KeyGroups, Keys
 
 # ---------------------------------------------------------------------------
 # Bool checks
@@ -400,33 +405,33 @@ def require_keys(value, context: str | None = None) -> Keys:
         raise RequiredValueException("RealTeamMemberKey", context)
 
 
+def require_key_groups(value, context: str | None = None, allow_dups: bool | None = False) -> KeyGroups:
+    try:
+        keys = KeyGroups.create(value, allow_dups=allow_dups)
+        if keys is None:
+            raise ValueError
+        return keys
+    except (ValueError, TypeError):
+        raise RequiredValueException("RealTeamMemberKey", context)
+
+
+def require_record(db: Session, model: type[_T], record_id: int | None) -> _T:
+    record = db.get(model, record_id) if record_id else None
+    if record is None:
+        raise NotFoundException(object_name=model.__name__, object_id=record_id)
+    return record
+
+
 def require_team(db: Session, team_id: int | None) -> Team:
-    row = db.query(Team).filter(Team.teamID == team_id).first() if team_id else None
-    if row:
-        return row
-    raise NotFoundException(object_name="Team", object_id=team_id)
+    return require_record(db, Team, team_id)
 
 
 def require_division(db: Session, division_id: int | None) -> Division:
-    row = (
-        db.query(Division).filter(Division.divisionID == division_id).first()
-        if division_id
-        else None
-    )
-    if row:
-        return row
-    raise NotFoundException(object_name="Division", object_id=division_id)
+    return require_record(db, Division, division_id)
 
 
 def require_league(db: Session, league_id: int | None) -> League:
-    row = (
-        db.query(League).filter(League.leagueID == league_id).first()
-        if league_id
-        else None
-    )
-    if row:
-        return row
-    raise NotFoundException(object_name="League", object_id=league_id)
+    return require_record(db, League, league_id)
 
 
 def require_team_owner(db: Session, user_id: int, team_id: int | None) -> Team:

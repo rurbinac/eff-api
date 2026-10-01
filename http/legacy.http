@@ -33,6 +33,12 @@
 @real-team-member-key = P1
 @real-player-ids = 234,4234,234234,23
 @substitute-real-player-ids = 234,2347
+@team-member-transfer-id = 3
+@other-team-id = 57
+@waiver-member-keys = P1:P2
+@add-drop-keys = P12,T21
+@requested-keys = P1,P2
+@offered-keys = T3,P4
 
 
 #
@@ -93,7 +99,7 @@ _format={{format}}
 
 ### 01.02 -> SignInfo
 
-POST {{base-url}}/Users.php?f=SignInfo
+POST {{base-url}}/SignInfo.php
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
 Authorization: Bearer {{access-token}}
 
@@ -102,7 +108,7 @@ _format=json
 
 ### 01.03 -> SignOut
 
-POST {{base-url}}/Users.php?f=SignOut
+POST {{base-url}}/SignOut.php
 Content-Type: application/x-www-form-urlencoded; charset=UTF-8
 Authorization: Bearer {{access-token}}
 
@@ -404,6 +410,42 @@ _format={{format}}
 &notes=Some notes here
 
 
+### 05.08 -> Teams - WaiversRequest - {{team-id}}
+
+POST {{base-url}}/Teams.php?f=WaiversRequest
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+&waiversMemberKeys={{waiver-member-keys}}
+
+
+### 05.09 -> Teams - AddAndDropMembers - {{team-id}}
+
+POST {{base-url}}/Teams.php?f=AddAndDropMembers
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+&memberKeys={{add-drop-keys}}
+
+
+### 05.10 -> Teams - MakeCommissioner - {{team-id}}
+
+POST {{base-url}}/Teams.php?f=MakeCommissioner
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+&make=1
+
+
 #
 #   06    => TeamMemberTransfers
 #
@@ -429,6 +471,55 @@ Authorization: Bearer {{access-token}}
 
 _format={{format}}
 &teamID={{team-id}}
+
+
+### 06.03 -> TeamMemberTransfers - Accept - {{team-member-transfer-id}}
+
+POST {{base-url}}/TeamMemberTransfers.php?f=Accept
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamMemberTransferID={{team-member-transfer-id}}
+&addDrop={{add-drop-keys}}
+
+
+### 06.04 -> TeamMemberTransfers - Reject - {{team-member-transfer-id}}
+
+POST {{base-url}}/TeamMemberTransfers.php?f=Reject
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamMemberTransferID={{team-member-transfer-id}}
+
+
+### 06.05 -> TeamMemberTransfers - Withdraw - {{team-member-transfer-id}}
+
+POST {{base-url}}/TeamMemberTransfers.php?f=Withdraw
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamMemberTransferID={{team-member-transfer-id}}
+
+
+### 06.06 -> TeamMemberTransfers - Request - team {{team-id}} → {{other-team-id}}
+
+POST {{base-url}}/TeamMemberTransfers.php?f=Request
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+&otherTeamID={{other-team-id}}
+&requested={{requested-keys}}
+&offered={{offered-keys}}
+&addDrop={{add-drop-keys}}
 
 
 #

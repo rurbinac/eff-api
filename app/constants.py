@@ -1,7 +1,7 @@
 """Application constants for lookups and configuration."""
 
 from collections.abc import Iterator
-from typing import Any, Final
+from typing import Any, ClassVar, Final
 
 
 class LookupConstants:
@@ -162,6 +162,8 @@ class WaiversConstants:
 
     # Waiver configuration
     MAX_WAIVERS: Final[int] = 3
+    MAX_ADD: Final[int] = 3
+    MAX_DROP: Final[int | None] = None
 
 
 class RealCompetitionConstants:
@@ -177,41 +179,41 @@ class DraftPositionConstants:
     """Draft position order, name mappings, and team type constants."""
 
     # Position constants
-    GOALKEEPER: Final[str] = "Goalkeeper"
-    DEFENDER: Final[str] = "Defender"
-    MIDFIELDER: Final[str] = "Midfielder"
-    STRIKER: Final[str] = "Striker"
-    EPL_TEAM: Final[str] = "EPLTeam"
+    GOALKEEPER: ClassVar[str] = "Goalkeeper"
+    DEFENDER: ClassVar[str] = "Defender"
+    MIDFIELDER: ClassVar[str] = "Midfielder"
+    STRIKER: ClassVar[str] = "Striker"
+    EPL_TEAM: ClassVar[str] = "EPLTeam"
 
     # Aggregate position labels
-    PLAYER: Final[str] = "Player"
-    MEMBER: Final[str] = "Member"
-    UNKNOWN: Final[str] = "Unknown"
+    PLAYER: ClassVar[str] = "Player"
+    MEMBER: ClassVar[str] = "Member"
+    UNKNOWN: ClassVar[str] = "Unknown"
 
     # Min constraints
-    MIN_EPL_TEAM: Final[int] = 2
-    MIN_PLAYER: Final[int] = 14
-    MIN_GOALKEEPER: Final[int] = 2
-    MIN_DEFENDER: Final[int] = 5
-    MIN_MIDFIELDER: Final[int] = 5
-    MIN_STRIKER: Final[int] = 2
-    MIN_MEMBER: Final[int] = MIN_PLAYER + MIN_EPL_TEAM
+    MIN_EPL_TEAM: ClassVar[int] = 2
+    MIN_PLAYER: ClassVar[int] = 14
+    MIN_GOALKEEPER: ClassVar[int] = 2
+    MIN_DEFENDER: ClassVar[int] = 5
+    MIN_MIDFIELDER: ClassVar[int] = 5
+    MIN_STRIKER: ClassVar[int] = 2
+    MIN_MEMBER: ClassVar[int] = 16  # MIN_PLAYER + MIN_EPL_TEAM
 
     # Max constraints
-    MAX_EPL_TEAM: Final[int] = 2
-    MAX_PLAYER: Final[int] = 17
-    MAX_GOALKEEPER: Final[int] = 2
-    MAX_DEFENDER: Final[int] = 7
-    MAX_MIDFIELDER: Final[int] = 7
-    MAX_STRIKER: Final[int] = 3
-    MAX_MEMBER: Final[int] = MAX_PLAYER + MAX_EPL_TEAM
+    MAX_EPL_TEAM: ClassVar[int] = 2
+    MAX_PLAYER: ClassVar[int] = 17
+    MAX_GOALKEEPER: ClassVar[int] = 2
+    MAX_DEFENDER: ClassVar[int] = 7
+    MAX_MIDFIELDER: ClassVar[int] = 7
+    MAX_STRIKER: ClassVar[int] = 3
+    MAX_MEMBER: ClassVar[int] = 19  # MAX_PLAYER + MAX_EPL_TEAM
 
     # Lowest draft constraints
-    LOWEST_EPL_TEAM: Final[int] = 1
-    LOWEST_GOALKEEPER: Final[int] = 1
-    LOWEST_DEFENDER: Final[int] = 4
-    LOWEST_MIDFIELDER: Final[int] = 4
-    LOWEST_STRIKER: Final[int] = 2
+    LOWEST_EPL_TEAM: ClassVar[int] = 1
+    LOWEST_GOALKEEPER: ClassVar[int] = 1
+    LOWEST_DEFENDER: ClassVar[int] = 4
+    LOWEST_MIDFIELDER: ClassVar[int] = 4
+    LOWEST_STRIKER: ClassVar[int] = 2
 
     # Position constraint limits (will be set after class definition)
     LIMITS: dict | None = None
@@ -478,6 +480,14 @@ class CompetitionTypeConstants:
             CompetitionTypeConstants.DIVISION_KNOCK_OUT,
             CompetitionTypeConstants.LEAGUE_KNOCK_OUT,
         )
+
+
+class TeamMemberLogConstants:
+    DRAFTED: ClassVar[int] = 1
+    ADD_DROP: ClassVar[int] = 2
+    WAIVER: ClassVar[int] = 3
+    TRANSFER_SOURCE: ClassVar[int] = 4
+    TRANSFER_TARGET: ClassVar[int] = 5
 
 
 class TeamMemberTransfersStatusConstants:

@@ -204,7 +204,6 @@ class DraftMember(DraftBase):
                 and not self._timed_out
             ):
                 raise MemberNotAvailableException(self._member_key)
-        #
         if self._auto_draft or self._draft_unsigned or self._timed_out:
             # Pick up one key automatically
             if self._use_ranking:
@@ -228,10 +227,7 @@ class DraftMember(DraftBase):
             bool: _description_
         """
         dv = self._dh.draft_values
-        if dv.get_member_team_id(key) is None:
-            if dv.get_dp(key) in available_positions:
-                return True
-        return False
+        return dv.get_member_team_id(key) is None and dv.get_dp(key) in available_positions
 
     def _update_other_teams(self) -> None:
         """_summary_"""

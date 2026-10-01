@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from app.utils.readers import KeysReader
 
 from app.constants import DraftPositionConstants
-from app.utils.scalars import to_int
+from app.utils.scalars import parse_pos_ints, to_int
 
 
 class Keys(UserList):
@@ -21,9 +21,10 @@ class Keys(UserList):
     Also provides static helpers for parsing, building, and serialising keys.
     """
 
-    SUFFIX: Final[str] = "."
     PLAYER: Final[str] = "P"
     TEAM: Final[str] = "T"
+    SUFFIX: Final[str] = "."
+    _SUFFIX: Final[str] = ","
 
     @staticmethod
     def is_valid(key: str) -> bool:
@@ -64,43 +65,42 @@ class Keys(UserList):
         )
 
     @staticmethod
-    def build_player_keys(ids: int | list[int]) -> str | list[str] | None:
+    def build_player_keys(
+        ids: int | str | list | None, default: list[str] | None = None
+    ) -> list[str] | None:
         """Build one or more player key strings from an id or list of ids.
 
         Returns a single string for a scalar id, a list for a list of ids,
         or None if any id is invalid.
         """
-        return Keys._build_member_keys(ids, Keys.PLAYER)
+        return Keys._build_member_keys(ids, Keys.PLAYER, default)
 
     @staticmethod
-    def build_team_keys(ids: int | list[int]) -> str | list[str] | None:
+    def build_team_keys(
+        ids: int | str | list | None, default: list[str] | None = None
+    ) -> list[str] | None:
         """Build one or more team key strings from an id or list of ids.
 
         Returns a single string for a scalar id, a list for a list of ids,
         or None if any id is invalid.
         """
-        return Keys._build_member_keys(ids, Keys.TEAM)
+        return Keys._build_member_keys(ids, Keys.TEAM, default)
 
     @staticmethod
-    def to_str(keys: str | list[str] | Keys | None) -> str | None:
+    def to_str(value: str | list[str] | Keys | None) -> str | None:
         """Serialise keys to a packed dot-separated string (e.g. 'P1.P2.T3.').
 
         Accepts a Keys instance, a list of key strings, a single key string,
         or None. Returns an empty string for None or an empty collection,
         and None if any key is invalid.
         """
-        if keys is None:
-            return ""
-        elif isinstance(keys, Keys):
-            return keys.pack()
-        elif isinstance(keys, str):
-            keys = Keys._str_to_list(keys)
-        elif not isinstance(keys, list):
-            return None
-        return Keys._list_to_str(keys) if all(Keys.is_valid(k) for k in keys) else None
+        if isinstance(value, Keys):
+            return value.pack()
+        as_list = Keys.to_list(value)
+        return None if as_list is None else _keys_list_to_str(as_list)
 
     @staticmethod
-    def to_list(keys: str | list[str] | Keys | None) -> list[str] | None:
+    def to_list(value: str | list[str] | Keys | None) -> list[str] | None:
         """Parse keys into a flat list of key strings.
 
         Accepts any key string format: dot-separated ('P1.P2.T3.'), comma-separated,
@@ -108,42 +108,41 @@ class Keys(UserList):
         strings, a Keys instance, or None. Returns an empty list for None or empty
         input, and None if any key is invalid. Always returns a copy.
         """
-        if keys is None:
+        if value is None:
             return []
-        elif isinstance(keys, Keys):
-            return keys.data.copy()
-        elif isinstance(keys, list):
-            return keys.copy() if all(map(Keys.is_valid, keys)) else None
-        elif isinstance(keys, str):
-            tmp_list = Keys._str_to_list(keys)
-            return tmp_list if all(Keys.is_valid(k) for k in tmp_list) else None
+        elif isinstance(value, Keys):
+            return value.data.copy()
+        elif isinstance(value, list):
+            return value.copy() if all(map(Keys.is_valid, value)) else None
+        elif isinstance(value, str):
+            as_list = _keys_str_to_list(value)
+            return as_list if all(map(Keys.is_valid, as_list)) else None
         return None
 
     @staticmethod
-    def _build_member_keys(ids: int | list[int], suffix: str) -> str | list[str] | None:
+    def create(
+        value: str | list[str] | Keys | None, allow_dups: bool | None = False
+    ) -> Keys | None:
+        if value is None:
+            as_list = []
+        else:
+            as_list = Keys.to_list(value)
+            if as_list is None:
+                return None
+        try:
+            return Keys(as_list, allow_dups=allow_dups)
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _build_member_keys(
+        ids: int | str | list, suffix: str, default: list[str] | None
+    ) -> list[str] | None:
         """Build key string(s) from one or more ids using the given prefix."""
-        if isinstance(ids, int):
-            return suffix + str(ids) if ids > 0 else None
-        elif isinstance(ids, list):
-            keys = []
-            for i in ids:
-                key = Keys._build_member_keys(i, suffix)
-                if key is None:
-                    return None
-                keys.append(key)
-            return keys
-        return None
-
-    @staticmethod
-    def _str_to_list(txt: str) -> list[str]:
-        stripped = txt.strip().replace(".", "").replace(",", "").replace(" ", "")
-        if not stripped:
-            return []
-        return stripped.replace("P", " P").replace("T", " T")[1:].split(" ")
-
-    @staticmethod
-    def _list_to_str(items: list[str]) -> str:
-        return Keys.SUFFIX.join(items) + Keys.SUFFIX if len(items) > 0 else ""
+        try:
+            return [str(i) + suffix for i in parse_pos_ints(ids)]
+        except (ValueError, TypeError):
+            return default
 
     def __init__(self, initlist=None, allow_dups: bool | None = False):
         """Create a validated list of member keys.
@@ -193,7 +192,7 @@ class Keys(UserList):
 
         Returns an empty string if the list is empty.
         """
-        return Keys._list_to_str(self.data)
+        return _keys_list_to_str(self.data)
 
     def check(self) -> None:
         """Re-validate all keys and enforce the duplicate policy.
@@ -311,6 +310,7 @@ class KeyGroups:
     """
 
     DELIM: Final[str] = ":"
+    _DELIM: Final[str] = ";"
 
     def __init__(self, size: int, allow_dups: bool | None = False):
         self._allow_dups = allow_dups
@@ -319,28 +319,43 @@ class KeyGroups:
     # --- static helpers (used by callers that don't need a sized instance) ---
 
     @staticmethod
-    def to_list(groups: str | list | KeyGroups | None) -> list[list[str]] | None:
+    def to_str(value: str | list | Keys | KeyGroups | None) -> str | None:
+        if isinstance(value, (Keys, KeyGroups)):
+            return value.pack()
+        as_list = KeyGroups.to_list(value)
+        if as_list is None:
+            return None
+        return KeyGroups.DELIM.join(_keys_list_to_str(keys) for keys in as_list)
+
+    @staticmethod
+    def to_list(value: str | list | Keys | KeyGroups | None) -> list[list[str]] | None:
         """Parse packed string or list into a list of key lists.
 
         Returns empty list for None/empty input, None if any key is invalid.
         """
-        if groups is None:
+        if value is None:
             return []
-        if isinstance(groups, KeyGroups):
-            return [list(k) for k in groups._keys]
-        if isinstance(groups, str):
-            if not groups.strip():
+        if isinstance(value, KeyGroups):
+            return [list(k) for k in value._keys]
+        if isinstance(value, Keys):
+            return [list(value.data)]
+        if isinstance(value, str):
+            if not value.strip():
                 return []
             result = []
-            for part in groups.strip().split(KeyGroups.DELIM):
+            for part in (
+                value.replace(KeyGroups._DELIM, KeyGroups.DELIM)
+                .replace(" ", "")
+                .split(KeyGroups.DELIM)
+            ):
                 keys = Keys.to_list(part) if part else []
                 if keys is None:
                     return None
                 result.append(keys)
             return result
-        if isinstance(groups, list):
+        if isinstance(value, list):
             result = []
-            for g in groups:
+            for g in value:
                 keys = Keys.to_list(g if isinstance(g, (str, list, Keys)) else None)
                 if keys is None:
                     return None
@@ -348,11 +363,43 @@ class KeyGroups:
             return result
         return None
 
+    @staticmethod
+    def create(
+        value: str | list | Keys | KeyGroups | None,
+        size: int | None = None,
+        allow_dups: bool | None = False,
+    ) -> KeyGroups | None:
+        try:
+            if size is not None and size <= 0:
+                return None
+            if value is None:
+                as_list = []
+            else:
+                as_list = KeyGroups.to_list(value)
+                if as_list is None:
+                    return None
+                if size is None:
+                    size = len(as_list)
+                elif size < len(as_list):
+                    return None
+            key_gr = KeyGroups(size=size, allow_dups=allow_dups)
+            if len(as_list) > 0 and not key_gr.unpack(as_list):
+                return None
+            return key_gr
+        except (ValueError, TypeError):
+            return None
+
     # --- instance methods ---
 
     @property
     def allow_dups(self) -> bool | None:
         return self._allow_dups
+
+    def compress(self) -> None:
+        non_empty = [g for g in self._keys if len(g) > 0]
+        for i, g in enumerate(non_empty):
+            g._group = i
+        self._keys = non_empty
 
     def find(self, key: str) -> list[int]:
         """Return the list of group indices containing key (empty if not found)."""
@@ -370,41 +417,25 @@ class KeyGroups:
         """Serialise to a packed string (e.g. 'P1.P2.:T3.::P4.')."""
         return self.DELIM.join(k.pack() for k in self._keys)
 
-    def unpack(self, data: str | KeyGroups | None) -> bool:
-        """Replace group contents from a packed string.
+    def unpack(self, data: str | list | KeyGroups | None) -> bool:
+        """Replace group contents from a packed string, list, or KeyGroups.
 
-        Fills slots left-to-right; extra groups in the string beyond size
-        cause a False return. Returns True on success, False on invalid data
-        or duplicate key across groups.
+        Fills slots left-to-right; extra groups beyond size cause a False return.
+        Returns True on success, False on invalid data or duplicate key across groups.
         """
         self.reset()
-        if isinstance(data, KeyGroups):
-            if len(data) > len(self._keys):
-                return False
-            try:
-                for i, group in enumerate(data):
-                    for key in group:
-                        self._keys[i].append(key)
-            except ValueError:
-                self.reset()
-                return False
+        if data is None:
             return True
-        if data is None or not data.strip():
-            return True
-        parts = data.strip().split(self.DELIM)
-        if len(parts) > len(self._keys):
+        as_list = KeyGroups.to_list(data)
+        if as_list is None or len(as_list) > len(self._keys):
             return False
-        for i, part in enumerate(parts):
-            key_list = Keys.to_list(part) if part else []
-            if key_list is None:
-                self.reset()
-                return False
-            try:
-                for key in key_list:
+        try:
+            for i, group in enumerate(as_list):
+                for key in group:
                     self._keys[i].append(key)
-            except ValueError:
-                self.reset()
-                return False
+        except ValueError:
+            self.reset()
+            return False
         return True
 
     def count(self, unique: bool = False) -> int:
@@ -499,7 +530,7 @@ def collect_by_dp(
     get_dp: KeysReader | Callable[[str], str | None],
     by_dp: dict[str, list[str]] | None = None,
 ) -> dict[str, list[str]]:
-    if hasattr(get_dp, 'get_dp'):
+    if hasattr(get_dp, "get_dp"):
         get_dp = get_dp.get_dp
     if by_dp is None:
         by_dp: dict[str, list[str]] = {
@@ -518,7 +549,9 @@ def collect_by_dp(
     return by_dp
 
 
-def count_by_dp(keys: Keys | KeyGroups, get_dp: KeysReader | Callable[[str], str | None]) -> dict[str, int]:
+def count_by_dp(
+    keys: Keys | KeyGroups, get_dp: KeysReader | Callable[[str], str | None]
+) -> dict[str, int]:
     cnt_dp: dict[str, int] = {
         DraftPositionConstants.MEMBER: 0,
         DraftPositionConstants.PLAYER: 0,
@@ -532,14 +565,86 @@ def count_by_dp(keys: Keys | KeyGroups, get_dp: KeysReader | Callable[[str], str
                 cnt_dp[DraftPositionConstants.PLAYER] += cnt
     return cnt_dp
 
+def stats_by_dp(keys: Keys | KeyGroups, get_dp: KeysReader | Callable[[str], str | None]) -> dict[str, dict[str, int]]:
+    dp_cnt = count_by_dp(keys, get_dp)
+    dp_stats: dict[str, dict[str, int]] = {}
+    deficit = False
+    surplus = False
+    for dp, cnt_dp in dp_cnt.items():
+        limits = DraftPositionConstants.LIMITS[dp]
+        dp_stats[dp] = {"cnt": cnt_dp, "min": limits["min"], "max": limits["max"]}
+        if dp not in {DraftPositionConstants.PLAYER, DraftPositionConstants.MEMBER}:
+            dp_stats[dp]["must_add"] = max(limits["min"] - cnt_dp, 0)
+            dp_stats[dp]["must_remove"] = max(cnt_dp - limits["max"], 0)
+            dp_stats[dp]["can_add"] = max(limits["max"] - cnt_dp, 0)
+            dp_stats[dp]["can_remove"] = max(cnt_dp - limits["min"], 0)
+            deficit = deficit or dp_stats[dp]["must_add"] > 0
+            surplus = surplus or dp_stats[dp]["must_remove"] > 0
+    dp_stats[DraftPositionConstants.MEMBER]["deficit"] = deficit
+    dp_stats[DraftPositionConstants.MEMBER]["surplus"] = surplus
+    return dp_stats
+
+
+class MemberKeys(Keys):
+    def __init__(
+        self,
+        get_dp: KeysReader | Callable[[str], str | None],
+    ) -> None:
+        self._get_dp = get_dp.get_dp if hasattr(get_dp, "get_dp") else get_dp
+        super().__init__(allow_dups=False)
+
+    def get_add_drops(self, keys) -> tuple[list[str], list[str]]:
+        keys_list = Keys.to_list(keys) or []
+        current_set = set(self.data)
+        to_add = [k for k in keys_list if k not in current_set]
+        to_drop = [k for k in keys_list if k in current_set]
+        return (to_add, to_drop)
+
+    def try_change(self, to_add: list, to_drop: list) -> bool:
+        adding = {k: self._get_dp(k) for k in to_add}
+        dropping = {k: self._get_dp(k) for k in to_drop}
+        before = count_by_dp(self, self._get_dp)
+        after = before.copy()
+        keys = self.data.copy()
+        keys_set = set(keys)
+        for k, dp in dropping.items():
+            if not dp:
+                raise ValueError
+            if k not in keys_set:
+                return False
+            after[dp] = after.get(dp, 0) - 1
+            keys.remove(k)
+            keys_set.remove(k)
+        for k, dp in adding.items():
+            if not dp:
+                raise ValueError
+            if k in keys_set:
+                return False
+            after[dp] = after.get(dp, 0) + 1
+            keys.append(k)
+            keys_set.add(k)
+        if self._valid(after):
+            self.data = keys
+            return True
+        return False
+
+    def _valid(self, cnt: dict[str, int]) -> bool:
+        return all(
+            DraftPositionConstants.check_bounds(dp, n) == 0
+            for dp, n in cnt.items()
+            if dp in DraftPositionConstants.LIMITS
+        )
+
 
 class DraftingKeys(Keys):
     """Keys with draft-position awareness: dp_cnt, dp_stats, and available_dp."""
 
     def __init__(
-        self, get_dp: KeysReader | Callable[[str], str | None], allow_dups: bool | None = False
+        self,
+        get_dp: KeysReader | Callable[[str], str | None],
+        allow_dups: bool | None = False,
     ) -> None:
-        self._get_dp = get_dp.get_dp if hasattr(get_dp, 'get_dp') else get_dp
+        self._get_dp = get_dp.get_dp if hasattr(get_dp, "get_dp") else get_dp
         super().__init__(allow_dups=allow_dups)
 
     @property
@@ -569,26 +674,57 @@ class DraftingKeys(Keys):
     @property
     def is_valid(self) -> bool:
         dp_stats = self.dp_stats
-        return not dp_stats[DraftPositionConstants.MEMBER]["deficit"] and not dp_stats[DraftPositionConstants.MEMBER]["surplus"]
+        return (
+            not dp_stats[DraftPositionConstants.MEMBER]["deficit"]
+            and not dp_stats[DraftPositionConstants.MEMBER]["surplus"]
+        )
 
     def available_dp(self, draft_lowest: bool) -> set[str]:
         dp_cnt = self.dp_cnt
         available: set[str] = set()
         if draft_lowest:
             for dp, limits in DraftPositionConstants.LIMITS.items():
-                if dp not in {DraftPositionConstants.PLAYER, DraftPositionConstants.MEMBER} and dp_cnt.get(dp, 0) < limits["lowest"]:
+                if (
+                    dp
+                    not in {
+                        DraftPositionConstants.PLAYER,
+                        DraftPositionConstants.MEMBER,
+                    }
+                    and dp_cnt.get(dp, 0) < limits["lowest"]
+                ):
                     available.add(dp)
         if not available:
             dp_stats = self.dp_stats
             cnt_must = 0
             can_add_dp: set[str] = set()
             for dp, stats in dp_stats.items():
-                if dp not in {DraftPositionConstants.PLAYER, DraftPositionConstants.MEMBER}:
+                if dp not in {
+                    DraftPositionConstants.PLAYER,
+                    DraftPositionConstants.MEMBER,
+                }:
                     if stats["must_add"] > 0:
                         cnt_must += stats["must_add"]
                         available.add(dp)
                     elif stats["can_add"] > 0:
                         can_add_dp.add(dp)
-            if dp_stats[DraftPositionConstants.MEMBER]["cnt"] + cnt_must < dp_stats[DraftPositionConstants.MEMBER]["max"]:
+            if (
+                dp_stats[DraftPositionConstants.MEMBER]["cnt"] + cnt_must
+                < dp_stats[DraftPositionConstants.MEMBER]["max"]
+            ):
                 available.update(can_add_dp)
         return available
+
+
+def _keys_str_to_list(txt: str) -> list[str]:
+    stripped = txt.replace(Keys.SUFFIX, "").replace(Keys._SUFFIX, "").replace(" ", "")
+    if not stripped:
+        return []
+    return (
+        stripped.replace(Keys.PLAYER, " " + Keys.PLAYER)
+        .replace(Keys.TEAM, " " + Keys.TEAM)[1:]
+        .split(" ")
+    )
+
+
+def _keys_list_to_str(items: list[str]) -> str:
+    return Keys.SUFFIX.join(items) + Keys.SUFFIX if len(items) > 0 else ""

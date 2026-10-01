@@ -2,14 +2,17 @@ from fastapi import APIRouter, Form, Query
 from pydantic import BaseModel
 
 from app.actions.teams import (
+    TeamsAddAndDropMembersAction,
     TeamsFranchiseWishListDetailAction,
     TeamsGetCurrentMembersAction,
     TeamsGetRealMembersRankingAction,
+    TeamsMakeCommissionerAction,
     TeamsReadListAction,
     TeamsSetFranchiseWishListAction,
     TeamsSetRealMembersRankingAction,
     TeamsUpdateAction,
     TeamsWaiverMembersDetailAction,
+    TeamsWaiversRequestAction,
     TeamsWishListDetailAction,
     TeamsWishListSetAction,
 )
@@ -18,6 +21,8 @@ from app.database import CurrentUser, DbSession
 from app.exceptions import EFFException, UnknownActionException
 from app.guards import (
     require_authentication,
+    require_key_groups,
+    require_keys,
     require_pos_int,
 )
 from app.utils import JsonApiSerializer
@@ -39,6 +44,8 @@ async def legacy_teams(
     memberKeys: str | None = Form(None),
     wishListKeys: str | None = Form(None),
     franchiseWishListKeys: str | None = Form(None),
+    waiversMemberKeys: str | None = Form(None),
+    make: int | None = Form(None),
     type: str | None = Form(None, alias="_type"),
 ):
     """Legacy PHP-compatible endpoint for Teams actions."""
@@ -97,18 +104,45 @@ async def legacy_teams(
             )
             return return_one_legacy("Teams", values)
 
+        elif f == "AddAndDropMembers":
+            require_pos_int(teamID, "teamID", f)
+            keys = require_keys(memberKeys, f)
+            values = TeamsAddAndDropMembersAction.execute(
+                db, team_id=teamID, user_id=current_user, keys=keys,
+            )
+            return return_one_legacy("Teams", values)
+
+        elif f == "MakeCommissioner":
+            require_pos_int(teamID, "teamID", f)
+            values = TeamsMakeCommissionerAction.execute(
+                db, team_id=teamID, user_id=current_user, make=bool(make),
+            )
+            return return_one_legacy("Teams", values)
+
         elif f == "WishListDetail":
             require_pos_int(teamID, "teamID", f)
             items = TeamsWishListDetailAction.execute(db, teamID, current_user)
             return return_many_legacy("WishList", items)
 
+        elif f == "WaiversRequest":
+            require_pos_int(teamID, "teamID", f)
+            keys = require_key_groups(waiversMemberKeys, f, allow_dups=True)
+            values = TeamsWaiversRequestAction.execute(
+                db,
+                team_id=teamID,
+                user_id=current_user,
+                keys=keys,
+            )
+            return return_one_legacy("Teams", values)
+
         elif f == "WishListSet":
             require_pos_int(teamID, "teamID", f)
+            keys = require_keys(wishListKeys, f)
             values = TeamsWishListSetAction.execute(
                 db,
                 team_id=teamID,
                 user_id=current_user,
-                wish_list_keys_str=wishListKeys,
+                keys=keys,
             )
             return return_one_legacy("Teams", values)
 
@@ -119,11 +153,12 @@ async def legacy_teams(
 
         elif f == "SetFranchiseWishList":
             require_pos_int(teamID, "teamID", f)
+            keys = require_keys(franchiseWishListKeys, f)
             values = TeamsSetFranchiseWishListAction.execute(
                 db,
                 team_id=teamID,
                 user_id=current_user,
-                franchise_wish_list_keys_str=franchiseWishListKeys,
+                keys=keys,
             )
             return return_one_legacy("Teams", values)
 

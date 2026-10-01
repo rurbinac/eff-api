@@ -2,14 +2,18 @@ from fastapi import APIRouter, Form, Query
 from pydantic import BaseModel
 
 from app.actions.team_member_transfers import (
+    TeamMemberTransfersAcceptAction,
     TeamMemberTransfersGetPendingByTeamIDAction,
+    TeamMemberTransfersRejectAction,
+    TeamMemberTransfersRequestAction,
+    TeamMemberTransfersWithdrawAction,
 )
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
 from app.exceptions import EFFException, UnknownActionException
-from app.guards import require_authentication, require_pos_int
+from app.guards import require_authentication, require_keys, require_pos_int
 from app.utils import JsonApiSerializer
-from app.utils.legacy_returns import return_error, return_many_legacy
+from app.utils.legacy_returns import return_error, return_many_legacy, return_one_legacy
 
 
 class TeamMemberTransfersRequest(BaseModel):
@@ -26,6 +30,11 @@ async def legacy_team_member_transfers(
     f: str = Query(..., description="Action name"),
     type: str | None = Form(None, alias="_type"),
     teamID: int | None = Form(None),
+    otherTeamID: int | None = Form(None),
+    teamMemberTransferID: int | None = Form(None),
+    requested: str | None = Form(None),
+    offered: str | None = Form(None),
+    addDrop: str | None = Form(None),
 ):
     """Legacy PHP-compatible endpoint for TeamMemberTransfers actions."""
     RequestContext.set_datetime()
@@ -34,13 +43,47 @@ async def legacy_team_member_transfers(
 
         require_authentication(current_user)
 
-        if f == "GetPendingByTeamID":
+        if f == "Request":
+            require_pos_int(teamID, "teamID", f)
+            require_pos_int(otherTeamID, "otherTeamID", f)
+            req_keys = require_keys(requested, f)
+            off_keys = require_keys(offered, f)
+            drop_keys = require_keys(addDrop, f)
+            values = TeamMemberTransfersRequestAction.execute(
+                db, user_id=current_user, team_id=teamID, other_team_id=otherTeamID,
+                requested=req_keys, offered=off_keys, add_drop=drop_keys,
+            )
+            return return_one_legacy("TeamMemberTransfers", values)
+
+        elif f == "GetPendingByTeamID":
             if type == "byLeagueID":
                 require_pos_int(teamID, "teamID", f)
                 items = TeamMemberTransfersGetPendingByTeamIDAction.execute(db, current_user, teamID)
                 return return_many_legacy("TeamMemberTransfers", items)
             else:
                 raise UnknownActionException(f, type)
+
+        elif f == "Accept":
+            require_pos_int(teamMemberTransferID, "teamMemberTransferID", f)
+            keys = require_keys(addDrop, f)
+            values = TeamMemberTransfersAcceptAction.execute(
+                db, transfer_id=teamMemberTransferID, user_id=current_user, add_drop=keys,
+            )
+            return return_one_legacy("TeamMemberTransfers", values)
+
+        elif f == "Reject":
+            require_pos_int(teamMemberTransferID, "teamMemberTransferID", f)
+            values = TeamMemberTransfersRejectAction.execute(
+                db, transfer_id=teamMemberTransferID, user_id=current_user,
+            )
+            return return_one_legacy("TeamMemberTransfers", values)
+
+        elif f == "Withdraw":
+            require_pos_int(teamMemberTransferID, "teamMemberTransferID", f)
+            values = TeamMemberTransfersWithdrawAction.execute(
+                db, transfer_id=teamMemberTransferID, user_id=current_user,
+            )
+            return return_one_legacy("TeamMemberTransfers", values)
 
         else:
             raise UnknownActionException(f)

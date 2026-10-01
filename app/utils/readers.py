@@ -56,7 +56,7 @@ class KeysReader(Reader):
         merged = list(keys) if keys else []
         if key is not None:
             merged.append(key)
-        return [k for k in merged if Keys.isvalid(k) and k not in self._cache]
+        return [k for k in merged if Keys.is_valid(k) and k not in self._cache]
 
     def _check_dp(self, data: dict) -> dict:
         data["draftPosition"] = DraftPositionConstants.normalize(
