@@ -56,10 +56,10 @@ class AddDrop(RTMChange):
         super().__init__(db, reader)
 
     def execute(self, user_id: int, team: Team, add_drop: Keys) -> None:
+        if len(add_drop) == 0:
+            return
         keys_before = team.teamMembers or ""
         members, to_add, to_drop = self._init_keys(team, add_drop)
-        if len(to_add) + len(to_drop) == 0:
-            return False
         self._check_max(team, len(to_add), len(to_drop))
 
         if to_add:
@@ -384,7 +384,6 @@ class SettleWaivers(AddDrop):
                         continue
                     to_add, to_drop = teams_keys[i]["members"].get_add_drops(keys)
                     prev_members = team.teamMembers
-                    self._reader.load(keys=teams_keys[i]["members"] + to_add)
                     if teams_keys[i]["members"].try_change(to_add, to_drop):
                         changes += 1
                         team.teamMembers = teams_keys[i]["members"].pack()
@@ -406,6 +405,7 @@ class SettleWaivers(AddDrop):
 
 
     def execute(self, competition_id: int | None = None, now: datetime | None = None) -> bool:
+        self._reader.load(rc_id=competition_id)
         base_competition_id = QueryService.get_base_competition_id(self._db, competition_id)
         now = utc_now() if now is None else now
         for teams in self._iter_divisions(base_competition_id, now):

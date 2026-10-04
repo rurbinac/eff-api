@@ -39,7 +39,7 @@ class KeysReader(Reader):
         return self._cache[key]
 
     def get_dp(self, key: str) -> str | None:
-        dp =  self.get(key, "draftPosition")
+        dp = self.get(key, "draftPosition")
         return dp if dp in DraftPositionConstants.valid_values() else None
 
     def real_match_finished(self, key: str) -> bool:
@@ -69,11 +69,22 @@ class RTMReader(KeysReader):
     def __init__(self, db: Session):
         super().__init__(db)
 
-    def load(self, key: str | None = None, keys: list[str] | None = None):
-        for data in QueryService.get_real_team_members_by_keys(
-            self._db, self._clean(key, keys)
-        ).values():
-            self._cache[data["realTeamMemberKey"]] = self._check_dp(data)
+    def load(
+        self,
+        key: str | None = None,
+        keys: list[str] | None = None,
+        rc_id: int | None = None,
+    ):
+        if isinstance(rc_id, int):
+            for data in QueryService.get_real_team_members_by_rc_id(
+                self._db, rc_id
+            ).values():
+                self._cache[data["realTeamMemberKey"]] = self._check_dp(data)
+        else:
+            for data in QueryService.get_real_team_members_by_keys(
+                self._db, self._clean(key, keys)
+            ).values():
+                self._cache[data["realTeamMemberKey"]] = self._check_dp(data)
 
 
 class RSReader(KeysReader):

@@ -20,6 +20,7 @@ from sqlmodel import SQLModel
 
 _T = TypeVar("_T", bound=SQLModel)
 
+from app.constants import TeamMemberTransfersStatusConstants
 from app.exceptions import (
     NotACommissionerException,
     NotAMemberException,
@@ -28,7 +29,6 @@ from app.exceptions import (
     RequiredValueException,
     UnauthorizedException,
 )
-from app.constants import TeamMemberTransfersStatusConstants
 from app.models import Division, League, Team, TeamMemberTransfers
 from app.utils.rtm_keys import KeyGroups, Keys
 

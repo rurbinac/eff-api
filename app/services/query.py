@@ -298,6 +298,24 @@ class QueryService:
         return {row["realTeamMemberKey"]: dict(row) for row in rows}
 
     @staticmethod
+    def get_real_team_members_by_rc_id(db: Session, rc_id: int | None = None) -> dict[str, dict]:
+        """Batch-fetch RealTeamMembers rows for a list of keys.
+
+        Returns a dict keyed by realTeamMemberKey for O(1) lookup.
+        Keys are season-scoped so no competition filter is needed.
+        """
+        if not rc_id:
+            return {}
+        base_rc_id = QueryService.get_base_competition_id(db, rc_id)
+        if not base_rc_id:
+            return {}
+        rows = db.execute(
+            text("SELECT * FROM `RealTeamMembers` WHERE `baseRealCompetitionID` = :base_rc_id"),
+            {"base_rc_id": base_rc_id},
+        ).mappings().all()
+        return {row["realTeamMemberKey"]: dict(row) for row in rows}
+
+    @staticmethod
     def _to_dict(
         obj: SQLModel,
         exclude: list[str] | None = None,
