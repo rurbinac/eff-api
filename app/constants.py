@@ -461,9 +461,9 @@ class MatchCreationConstants:
 
 
 class CompetitionTypeConstants:
-    DIVISION_ROUND_ROBIN: Final[int] = 1
-    DIVISION_KNOCK_OUT: Final[int] = 2
-    LEAGUE_KNOCK_OUT: Final[int] = 3
+    DIVISION_ROUND_ROBIN: ClassVar[int] = 1
+    DIVISION_KNOCK_OUT: ClassVar[int] = 2
+    LEAGUE_KNOCK_OUT: ClassVar[int] = 3
 
     @staticmethod
     def is_valid(value: Any) -> bool:
@@ -517,9 +517,9 @@ class TeamMemberTransfersStatusConstants:
 
 
 class MatchStatusConstants:
-    NOT_STARTED: Final[int] = 1
-    PLAYING: Final[int] = 2
-    FINISHED: Final[int] = 3
+    NOT_STARTED: ClassVar[int] = 1
+    PLAYING: ClassVar[int] = 2
+    FINISHED: ClassVar[int] = 3
 
     @staticmethod
     def is_valid(value: Any) -> bool:

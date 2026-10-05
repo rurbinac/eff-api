@@ -119,6 +119,7 @@ class SettleMatches:
                         t = self._db.get(Team, side_data["teamID"])
                         if t:
                             t.waiversOrder = 1 + cnt_teams - s["place"]
+                            t.updatedIn = now
                     else:
                         mt.teamScore = None
                         mt.teamPoints = None
