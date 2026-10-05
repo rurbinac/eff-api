@@ -1,6 +1,8 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Form, Query, Request
 
-from app.actions.sign import SignInAction, SignInfoAction, SignOutAction
+from app.actions.sign import SignInAction, SignInfoAction, SignOutAction, SignUpAction
 from app.actions.top_epl import TopEPLAction
 from app.context import RequestContext
 from app.database import CurrentToken, CurrentUser, DbSession
@@ -83,6 +85,48 @@ async def legacy_top_epl(db: DbSession):
         return return_many_legacy("TopEPL", items)
     finally:
         RequestContext.reset()
+
+@router.post("/gaming/api/SignUp.php")
+async def legacy_signup(
+    db: DbSession,
+    userEmail: str = Form(...),
+    userPassword: str = Form(...),
+    userName: str = Form(""),
+    firstName: str = Form(...),
+    lastName: str = Form(...),
+    birthday: str = Form(None),
+    country: str = Form(None),
+    state: str = Form(None),
+    city: str = Form(None),
+    phoneNumber: str = Form(None),
+    timeZone: str = Form(None),
+    favoriteTeam: str = Form(None),
+):
+    """Legacy SignUp endpoint."""
+    RequestContext.set_datetime()
+    try:
+        parsed_birthday = datetime.fromisoformat(birthday) if birthday else None
+        session_data = SignUpAction.execute(
+            db=db,
+            user_email=userEmail,
+            user_password=userPassword,
+            user_name=userName,
+            first_name=firstName,
+            last_name=lastName,
+            birthday=parsed_birthday,
+            country=country,
+            state=state,
+            city=city,
+            phone_number=phoneNumber,
+            time_zone=timeZone,
+            favorite_team=favoriteTeam,
+        )
+        return return_one_legacy("Session", session_data)
+    except EFFException as e:
+        return return_error(e)
+    finally:
+        RequestContext.reset()
+
 
 def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "0.0.0.0"
