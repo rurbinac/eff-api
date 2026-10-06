@@ -110,6 +110,13 @@ def to_pos_ints(value, default: list[int] | None = None) -> list[int] | None:
         return default
 
 
+def to_float(value, default: float | None = None) -> float | None:
+    try:
+        return parse_float(value, default=default)
+    except (ValueError, TypeError):
+        return default
+
+
 def to_floats(value, default: list[float] | None = None) -> list[float] | None:
     try:
         return parse_floats(value, default=default)
