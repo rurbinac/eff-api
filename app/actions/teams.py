@@ -345,15 +345,14 @@ class TeamsGetRealMembersRankingAction:
 
         # Ranked members first (preserving ranking order), then unranked remainder
         result: list[dict] = []
-        ranking = {"ranking": 0}
         for key in ranking_order:
             if key in all_members:
-                ranking["ranking"] += 1
-                result.append(all_members[key] | ranking)
+                all_members[key]["ranking"] = 1 + len(result)
+                result.append(all_members[key])
         for key, member in all_members.items():
             if key not in ranking_set:
-                ranking["ranking"] += 1
-                result.append(member | ranking)
+                member["ranking"] = 1 + len(result)
+                result.append(member)
 
         return result
 
