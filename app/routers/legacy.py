@@ -87,7 +87,7 @@ async def legacy_top_epl(db: DbSession):
         RequestContext.reset()
 
 
-@router.post("/gaming/api/SignUp.php")
+@router.post("/eff/eff_api/SignUp.php")
 async def legacy_signup(
     db: DbSession,
     userEmail: str = Form(...),
