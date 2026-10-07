@@ -16,6 +16,16 @@ from app.utils.dt import to_iso, utc_now
 from app.utils.rtm_keys import Keys
 
 
+class DivisionsReadAction:
+    """Get a single division by ID."""
+
+    @staticmethod
+    def execute(db: Session, division_id: int, user_id: int | None = None) -> dict:
+        division = require_division(db, division_id)
+        require_league_member(db, user_id, division_id=division_id)
+        return QueryService.division_to_dict(division)
+
+
 class DivisionsReadListAction:
     """Get all divisions for a league."""
 

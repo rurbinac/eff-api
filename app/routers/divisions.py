@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.actions.divisions import (
+    DivisionsReadAction,
     DivisionsReadListAction,
     DivisionsShuffleTeamsAction,
     DivisionsTransactionsDetailAction,
@@ -82,7 +83,14 @@ async def legacy_divisions(
 
     try:
         require_authentication(current_user)
-        if f == "ReadList":
+        if f == "Read":
+            if type == "byID":
+                require_pos_int(divisionID, "divisionID", f"{f}({type})")
+                item = DivisionsReadAction.execute(db, divisionID, user_id=current_user)
+            else:
+                raise UnknownActionException(f, type)
+            return return_one_legacy("Divisions", item)
+        elif f == "ReadList":
             if type == "byLeagueID":
                 require_pos_int(leagueID, "leagueID", f"{f}({type})")
                 items = DivisionsReadListAction.execute(db, leagueID, user_id=current_user)
