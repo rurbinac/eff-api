@@ -31,7 +31,7 @@ from app.exceptions import (
 )
 from app.models import Division, League, Team, TeamMemberTransfers
 from app.utils.rtm_keys import KeyGroups, Keys
-from app.utils.scalars import parse_int, parse_pos_int
+from app.utils.scalars import parse_int, parse_pos_int, to_int
 
 # ---------------------------------------------------------------------------
 # Bool checks
@@ -142,7 +142,7 @@ def user_is_commissioner(
     team_id: int | None = None,
     team: Team | RowMapping | dict | None = None,
 ) -> bool:
-    """True if the user is a commissioner of the given division.
+    """True if the user is a commissioner of any division of a league.
 
     A user qualifies if they are the league commissioner (Division.commissionerID)
     or if they have a team in the division with isCommissioner set to True.
@@ -367,7 +367,7 @@ def require_ints(
     int_list = []
     for i, v in enumerate(val):
         try:
-            num = require_int(v, value_name, context, False)
+            num = to_int(v, value_name, context, False)
             if num is not None:
                 int_list.append(num)
         except (ValueError, TypeError):

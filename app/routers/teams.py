@@ -99,8 +99,9 @@ async def legacy_teams(
 
         elif f == "SetRealMembersRanking":
             require_pos_int(teamID, "teamID", f)
+            keys = require_keys(memberKeys, f)
             values = TeamsSetRealMembersRankingAction.execute(
-                db, team_id=teamID, user_id=current_user, member_keys_str=memberKeys
+                db, team_id=teamID, user_id=current_user, keys=keys
             )
             return return_one_legacy("Teams", values)
 

@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.guards import (
+    require_commissioner,
     require_division,
     require_league_commissioner,
     require_league_member,
@@ -199,7 +200,7 @@ class DivisionsShuffleTeamsAction:
     @staticmethod
     def execute(db: Session, division_id: int, user_id: int) -> list[dict]:
         division = require_division(db, division_id)
-        require_league_commissioner(db, user_id, division=division)
+        require_commissioner(db, user_id, division=division)
 
         teams = db.query(Team).filter(Team.divisionID == division_id).all()
         orders = list(range(1, len(teams) + 1))
@@ -212,4 +213,3 @@ class DivisionsShuffleTeamsAction:
 
         db.commit()
         return [{"teamID": t.teamID, "draftOrder": t.draftOrder} for t in teams]
-

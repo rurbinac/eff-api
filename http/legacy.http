@@ -36,7 +36,7 @@
 @team-member-transfer-id = 3
 @other-team-id = 57
 @waiver-member-keys = P1:P2
-@add-drop-keys = P12,T21
+@add-drop-keys = P27027,P26988,P27059
 @requested-keys = P1,P2
 @offered-keys = T3,P4
 
@@ -395,6 +395,18 @@ Authorization: Bearer {{access-token}}
 
 _format={{format}}
 &teamID={{team-id}}
+
+
+### 05.06b -> Teams - SetRealMembersRanking - {{team-id}}
+
+POST {{base-url}}/Teams.php?f=SetRealMembersRanking
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&teamID={{team-id}}
+&memberKeys={{add-drop-keys}}
 
 
 ### 05.07 -> Teams - Update - {{team-id}}
