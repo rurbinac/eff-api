@@ -5,7 +5,7 @@ from app.constants import WaiversConstants
 from app.context import RequestContext
 from app.exceptions import CannotSaveException, RequiredValueException
 from app.guards import (
-    require_division_commissioner,
+    require_commissioner,
     require_league_member,
     require_team,
     require_team_owner,
@@ -429,7 +429,7 @@ class TeamsMakeCommissionerAction:
     @staticmethod
     def execute(db: Session, team_id: int, user_id: int, make: bool) -> dict:
         team = require_team(db, team_id)
-        require_division_commissioner(db, user_id, team_id=team_id)
+        require_commissioner(db, user_id, team_id=team_id)
         team.isCommissioner = 1 if make else 0
         team.updatedBy = user_id
         team.updatedIn = utc_now()

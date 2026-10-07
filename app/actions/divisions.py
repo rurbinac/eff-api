@@ -1,3 +1,4 @@
+import random
 from datetime import datetime
 
 from sqlalchemy import text
@@ -8,6 +9,7 @@ from app.guards import (
     require_league_commissioner,
     require_league_member,
 )
+from app.models import Team
 from app.services import QueryService
 from app.utils.dt import to_iso, utc_now
 from app.utils.rtm_keys import Keys
@@ -189,4 +191,25 @@ class DivisionsTransactionsDetailAction:
         dropped = list(set(before_list) - set(after_list))
 
         return added, dropped
+
+
+class DivisionsShuffleTeamsAction:
+    """Re-randomize draftOrder for all teams in a division."""
+
+    @staticmethod
+    def execute(db: Session, division_id: int, user_id: int) -> list[dict]:
+        division = require_division(db, division_id)
+        require_league_commissioner(db, user_id, division=division)
+
+        teams = db.query(Team).filter(Team.divisionID == division_id).all()
+        orders = list(range(1, len(teams) + 1))
+        random.shuffle(orders)
+
+        now = utc_now()
+        for team, order in zip(teams, orders):
+            team.draftOrder = order
+            team.updatedIn = now
+
+        db.commit()
+        return [{"teamID": t.teamID, "draftOrder": t.draftOrder} for t in teams]
 

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.actions.divisions import (
     DivisionsReadListAction,
+    DivisionsShuffleTeamsAction,
     DivisionsTransactionsDetailAction,
     DivisionsUpdateAction,
 )
@@ -21,7 +22,8 @@ from app.database import CurrentUser, DbSession
 from app.exceptions import EFFException, NotFoundException, UnknownActionException
 from app.guards import (
     require_authentication,
-    require_division_commissioner,
+    require_commissioner,
+    require_int,
     require_league_member,
     require_pos_int,
 )
@@ -113,9 +115,13 @@ async def legacy_divisions(
             if result is None:
                 raise NotFoundException("Division", divisionID)
             return return_one_legacy("DraftSituation", result)
+        elif f == "ShuffleTeams":
+            division_id = require_int(divisionID, "divisionID", f)
+            items = DivisionsShuffleTeamsAction.execute(db, division_id, current_user)
+            return return_many_legacy("Teams", items)
         elif f in ("StartDraft", "PauseDraft", "RestartDraft"):
             require_pos_int(divisionID, "divisionID", f)
-            require_division_commissioner(db, current_user, division_id=divisionID)
+            require_commissioner(db, current_user, division_id=divisionID)
             dh, auth_err = _auth_helper(db, current_user, divisionID)
             if auth_err:
                 raise auth_err

@@ -11,7 +11,7 @@ def parse_int(value, default: int | None = None) -> int | None:
 
 def parse_pos_int(value, default: int | None = None) -> int | None:
     i = parse_int(value, default=default)
-    if i <= 0:
+    if i is not None and i <= 0:
         raise ValueError
     return i
 
@@ -53,7 +53,7 @@ def parse_float(value, default: float | None = None) -> float | None:
 
 def parse_pos_float(value, default: float | None = None) -> float | None:
     i = parse_float(value, default=default)
-    if i <= 0:
+    if i is not None and i <= 0:
         raise ValueError
     return i
 
