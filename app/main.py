@@ -38,6 +38,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(users.legacy_router)
 app.include_router(legacy.router)
 app.include_router(leagues.router)
 app.include_router(divisions.router)

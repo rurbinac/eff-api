@@ -287,6 +287,20 @@ class UpdateUserAction:
         return session_data
 
 
+class ChangePasswordAction:
+    """Change a user's password."""
+
+    @staticmethod
+    def execute(db: Session, user_id: int, new_password: str) -> dict:
+        user = db.query(User).filter(User.userID == user_id).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        user.userPassword = hash_password(new_password)
+        user.updatedIn = RequestContext.get_datetime()
+        db.commit()
+        return {"userID": user.userID}
+
+
 class SignUpAction:
     """Create a new user account."""
 

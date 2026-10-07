@@ -115,6 +115,37 @@ Authorization: Bearer {{access-token}}
 _format=json
 
 
+### 01.04 -> Users - ChangePassword
+
+POST {{base-url}}/Users.php?f=ChangePassword
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&userPassword=newpassword123
+
+
+### 01.05 -> Users - Update - {{user-id}}
+
+POST {{base-url}}/Users.php?f=Update
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&userID={{user-id}}
+&firstName=
+&lastName=
+&birthday=
+&country=
+&state=
+&city=
+&phoneNumber=
+&timeZone=
+&favoriteTeam=
+
+
 #
 #   02    => Leagues
 #
@@ -256,6 +287,17 @@ _format={{format}}
 &draftType=A
 &draftDate={{trade-deadline}}
 &draftCompleteDate={{trade-deadline}}
+
+
+### 03.09 -> Divisions - ShuffleTeams - {{division-id}}
+
+POST {{base-url}}/Divisions.php?f=ShuffleTeams
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+User-Agent: {{user-agent}}
+Authorization: Bearer {{access-token}}
+
+_format={{format}}
+&divisionID={{division-id}}
 
 
 #
