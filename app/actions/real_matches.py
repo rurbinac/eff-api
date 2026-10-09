@@ -13,33 +13,35 @@ class RealMatchesReadListAction:
         real_competition_id: int,
         real_competition_match_day: int | None = None,
     ) -> list[dict]:
-        query = (
-            db.query(RealMatch, RealMatchTeam)
-            .join(RealMatchTeam, RealMatchTeam.realMatchID == RealMatch.realMatchID)
-            .filter(RealMatch.realCompetitionID == real_competition_id)
-        )
+        query = db.query(RealMatch).filter(RealMatch.realCompetitionID == real_competition_id)
+
         if real_competition_match_day is not None:
             query = query.filter(RealMatch.realCompetitionMatchDay == real_competition_match_day)
 
-        query = query.order_by(
-            RealMatch.realMatchDate.asc(),
-            RealMatch.realMatchID.asc(),
-            RealMatchTeam.realTeamNumber.asc(),
+        matches: list[RealMatch] = (
+            query.order_by(RealMatch.realMatchDate.asc(), RealMatch.realMatchID.asc()).all()
         )
 
+        if not matches:
+            return []
+
+        match_ids = [m.realMatchID for m in matches]
+        team_rows: list[RealMatchTeam] = (
+            db.query(RealMatchTeam)
+            .filter(RealMatchTeam.realMatchID.in_(match_ids))
+            .order_by(RealMatchTeam.realTeamNumber.asc())
+            .all()
+        )
+
+        # Index teams by matchID
+        teams_by_match: dict[int, dict[int, RealMatchTeam]] = {}
+        for rmt in team_rows:
+            teams_by_match.setdefault(rmt.realMatchID, {})[rmt.realTeamNumber] = rmt
+
         items: list[dict] = []
-        rm: RealMatch = None
-        rmt: list[RealMatchTeam] = []
-        for match, match_team in query.all():
-            if rm is None:
-                rm = match
-            elif rm.realMatchID != match.realMatchID:
-                RealMatchesReadListAction._serialize_match(items, rm, rmt)
-                rm = match
-                rmt = []
-            rmt.append(match_team)
-        if rm is not None:
-            RealMatchesReadListAction._serialize_match(items, rm, rmt)
+        for match in matches:
+            teams = teams_by_match.get(match.realMatchID, {})
+            RealMatchesReadListAction._serialize_match(items, match, list(teams.values()))
 
         return items
 
