@@ -1,7 +1,6 @@
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.models import RealMatchTeam
+from app.models import RealMatch, RealMatchTeam
 from app.utils.dt import to_iso
 
 
@@ -11,165 +10,107 @@ class RealMatchesReadListAction:
     @staticmethod
     def execute(
         db: Session,
-        real_competition_id: int | None = None,
+        real_competition_id: int,
         real_competition_match_day: int | None = None,
     ) -> list[dict]:
-        """
-        Get real matches filtered by competition and match day.
-        Joins with RealMatchTeams to reconstruct first/second team fields.
-        """
-        where_clauses = ["1=1"]
-        params: dict = {}
-
-        if real_competition_id is not None:
-            where_clauses.append("realCompetitionID = :realCompetitionID")
-            params["realCompetitionID"] = real_competition_id
-
+        query = (
+            db.query(RealMatch, RealMatchTeam)
+            .join(RealMatchTeam, RealMatchTeam.realMatchID == RealMatch.realMatchID)
+            .filter(RealMatch.realCompetitionID == real_competition_id)
+        )
         if real_competition_match_day is not None:
-            where_clauses.append("realCompetitionMatchDay = :realCompetitionMatchDay")
-            params["realCompetitionMatchDay"] = real_competition_match_day
+            query = query.filter(RealMatch.realCompetitionMatchDay == real_competition_match_day)
 
-        sql = text(f"""
-            SELECT realMatchID, realMatchStatus, realMatchType, realMatchPeriod,
-                   realMatchRealPeriod, realMatchAttendance, realMatchDate,
-                   realMatchDateOffset, realMatchResultType, realMatchTime,
-                   realMatchFirstHalfTime, realMatchSecondHalfTime,
-                   realMatchFirstHalfExtraTime, realMatchSecondHalfExtraTime,
-                   realMatchEnded, realMatchIgnore,
-                   realCompetitionID, realCompetitionUID, realCompetitionSYMID,
-                   realCompetitionSeasonId, realCompetitionMatchDay,
-                   realCompetitionFirstMatchDay, realCompetitionLastMatchDay,
-                   baseRealCompetitionID, extraRealCompetitionID,
-                   realVenueID, realVenueUID,
-                   enabled, lastF7Date, lastF42Date, lastFDate,
-                   createdIn, updatedIn
-            FROM RealMatches
-            WHERE {' AND '.join(where_clauses)}
-            ORDER BY realMatchDate ASC
-        """)
+        query = query.order_by(
+            RealMatch.realMatchDate.asc(),
+            RealMatch.realMatchID.asc(),
+            RealMatchTeam.realTeamNumber.asc(),
+        )
 
-        matches = [dict(r) for r in db.execute(sql, params).mappings()]
-
-        items = []
-        for match in matches:
-            # Query RealMatchTeams for this match to get team data
-            team_records = db.query(RealMatchTeam).filter(
-                RealMatchTeam.realMatchID == match["realMatchID"]
-            ).all()
-
-            # Create a dict keyed by realTeamNumber
-            teams_by_num = {rmt.realTeamNumber: rmt for rmt in team_records}
-
-            values = {
-                "realMatchID": match["realMatchID"],
-                "realMatchStatus": match["realMatchStatus"],
-                "realMatchType": match["realMatchType"],
-                "realMatchPeriod": match["realMatchPeriod"],
-                "realMatchRealPeriod": match["realMatchRealPeriod"],
-                "realMatchAttendance": match["realMatchAttendance"],
-                "realMatchDate": to_iso(match["realMatchDate"]),
-                "realMatchDateOffset": match["realMatchDateOffset"],
-                "realMatchResultType": match["realMatchResultType"],
-                "realMatchTime": match["realMatchTime"],
-                "realMatchFirstHalfTime": match["realMatchFirstHalfTime"],
-                "realMatchSecondHalfTime": match["realMatchSecondHalfTime"],
-                "realMatchFirstHalfExtraTime": match["realMatchFirstHalfExtraTime"],
-                "realMatchSecondHalfExtraTime": match["realMatchSecondHalfExtraTime"],
-                "realMatchEnded": match["realMatchEnded"],
-                "realMatchIgnore": match["realMatchIgnore"],
-                "realCompetitionID": match["realCompetitionID"],
-                "realCompetitionUID": match["realCompetitionUID"],
-                "realCompetitionSYMID": match["realCompetitionSYMID"],
-                "realCompetitionSeasonId": match["realCompetitionSeasonId"],
-                "realCompetitionMatchDay": match["realCompetitionMatchDay"],
-                "realCompetitionFirstMatchDay": match["realCompetitionFirstMatchDay"],
-                "realCompetitionLastMatchDay": match["realCompetitionLastMatchDay"],
-                "baseRealCompetitionID": match["baseRealCompetitionID"],
-                "extraRealCompetitionID": match["extraRealCompetitionID"],
-                "realVenueID": match["realVenueID"],
-                "realVenueUID": match["realVenueUID"],
-            }
-
-            # Add first team data (realTeamNumber = 1)
-            if 1 in teams_by_num:
-                rmt1 = teams_by_num[1]
-                values.update({
-                    "firstRealTeamMemberID": rmt1.realTeamMemberID,
-                    "firstRealTeamMemberKey": rmt1.realTeamMemberKey,
-                    "firstRealTeamID": rmt1.realTeamID,
-                    "firstRealTeamUID": rmt1.realTeamUID,
-                    "firstRealTeamName": rmt1.realTeamName,
-                    "firstRealTeamShortName": rmt1.realTeamShortName,
-                    "firstRealTeamScore": rmt1.realTeamScore,
-                    "firstRealTeamRealScore": rmt1.realTeamRealScore,
-                    "firstRealTeamSide": rmt1.realTeamSide,
-                    "firstRealTeamCleanSheet": rmt1.realTeamCleanSheet,
-                    "firstRealTeamResult": rmt1.realTeamResult,
-                    "firstRealTeamPoints": rmt1.realTeamPoints,
-                    "firstRealTeamNumber": rmt1.realTeamNumber,
-                })
-            else:
-                values.update({
-                    "firstRealTeamMemberID": None,
-                    "firstRealTeamMemberKey": None,
-                    "firstRealTeamID": None,
-                    "firstRealTeamUID": None,
-                    "firstRealTeamName": None,
-                    "firstRealTeamShortName": None,
-                    "firstRealTeamScore": None,
-                    "firstRealTeamRealScore": None,
-                    "firstRealTeamSide": None,
-                    "firstRealTeamCleanSheet": None,
-                    "firstRealTeamResult": None,
-                    "firstRealTeamPoints": None,
-                    "firstRealTeamNumber": None,
-                })
-
-            # Add second team data (realTeamNumber = 2)
-            if 2 in teams_by_num:
-                rmt2 = teams_by_num[2]
-                values.update({
-                    "secondRealTeamMemberID": rmt2.realTeamMemberID,
-                    "secondRealTeamMemberKey": rmt2.realTeamMemberKey,
-                    "secondRealTeamID": rmt2.realTeamID,
-                    "secondRealTeamUID": rmt2.realTeamUID,
-                    "secondRealTeamName": rmt2.realTeamName,
-                    "secondRealTeamShortName": rmt2.realTeamShortName,
-                    "secondRealTeamScore": rmt2.realTeamScore,
-                    "secondRealTeamRealScore": rmt2.realTeamRealScore,
-                    "secondRealTeamSide": rmt2.realTeamSide,
-                    "secondRealTeamCleanSheet": rmt2.realTeamCleanSheet,
-                    "secondRealTeamResult": rmt2.realTeamResult,
-                    "secondRealTeamPoints": rmt2.realTeamPoints,
-                    "secondRealTeamNumber": rmt2.realTeamNumber,
-                })
-            else:
-                values.update({
-                    "secondRealTeamMemberID": None,
-                    "secondRealTeamMemberKey": None,
-                    "secondRealTeamID": None,
-                    "secondRealTeamUID": None,
-                    "secondRealTeamName": None,
-                    "secondRealTeamShortName": None,
-                    "secondRealTeamScore": None,
-                    "secondRealTeamRealScore": None,
-                    "secondRealTeamSide": None,
-                    "secondRealTeamCleanSheet": None,
-                    "secondRealTeamResult": None,
-                    "secondRealTeamPoints": None,
-                    "secondRealTeamNumber": None,
-                })
-
-            # Add metadata
-            values.update({
-                "enabled": match["enabled"],
-                "lastF7Date": to_iso(match["lastF7Date"]),
-                "lastF42Date": to_iso(match["lastF42Date"]),
-                "lastFDate": to_iso(match["lastFDate"]),
-                "createdIn": to_iso(match["createdIn"]),
-                "updatedIn": to_iso(match["updatedIn"]),
-            })
-
-            items.append(values)
+        items: list[dict] = []
+        rm: RealMatch = None
+        rmt: list[RealMatchTeam] = []
+        for match, match_team in query.all():
+            if rm is None:
+                rm = match
+            elif rm.realMatchID != match.realMatchID:
+                RealMatchesReadListAction._serialize_match(items, rm, rmt)
+                rm = match
+                rmt = []
+            rmt.append(match_team)
+        if rm is not None:
+            RealMatchesReadListAction._serialize_match(items, rm, rmt)
 
         return items
+
+    @staticmethod
+    def _serialize_match(items: list, match: RealMatch, rmt: list[RealMatchTeam]) -> None:
+        rmt1 = None
+        rmt2 = None
+        for x in rmt:
+            if x.realTeamNumber == 1:
+                rmt1 = x
+            elif x.realTeamNumber == 2:
+                rmt2 = x
+
+        items.append({
+            "realMatchID": match.realMatchID,
+            "realMatchStatus": match.realMatchStatus,
+            "realMatchType": match.realMatchType,
+            "realMatchPeriod": match.realMatchPeriod,
+            "realMatchRealPeriod": match.realMatchRealPeriod,
+            "realMatchAttendance": match.realMatchAttendance,
+            "realMatchDate": to_iso(match.realMatchDate),
+            "realMatchDateOffset": match.realMatchDateOffset,
+            "realMatchResultType": match.realMatchResultType,
+            "realMatchTime": match.realMatchTime,
+            "realMatchFirstHalfTime": match.realMatchFirstHalfTime,
+            "realMatchSecondHalfTime": match.realMatchSecondHalfTime,
+            "realMatchFirstHalfExtraTime": match.realMatchFirstHalfExtraTime,
+            "realMatchSecondHalfExtraTime": match.realMatchSecondHalfExtraTime,
+            "realMatchEnded": match.realMatchEnded,
+            "realMatchIgnore": match.realMatchIgnore,
+            "realCompetitionID": match.realCompetitionID,
+            "realCompetitionUID": match.realCompetitionUID,
+            "realCompetitionSYMID": match.realCompetitionSYMID,
+            "realCompetitionSeasonId": match.realCompetitionSeasonId,
+            "realCompetitionMatchDay": match.realCompetitionMatchDay,
+            "realCompetitionFirstMatchDay": match.realCompetitionFirstMatchDay,
+            "realCompetitionLastMatchDay": match.realCompetitionLastMatchDay,
+            "baseRealCompetitionID": match.baseRealCompetitionID,
+            "extraRealCompetitionID": match.extraRealCompetitionID,
+            "realVenueID": match.realVenueID,
+            "realVenueUID": match.realVenueUID,
+            "firstRealTeamMemberID": rmt1.realTeamMemberID if rmt1 else None,
+            "firstRealTeamMemberKey": rmt1.realTeamMemberKey if rmt1 else None,
+            "firstRealTeamID": rmt1.realTeamID if rmt1 else None,
+            "firstRealTeamUID": rmt1.realTeamUID if rmt1 else None,
+            "firstRealTeamName": rmt1.realTeamName if rmt1 else None,
+            "firstRealTeamShortName": rmt1.realTeamShortName if rmt1 else None,
+            "firstRealTeamScore": rmt1.realTeamScore if rmt1 else None,
+            "firstRealTeamRealScore": rmt1.realTeamRealScore if rmt1 else None,
+            "firstRealTeamSide": rmt1.realTeamSide if rmt1 else None,
+            "firstRealTeamCleanSheet": rmt1.realTeamCleanSheet if rmt1 else None,
+            "firstRealTeamResult": rmt1.realTeamResult if rmt1 else None,
+            "firstRealTeamPoints": rmt1.realTeamPoints if rmt1 else None,
+            "firstRealTeamNumber": rmt1.realTeamNumber if rmt1 else None,
+            "secondRealTeamMemberID": rmt2.realTeamMemberID if rmt2 else None,
+            "secondRealTeamMemberKey": rmt2.realTeamMemberKey if rmt2 else None,
+            "secondRealTeamID": rmt2.realTeamID if rmt2 else None,
+            "secondRealTeamUID": rmt2.realTeamUID if rmt2 else None,
+            "secondRealTeamName": rmt2.realTeamName if rmt2 else None,
+            "secondRealTeamShortName": rmt2.realTeamShortName if rmt2 else None,
+            "secondRealTeamScore": rmt2.realTeamScore if rmt2 else None,
+            "secondRealTeamRealScore": rmt2.realTeamRealScore if rmt2 else None,
+            "secondRealTeamSide": rmt2.realTeamSide if rmt2 else None,
+            "secondRealTeamCleanSheet": rmt2.realTeamCleanSheet if rmt2 else None,
+            "secondRealTeamResult": rmt2.realTeamResult if rmt2 else None,
+            "secondRealTeamPoints": rmt2.realTeamPoints if rmt2 else None,
+            "secondRealTeamNumber": rmt2.realTeamNumber if rmt2 else None,
+            "enabled": match.enabled,
+            "lastF7Date": to_iso(match.lastF7Date),
+            "lastF42Date": to_iso(match.lastF42Date),
+            "lastFDate": to_iso(match.lastFDate),
+            "createdIn": to_iso(match.createdIn),
+            "updatedIn": to_iso(match.updatedIn),
+        })

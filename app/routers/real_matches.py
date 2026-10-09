@@ -33,7 +33,13 @@ async def legacy_real_matches(
         require_authentication(current_user)
 
         if f == "ReadList":
-            if type == "byMatchDay":
+            if f == "byRealCompetitionID":
+                require_pos_int(realCompetitionID, "realCompetitionID", f"{f}({type})")
+                items = RealMatchesReadListAction.execute(
+                    db,
+                    real_competition_id=realCompetitionID,
+                )
+            elif type == "byMatchDay":
                 require_pos_int(realCompetitionID, "realCompetitionID", f"{f}({type})")
                 require_pos_int(realCompetitionMatchDay, "realCompetitionMatchDay", f"{f}({type})")
                 items = RealMatchesReadListAction.execute(

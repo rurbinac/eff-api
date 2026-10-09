@@ -2,7 +2,6 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.constants import WaiversConstants
-from app.context import RequestContext
 from app.exceptions import CannotSaveException, RequiredValueException
 from app.guards import (
     require_commissioner,
@@ -144,21 +143,12 @@ class TeamsGetCurrentMembersAction:
     def execute(db: Session, team_id: int, user_id: int) -> list[dict]:
         """Get team members ordered by teamMembers field (pure data, no wrapper)."""
         require_league_member(db, user_id, team_id=team_id)
-        # Query team to get members string and competition ID
-        team_stmt = text("""
-            SELECT `teamMembers`, `baseRealCompetitionID`
-            FROM `Teams`
-            WHERE `teamID` = :teamID
-            LIMIT 1
-        """)
-        team_result = db.execute(team_stmt, {"teamID": team_id})
-        team_row = team_result.mappings().first()
-
-        if not team_row:
+        team = db.get(Team, team_id)
+        if not team:
             return []
 
-        team_members_str = team_row.get("teamMembers") or ""
-        base_competition_id = team_row.get("baseRealCompetitionID")
+        team_members_str = team.teamMembers or ""
+        base_competition_id = team.baseRealCompetitionID
 
         if not team_members_str or not base_competition_id:
             return []
@@ -178,48 +168,22 @@ class TeamsWaiverMembersDetailAction:
     def execute(db: Session, team_id: int, user_id: int) -> list[dict]:
         """Get team's waiver members with their stats and waiver actions (pure data, no wrapper)."""
         require_league_member(db, user_id, team_id=team_id)
-        # Query team to get membersWaivers and matchDayMapKey
-        team_stmt = text("""
-            SELECT `membersWaivers`, `matchDayMapKey`, `baseRealCompetitionID`
-            FROM `Teams`
-            WHERE `teamID` = :teamID
-            LIMIT 1
-        """)
-        team_result = db.execute(team_stmt, {"teamID": team_id})
-        team_row = team_result.mappings().first()
-
-        if not team_row:
+        team = db.get(Team, team_id)
+        if not team:
             return []
 
-        members_waivers_str = team_row.get("membersWaivers") or ""
-        match_day_map_key = team_row.get("matchDayMapKey")
+        members_waivers_str = team.membersWaivers or ""
+        match_day_map_key = team.matchDayMapKey
 
         if not members_waivers_str or not match_day_map_key:
             return []
 
-        # Query MatchDaysStatus to get realCompetitionID and realCompetitionMatchDay
-        mds_stmt = text("""
-            SELECT `realCompetitionID`, `realCompetitionMatchDay`
-            FROM `MatchDaysStatus`
-            WHERE `matchDayMapKey` = :matchDayMapKey
-              AND `startWaivers` <= :currentDateTime
-              AND `finishPostMatch` > :currentDateTime
-            LIMIT 1
-        """)
-        mds_result = db.execute(
-            mds_stmt,
-            {
-                "matchDayMapKey": match_day_map_key,
-                "currentDateTime": RequestContext.get_datetime(),
-            },
-        )
-        mds_row = mds_result.mappings().first()
-
-        if not mds_row:
+        mds = QueryService.get_current_match_day_status(db, match_day_map_key=match_day_map_key)
+        if not mds:
             return []
 
-        real_competition_id = mds_row.get("realCompetitionID")
-        real_competition_match_day = mds_row.get("realCompetitionMatchDay")
+        real_competition_id = mds.get("realCompetitionID")
+        real_competition_match_day = mds.get("realCompetitionMatchDay")
 
         kg = KeyGroups.to_list(members_waivers_str)
         if not kg:
@@ -283,23 +247,13 @@ class TeamsGetRealMembersRankingAction:
     def execute(db: Session, team_id: int, user_id: int) -> list[dict]:
         """Get real members with ranking metadata (pure data, no wrapper)."""
         require_league_member(db, user_id, team_id=team_id)
-        # Query target team's ranking info
-        team_stmt = text("""
-            SELECT `teamID`, `baseRealCompetitionID`, `membersRanking`, `teamMembers`, `divisionID`
-            FROM `Teams`
-            WHERE `teamID` = :teamID
-            LIMIT 1
-        """)
-        team_result = db.execute(team_stmt, {"teamID": team_id})
-        team_row = team_result.mappings().first()
-
-        if not team_row:
+        team = db.get(Team, team_id)
+        if not team:
             return []
 
-        target_team = dict(team_row)
-        base_competition_id = target_team["baseRealCompetitionID"]
-        division_id = target_team["divisionID"]
-        team_set: set[str] = set(Keys.to_list(target_team["teamMembers"]) or [])
+        base_competition_id = team.baseRealCompetitionID
+        division_id = team.divisionID
+        team_set: set[str] = set(Keys.to_list(team.teamMembers) or [])
 
         # Collect division member keys from all other teams in the same division
         division_teams_stmt = text("""
@@ -317,7 +271,7 @@ class TeamsGetRealMembersRankingAction:
             if div_keys:
                 division_set.update(div_keys)
 
-        ranking_order: list[str] = Keys.to_list(target_team["membersRanking"]) or []
+        ranking_order: list[str] = Keys.to_list(team.membersRanking) or []
         ranking_set: set[str] = set(ranking_order)
 
         # Load all enabled members for this competition into an in-memory dict

@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from app.utils.readers import KeysReader
 
 from app.constants import DraftPositionConstants
-from app.utils.scalars import parse_pos_ints, to_int
+from app.utils.scalars import parse_pos_ints, to_pos_int
 
 
 class Keys(UserList):
@@ -47,10 +47,10 @@ class Keys(UserList):
 
         Returns (prefix, id) on success, (None, None) if the key is invalid.
         """
-        k = key.strip(" " + Keys.SUFFIX)
+        k = key.strip(" " + Keys.SUFFIX + Keys._SUFFIX)
         if len(k) > 1 and k.startswith((Keys.PLAYER, Keys.TEAM)):
-            num = to_int(k[1:])
-            if num is not None and num > 0:
+            num = to_pos_int(k[1:])
+            if num is not None:
                 return (k[0:1], num)
         return (None, None)
 
