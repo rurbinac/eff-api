@@ -1,6 +1,9 @@
+import logging
 import os
+
 import pusher
 
+logger = logging.getLogger(__name__)
 
 _client: pusher.Pusher | None = None
 
@@ -14,9 +17,13 @@ def get_client() -> pusher.Pusher:
             secret=os.environ["PUSHER_SECRET"],
             cluster="mt1",
             ssl=True,
+            timeout=5,
         )
     return _client
 
 
 def trigger(channel: str, event: str, data: dict) -> None:
-    get_client().trigger(channel, event, data)
+    try:
+        get_client().trigger(channel, event, data)
+    except Exception as e:
+        logger.warning("Pusher trigger failed: %s", e)
