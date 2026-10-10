@@ -789,8 +789,8 @@ Authorization: Bearer {{access-token}}
 
 _format={{format}}
 &_type=byMatchDay
-&realCompetitionID={{real-competition-id}}
-&realCompetitionMatchDay={{real-competition-match-day}}
+&realCompetitionID=23
+&realCompetitionMatchDay=4
 
 
 #

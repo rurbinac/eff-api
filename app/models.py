@@ -537,32 +537,6 @@ class RealMatch(SQLModel, table=True):
     extraRealCompetitionID: int | None = None
     realVenueID: int | None = None
     realVenueUID: str | None = Field(default=None, max_length=20)
-    firstRealTeamMemberID: int | None = None
-    firstRealTeamMemberKey: str | None = Field(default=None, max_length=10)
-    firstRealTeamID: int | None = None
-    firstRealTeamUID: str | None = Field(default=None, max_length=20)
-    firstRealTeamName: str | None = Field(default=None, max_length=128)
-    firstRealTeamShortName: str | None = Field(default=None, max_length=10)
-    firstRealTeamScore: int | None = None
-    firstRealTeamRealScore: int | None = None
-    firstRealTeamSide: str | None = Field(default=None, max_length=20)
-    firstRealTeamCleanSheet: int | None = Field(default=None, sa_type=TINYINT)
-    firstRealTeamResult: int | None = Field(default=None, sa_type=TINYINT)
-    firstRealTeamPoints: int | None = Field(default=None, sa_type=TINYINT)
-    firstRealTeamNumber: int | None = Field(default=None, sa_type=TINYINT)
-    secondRealTeamMemberID: int | None = None
-    secondRealTeamMemberKey: str | None = Field(default=None, max_length=10)
-    secondRealTeamID: int | None = None
-    secondRealTeamUID: str | None = Field(default=None, max_length=20)
-    secondRealTeamName: str | None = Field(default=None, max_length=128)
-    secondRealTeamShortName: str | None = Field(default=None, max_length=10)
-    secondRealTeamScore: int | None = None
-    secondRealTeamRealScore: int | None = None
-    secondRealTeamSide: str | None = Field(default=None, max_length=20)
-    secondRealTeamCleanSheet: int | None = Field(default=None, sa_type=TINYINT)
-    secondRealTeamResult: int | None = Field(default=None, sa_type=TINYINT)
-    secondRealTeamPoints: int | None = Field(default=None, sa_type=TINYINT)
-    secondRealTeamNumber: int | None = Field(default=None, sa_type=TINYINT)
     enabled: int = Field(sa_type=TINYINT)
     lastF7Date: datetime | None = Field(default=None, sa_type=UTCDateTime())
     lastF42Date: datetime | None = Field(default=None, sa_type=UTCDateTime())
@@ -621,6 +595,11 @@ class RealTeam(SQLModel, table=True):
     realTeamMemberID: int | None = None
     prevRealTeamID: int | None = None
     nextRealTeamID: int | None = None
+    shortName: str | None = Field(default=None, max_length=20)
+    sortNumber: int | None = None
+    jerseyStyle: int | None = None
+    shortStyle: int | None = None
+    realTeamAvatar: str | None = Field(default=None, max_length=128)
     ranking: int | None = None
     lastF7Date: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
     lastF42Date: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
@@ -675,11 +654,18 @@ class TeamMemberTransfers(SQLModel, table=True):
     __tablename__ = "TeamMemberTransfers"
 
     teamMemberTransferID: int | None = Field(default=None, primary_key=True)
+    leagueID: int | None = None
+    divisionID: int | None = None
     teamID: int | None = None
+    userID: int | None = None
     otherTeamID: int | None = None
-    transferStatus: int | None = None
-    memberKeys: str | None = Field(default=None, max_length=500)
+    otherUserID: int | None = None
+    transferStatus: int | None = Field(default=None, sa_type=TINYINT)
+    memberKeys: str | None = Field(default=None, max_length=512)
+    notes: str | None = None
+    createdBy: int | None = None
     createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedBy: int | None = None
     updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
@@ -693,11 +679,13 @@ class TeamMemberLog(SQLModel, table=True):
     teamID: int
     userID: int
     requester: int | None = None
+    otherTeamID: int | None = None
+    otherUserID: int | None = None
     transactionType: int
     membersBefore: str | None = Field(default=None, max_length=500)
     membersAfter: str | None = Field(default=None, max_length=500)
+    createdBy: int | None = None
     createdIn: datetime = Field(sa_type=UTCDateTime())
-    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class Feed(SQLModel, table=True):

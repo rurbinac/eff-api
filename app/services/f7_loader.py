@@ -248,9 +248,7 @@ class F7Loader:
         match_data = processed_data["match_data"]
 
         try:
-            F7Loader._update_match_quick_mode(
-                db, match_ids, match_data, foundation["teams_cache"]
-            )
+            F7Loader._update_match_quick_mode(db, match_ids, match_data)
             task.inc("matches_updated")
         except Exception as e:
             task.add_error(f"RealMatches update failed [{type(e).__name__}]: {e!s}")
@@ -839,7 +837,7 @@ class F7Loader:
 
     @staticmethod
     def _update_match_quick_mode(
-        db: Session, match_ids: dict, match_data: dict, teams_cache: dict
+        db: Session, match_ids: dict, match_data: dict
     ) -> dict:
         """Update RealMatches with F7 data in Quick mode.
 
@@ -870,40 +868,6 @@ class F7Loader:
             except (ValueError, TypeError):
                 pass
 
-        # Identify home/away teams
-        home_uid = next(
-            (uid for uid, d in teams_cache.items() if d.get("side") == "Home"), None
-        )
-        away_uid = next(
-            (uid for uid, d in teams_cache.items() if d.get("side") == "Away"), None
-        )
-        home_team = teams_cache.get(home_uid) if home_uid else None
-        away_team = teams_cache.get(away_uid) if away_uid else None
-
-        # Parse scores
-        home_score = away_score = None
-        try:
-            home_score = int(match_data.get("home_score")) if match_data.get("home_score") else None
-            away_score = int(match_data.get("away_score")) if match_data.get("away_score") else None
-        except (ValueError, TypeError):
-            pass
-
-        # Calculate per-team result/points/clean-sheet
-        first_result = second_result = first_points = second_points = None
-        first_clean = second_clean = None
-        if home_score is not None and away_score is not None:
-            if home_score > away_score:
-                first_result, first_points = 1, 3
-                second_result, second_points = -1, 0
-            elif home_score < away_score:
-                first_result, first_points = -1, 0
-                second_result, second_points = 1, 3
-            else:
-                first_result = second_result = 0
-                first_points = second_points = 1
-            first_clean = 1 if away_score == 0 else 0
-            second_clean = 1 if home_score == 0 else 0
-
         # Update RealMatches
         db.execute(
             update(RealMatch)
@@ -921,30 +885,6 @@ class F7Loader:
                 realMatchFirstHalfTime=to_int(match_data.get("realMatchFirstHalfTime")),
                 realMatchSecondHalfTime=to_int(match_data.get("realMatchSecondHalfTime")),
                 realMatchEnded=real_match_ended,
-                firstRealTeamMemberKey=home_team.get("realTeamMemberKey") if home_team else None,
-                firstRealTeamID=home_team.get("realTeamID") if home_team else None,
-                firstRealTeamUID=home_uid,
-                firstRealTeamName=home_team.get("realTeamName") if home_team else None,
-                firstRealTeamShortName=home_team.get("realTeamShortName") if home_team else None,
-                firstRealTeamScore=home_score,
-                firstRealTeamRealScore=home_score,
-                firstRealTeamSide="Home",
-                firstRealTeamCleanSheet=first_clean,
-                firstRealTeamResult=first_result,
-                firstRealTeamPoints=first_points,
-                firstRealTeamNumber=1,
-                secondRealTeamMemberKey=away_team.get("realTeamMemberKey") if away_team else None,
-                secondRealTeamID=away_team.get("realTeamID") if away_team else None,
-                secondRealTeamUID=away_uid,
-                secondRealTeamName=away_team.get("realTeamName") if away_team else None,
-                secondRealTeamShortName=away_team.get("realTeamShortName") if away_team else None,
-                secondRealTeamScore=away_score,
-                secondRealTeamRealScore=away_score,
-                secondRealTeamSide="Away",
-                secondRealTeamCleanSheet=second_clean,
-                secondRealTeamResult=second_result,
-                secondRealTeamPoints=second_points,
-                secondRealTeamNumber=2,
                 lastF7Date=now,
                 lastFDate=now,
                 updatedIn=now,
