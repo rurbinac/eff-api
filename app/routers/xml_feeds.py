@@ -77,24 +77,24 @@ async def xml_feed_notify(
 
     # Open Feed log row (records size + sha256), process, stamp end time
     # Returns None when the file content is identical to the previous version
-    feed_row = FLoader.log_feed_start(db, blob_name, content)
-    logger.info("xml_feed_notify: log_feed_start returned feed_id=%s", feed_row.feedID if feed_row else None)
-    if feed_row is None:
+    process = FLoader.log_feed_start(db, blob_name, content)
+    logger.info("xml_feed_notify: log_feed_start returned process_id=%s", process.process_id if process else None)
+    if process is None:
         return {"status": "skipped", "reason": "identical content (sha256 and size unchanged)", "file": blob_name}
     try:
         tmp_name = FLoader.create_temp_file(content)
-        feed = FLoader.load_file(db, feed_row, tmp_name)
+        process = FLoader.load_file(db, process, tmp_name)
     finally:
         FLoader.delete_temp_file(tmp_name)
 
-    logger.info("xml_feed_notify: done feed_id=%s endDate=%s results=%s", feed.feedID, feed.endDate, feed.results)
+    logger.info("xml_feed_notify: done process_id=%s finishDate=%s tasks=%s", process.process_id, process.finishDate, process.tasks)
     return {
         "status": "processed",
         "bucket": bucket,
-        "file": feed.feedName,
-        "feed_type": feed.feedType,
-        "feed_id": feed.feedID,
-        "versions": feed.versions,
-        "duration_secs": feed.duration,
-        "results": feed.results,
+        "file": process.process_name,
+        "feed_type": feed_type,
+        "process_id": process.process_id,
+        "versions": process.versions,
+        "duration_secs": process.duration,
+        "tasks": process.tasks,
     }

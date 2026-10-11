@@ -6,7 +6,7 @@ from datetime import datetime
 from app.constants import RealCompetitionConstants
 from app.services.services_exception import FeedParsingException
 from app.utils.dt import utc_lowest
-from app.utils.tasks import Task
+from app.utils.processes import Process, Task
 
 
 class F42Parser:
@@ -19,17 +19,18 @@ class F42Parser:
     _FEED = "F42"
 
     @staticmethod
-    def parse_file(file_path: str) -> dict:
+    def parse_file(process: Process, file_path: str) -> dict:
         """Parse an F42 XML file in two passes for memory efficiency.
 
         Args:
+            process: Process row for logging
             file_path: Path to the F42 XML file
 
         Returns:
             Dictionary with parsed data: competition, teams, players, matches
         """
         # Pass 1: Extract competition info and Squads (teams, players)
-        task = Task(name=f"Parse {F42Parser._FEED} file: {file_path}", status_on_error=Task.ERROR)
+        task = process.create_task(name=f"Parse {F42Parser._FEED} file: {file_path}", status_on_error=Task.ERROR)
         task_1, competition, teams, players, team_id_mapping = (
             F42Parser._parse_pass_1_squads(file_path)
         )
@@ -40,7 +41,6 @@ class F42Parser:
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
 
         return {
-            "task": task,
             "competition": competition,
             "teams": teams,
             "players": players,

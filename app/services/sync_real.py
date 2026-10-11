@@ -13,15 +13,20 @@ from sqlalchemy.orm import Session
 
 from app.constants import DraftPositionConstants, RealCompetitionConstants
 from app.utils.dt import utc_now
+from app.utils.processes import Process, Task
 from app.utils.sql_text import sql_insert, sql_update
-from app.utils.tasks import Task
 
 
 class SyncRealService:
     """Synchronize Real* table data."""
 
     @staticmethod
-    def sync_all(db: Session, real_competition_id: int | None = None, include_rtm: bool = False) -> Task:
+    def sync_all(
+        db: Session,
+        real_competition_id: int | None = None,
+        include_rtm: bool = False,
+        prev_process: Process | None = None,
+    ) -> None:
         """Sync all Real* data for a competition season.
 
         Runs in order: RealCompetitions → RealTeams (+ RealTeamMembers teams) →
@@ -36,30 +41,30 @@ class SyncRealService:
                 RealStandings) and _sync_real_standings (copies final standings back
                 to RealTeamMembers). Expensive — intended for the weekly end-of-match-day
                 run, not every F42 load. Defaults to False.
-
-        Returns:
-            Task with aggregated queries_executed and rows_affected across all sub-tasks.
+            prev_process: Process that triggered this sync (e.g. a Feed process),
+                used to link the new SyncReal process via prevProcessID.
         """
-        task = Task(name="sync_all", status=Task.RUNNING, status_on_error=Task.ERROR)
+        # Derive real_competition_id if not provided
+        from app.services import QueryService
+
+        real_competition_id = QueryService.get_competition_id(db, real_competition_id)
+        if not real_competition_id:
+            return
+
+        sync_real_process = Process.init_sync_real_process(
+            db, str(real_competition_id), prevProcess=prev_process
+        )
+        task = sync_real_process.create_task(
+            "sync_all", status=Task.RUNNING, status_on_error=Task.ERROR
+        )
         task.init_info("queries_executed", "rows_affected", default=0)
 
         ok = True
 
         try:
-            # Derive real_competition_id if not provided
-            from app.services import QueryService
-
-            real_competition_id = QueryService.get_competition_id(
-                db, real_competition_id
-            )
-            if not real_competition_id:
-                task.add_error("Could not determine realCompetitionID")
-                task.close(status=Task.ERROR)
-                return task
-
             # Sync RealCompetitions
             if ok:
-                sub = SyncRealService._sync_real_competitions(db)
+                sub = SyncRealService._sync_real_competitions(db, sync_real_process)
                 task.add_subtask(sub)
                 task.inc("queries_executed", sub.info.get("queries_executed") or 0)
                 task.inc("rows_affected", sub.info.get("rows_affected") or 0)
@@ -67,7 +72,9 @@ class SyncRealService:
 
             # Sync RealTeams
             if ok:
-                sub = SyncRealService._sync_real_teams(db, real_competition_id)
+                sub = SyncRealService._sync_real_teams(
+                    db, real_competition_id, sync_real_process
+                )
                 task.add_subtask(sub)
                 task.inc("queries_executed", sub.info.get("queries_executed") or 0)
                 task.inc("rows_affected", sub.info.get("rows_affected") or 0)
@@ -75,7 +82,9 @@ class SyncRealService:
 
             # Sync RealPlayers
             if ok:
-                sub = SyncRealService._sync_real_players(db, real_competition_id)
+                sub = SyncRealService._sync_real_players(
+                    db, real_competition_id, process=sync_real_process
+                )
                 task.add_subtask(sub)
                 task.inc("queries_executed", sub.info.get("queries_executed") or 0)
                 task.inc("rows_affected", sub.info.get("rows_affected") or 0)
@@ -83,7 +92,9 @@ class SyncRealService:
 
             # Sync RealTeamMembers
             if ok and include_rtm:
-                sub = SyncRealService._sync_real_team_members(db, real_competition_id)
+                sub = SyncRealService._sync_real_team_members(
+                    db, real_competition_id, sync_real_process
+                )
                 task.add_subtask(sub)
                 task.inc("queries_executed", sub.info.get("queries_executed") or 0)
                 task.inc("rows_affected", sub.info.get("rows_affected") or 0)
@@ -91,7 +102,9 @@ class SyncRealService:
 
             # Sync standings back to RealTeamMembers
             if ok and include_rtm:
-                sub = SyncRealService._sync_real_standings(db, real_competition_id)
+                sub = SyncRealService._sync_real_standings(
+                    db, real_competition_id, sync_real_process
+                )
                 task.add_subtask(sub)
                 task.inc("queries_executed", sub.info.get("queries_executed") or 0)
                 task.inc("rows_affected", sub.info.get("rows_affected") or 0)
@@ -101,13 +114,19 @@ class SyncRealService:
             task.add_error(str(e))
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
-        return task
+        sync_real_process.finish()
 
     @staticmethod
-    def sync_new_real_players(db: Session, real_competition_id: int, new_ids: list[int]) -> Task | None:
+    def sync_new_real_players(
+        db: Session, real_competition_id: int, new_ids: list[int]
+    ) -> Task | None:
         if not new_ids:
             return
-        task = Task(name="sync_new_real_players", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task = Task(
+            name="sync_new_real_players",
+            status=Task.RUNNING,
+            status_on_error=Task.ERROR,
+        )
         task.init_info("queries_executed", "rows_affected", default=0)
 
         sub = SyncRealService._sync_real_players(db, real_competition_id, new_ids)
@@ -123,9 +142,6 @@ class SyncRealService:
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return task
-
-        SyncRealService._sync_real_players(db, real_competition_id, new_ids)
-        SyncRealService._sync_new_player_standings(db, new_ids)
 
     @staticmethod
     def _sync_new_player_standings(db: Session, new_ids: list[int]) -> Task:
@@ -239,7 +255,7 @@ class SyncRealService:
         return task
 
     @staticmethod
-    def _sync_real_competitions(db: Session) -> Task:
+    def _sync_real_competitions(db: Session, process: Process) -> Task:
         """Internal: cross-link RealCompetitions and propagate changes to RealTeams and RealMatches.
 
         Sets baseRealCompetitionID / extraRealCompetitionID and
@@ -248,6 +264,7 @@ class SyncRealService:
         Invalidates the QueryService competition cache at the end.
         """
         task = Task(
+            process=process,
             name="_sync_real_competitions",
             status=Task.RUNNING,
             status_on_error=Task.ERROR,
@@ -349,7 +366,9 @@ class SyncRealService:
         return task
 
     @staticmethod
-    def _sync_real_teams(db: Session, real_competition_id: int) -> Task:
+    def _sync_real_teams(
+        db: Session, real_competition_id: int, process: Process | None = None
+    ) -> Task:
         """Sync RealTeams, RealMatchTeams, and the team rows in RealTeamMembers.
 
         Runs six queries in order:
@@ -368,7 +387,10 @@ class SyncRealService:
             Task with queries_executed and rows_affected counts.
         """
         task = Task(
-            name="_sync_real_teams", status=Task.RUNNING, status_on_error=Task.ERROR
+            process=process,
+            name="_sync_real_teams",
+            status=Task.RUNNING,
+            status_on_error=Task.ERROR,
         )
         task.init_info("queries_executed", "rows_affected", default=0)
 
@@ -589,7 +611,12 @@ class SyncRealService:
         return task
 
     @staticmethod
-    def _sync_real_players(db: Session, real_competition_id: int, new_ids: list[int] | None = None) -> Task:
+    def _sync_real_players(
+        db: Session,
+        real_competition_id: int,
+        new_ids: list[int] | None = None,
+        process: Process | None = None,
+    ) -> Task:
         """Sync RealPlayers and the player rows in RealTeamMembers.
 
         Runs six queries in order:
@@ -610,7 +637,10 @@ class SyncRealService:
         if new_ids is None:
             new_ids = []
         task = Task(
-            name="_sync_real_players", status=Task.RUNNING, status_on_error=Task.ERROR
+            process=process,
+            name="_sync_real_players",
+            status=Task.RUNNING,
+            status_on_error=Task.ERROR,
         )
         task.init_info("queries_executed", "rows_affected", default=0)
 
@@ -829,7 +859,9 @@ class SyncRealService:
         return task
 
     @staticmethod
-    def _sync_real_team_members(db: Session, real_competition_id: int) -> Task:
+    def _sync_real_team_members(
+        db: Session, real_competition_id: int, process: Process | None = None
+    ) -> Task:
         """Calculate and write per-match-day RealStandings rows from RealTeamMembers data.
 
         For each competition in scope (base, and optionally extra when the base uses it),
@@ -846,6 +878,7 @@ class SyncRealService:
             Task with per-competition insert/update counts.
         """
         task = Task(
+            process=process,
             name="_sync_real_team_members",
             status=Task.RUNNING,
             status_on_error=Task.ERROR,
@@ -911,7 +944,9 @@ class SyncRealService:
         return task
 
     @staticmethod
-    def _sync_real_standings(db: Session, real_competition_id: int) -> Task:
+    def _sync_real_standings(
+        db: Session, real_competition_id: int, process: Process | None = None
+    ) -> Task:
         """Copy final-matchday RealStandings stats back into RealTeamMembers.
 
         Runs two UPDATE queries:
@@ -927,7 +962,10 @@ class SyncRealService:
             Task with queries_executed and rows_affected counts.
         """
         task = Task(
-            name="_sync_real_standings", status=Task.RUNNING, status_on_error=Task.ERROR
+            process=process,
+            name="_sync_real_standings",
+            status=Task.RUNNING,
+            status_on_error=Task.ERROR,
         )
         task.init_info("queries_executed", "rows_affected", default=0)
 

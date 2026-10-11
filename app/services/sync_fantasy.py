@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.services.query import QueryService
-from app.utils.tasks import Task
+from app.utils.processes import Process, Task
 
 
 class SyncFantasyService:
@@ -18,18 +18,20 @@ class SyncFantasyService:
     def sync_all(
         db: Session,
         real_competition_id: int | None = None,
-    ) -> Task:
+        prev_process: Process | None = None,
+    ) -> None:
         """Sync all fantasy data (Leagues → Divisions → Teams → Matches).
 
         Args:
             db: Database session
-            real_competition_id: RealCompetitionID to sync. If None, derived from current season.
-
-        Returns:
-            Task with aggregated results from all sync operations.
+            real_competition_id: RealCompetitionID to sync. If None, all competitions.
+            prev_process: Process that triggered this sync, used to link via prevProcessID.
         """
-        task = Task(
-            name="sync_fantasy_all", status=Task.RUNNING, status_on_error=Task.ERROR
+        sync_fantasy_process = Process.init_sync_fantasy_process(
+            db, str(real_competition_id or "all"), prevProcess=prev_process
+        )
+        task = sync_fantasy_process.create_task(
+            "sync_fantasy_all", status=Task.RUNNING, status_on_error=Task.ERROR
         )
         task.init_info("queries_executed", "rows_affected")
 
@@ -39,9 +41,8 @@ class SyncFantasyService:
             # Sync Leagues
             if ok:
                 sub = Task(
-                    name="_sync_leagues",
-                    status=Task.RUNNING,
-                    status_on_error=Task.ERROR,
+                    process=sync_fantasy_process, name="_sync_leagues",
+                    status=Task.RUNNING, status_on_error=Task.ERROR,
                 )
                 sub.init_info("queries_executed", "rows_affected")
                 SyncFantasyService._sync_leagues(db, sub, real_competition_id)
@@ -54,9 +55,8 @@ class SyncFantasyService:
             # Sync Divisions
             if ok:
                 sub = Task(
-                    name="_sync_divisions",
-                    status=Task.RUNNING,
-                    status_on_error=Task.ERROR,
+                    process=sync_fantasy_process, name="_sync_divisions",
+                    status=Task.RUNNING, status_on_error=Task.ERROR,
                 )
                 sub.init_info("queries_executed", "rows_affected")
                 SyncFantasyService._sync_divisions(db, sub, real_competition_id)
@@ -69,7 +69,8 @@ class SyncFantasyService:
             # Sync Teams
             if ok:
                 sub = Task(
-                    name="_sync_teams", status=Task.RUNNING, status_on_error=Task.ERROR
+                    process=sync_fantasy_process, name="_sync_teams",
+                    status=Task.RUNNING, status_on_error=Task.ERROR,
                 )
                 sub.init_info("queries_executed", "rows_affected")
                 SyncFantasyService._sync_teams(db, sub, real_competition_id)
@@ -82,9 +83,8 @@ class SyncFantasyService:
             # Sync Matches
             if ok:
                 sub = Task(
-                    name="_sync_matches",
-                    status=Task.RUNNING,
-                    status_on_error=Task.ERROR,
+                    process=sync_fantasy_process, name="_sync_matches",
+                    status=Task.RUNNING, status_on_error=Task.ERROR,
                 )
                 sub.init_info("queries_executed", "rows_affected")
                 SyncFantasyService._sync_matches(db, sub, real_competition_id)
@@ -98,7 +98,7 @@ class SyncFantasyService:
             task.add_error(str(e))
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
-        return task
+        sync_fantasy_process.finish()
 
     @staticmethod
     def sync_league(db: Session, league_id: int) -> bool:

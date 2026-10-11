@@ -15,7 +15,7 @@ from app.utils.dt import (
     utc_lowest,
 )
 from app.utils.match_day_map_keys import build_map_days_map_key
-from app.utils.tasks import Task
+from app.utils.processes import Process, Task
 
 
 class SaveMDS:
@@ -30,15 +30,20 @@ class SaveMDS:
     BASE_MD_HOURS = 5
     BASE_MD_DAYS = 1
 
-    def __init__(self, db: Session, real_competition_id: int | None = None):
+    def __init__(self, db: Session, real_competition_id: int | None = None, process: Process | None = None):
         """Initialise SaveMDS for a given competition.
 
         Args:
             db: SQLAlchemy database session.
             real_competition_id: ID of any competition in the season to process.
                 If None, the current base competition is resolved automatically.
+            process: Process to record progress into; a standalone Task is created when omitted.
         """
-        self._task: Task = Task(name="SaveMDS", status_on_error=Task.ERROR)
+        self._task: Task = (
+            process.create_task("SaveMDS", status_on_error=Task.ERROR)
+            if process is not None
+            else Task(name="SaveMDS", status_on_error=Task.ERROR)
+        )
         self._db: Session = db
         self._md: list[tuple[int, int]] = []
         self._mmd: dict = {}
@@ -67,6 +72,8 @@ class SaveMDS:
             self._fix_prev_mds()
             self._fix_next_mds()
         self._task.close(status=Task.COMPLETED)
+        if self._task.process is not None:
+            self._task.process.finish()
         return self._task
 
     def _combine_md(self) -> Generator[list, None, None]:

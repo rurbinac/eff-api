@@ -8,11 +8,9 @@ from typing import ClassVar
 
 from sqlalchemy.orm import Session
 
-from app.models import Feed
 from app.services.f7_loader import F7Loader
 from app.services.f42_loader import F42Loader
-from app.utils.dt import utc_now
-from app.utils.tasks import Task
+from app.utils.processes import Process
 
 
 class FeedTypes(StrEnum):
@@ -83,76 +81,39 @@ class FLoader:
                 else FeedTypes.NOT_XML
             )
 
+
     @staticmethod
     def log_feed_start(
         db: Session, blob_name: str, content: bytes, force: bool = False
-    ) -> Feed | None:
-        """Insert or update a Feed row at the start of processing.
+    ) -> Process | None:
+        """Get or create a Process for this feed file.
 
-        Computes size, cumulative totalSize, and sha256 from the raw file bytes.
+        Returns None if the file's sha256 is unchanged since the last run (unless force=True).
+        Resets the existing process record when the content has changed.
         """
-        start = utc_now()
-        file_size = len(content)
-        file_sha256 = hashlib.sha256(content).digest()  # 32 bytes
+        file_sha256 = hashlib.sha256(content).digest()
+        feed_type = FLoader.get_feed_type(blob_name)
+        process = Process.init_feeds_process(db, feed_type, blob_name)
 
-        feed = db.query(Feed).filter(Feed.feedName == blob_name).first()
-        file_changed = not feed or feed.sha256 != file_sha256 or feed.size != file_size
-        if feed:
-            feed.versions += 1
-            feed.updatedIn = start
-            if file_changed or force:
-                # Content is different (or forced) — reset processing fields and reprocess
-                feed.startDate = start
-                feed.endDate = None
-                feed.duration = None
-                feed.size = file_size
-                feed.totalSize += file_size
-                feed.sha256 = file_sha256
-            # else: content identical — only versions/updatedIn bumped; caller receives None
-        else:
-            feed = Feed(
-                feedName=blob_name,
-                feedType=FLoader.get_feed_type(blob_name),
-                versions=1,
-                startDate=start,
-                size=file_size,
-                totalSize=file_size,
-                sha256=file_sha256,
-                createdIn=start,
-            )
-            db.add(feed)
+        if not force and process.sha256 == file_sha256:
+            return None
+
+        process.reset(sha256=file_sha256)
         db.commit()
-        db.refresh(feed)
-        if file_changed or force:
-            # Record wall-clock start for accurate millisecond duration in log_feed_end.
-            # feed.startDate loses sub-second precision after the DB round-trip.
-            FLoader._start_times[feed.feedID] = time.perf_counter()
-            return feed
-        return None
+        FLoader._start_times[process.process_id] = time.perf_counter()
+        return process
 
     @staticmethod
-    def log_feed_end(
-        db: Session, feed: Feed, result: Task | dict | None = None
-    ) -> Feed:
-        """Stamp endDate, duration (seconds, 6 decimal places = microsecond precision), and results."""
-        end = utc_now()
-        feed.endDate = end
-        t0 = FLoader._start_times.pop(feed.feedID, None)
-        if t0 is not None:
-            feed.duration = round(time.perf_counter() - t0, 6)  # seconds, µs precision
-        else:
-            feed.duration = round((end - feed.startDate).total_seconds(), 6)
-        feed.updatedIn = end
-        if result is not None:
-            feed.results = result if isinstance(result, dict) else result.to_dict()
+    def log_feed_end(db: Session, process: Process) -> Process:
+        """Finish the process, persist finishDate/duration/tasks, and commit."""
+        FLoader._start_times.pop(process.process_id, None)
+        process.finish()
         try:
             db.commit()
         except Exception:  # noqa: BLE001
-            # Session may be in a failed-transaction state; rollback and retry once.
             db.rollback()
             db.commit()
-        db.refresh(feed)
-        return feed
+        return process
 
     @staticmethod
     def create_temp_file(content: bytes) -> str:
@@ -169,34 +130,30 @@ class FLoader:
             os.unlink(tmp_name)
 
     @staticmethod
-    def load_file(db: Session, feed: Feed, tmp_name: str | None = None) -> Feed:
-        """Download, parse, and persist a feed file; stamp the Feed log row when done.
+    def load_file(db: Session, process: Process, tmp_name: str | None = None) -> Process:
+        """Download, parse, and persist a feed file; finish the Process when done.
 
         Args:
-            db:      Database session
-            feed:    Feed log row (already created by log_feed_start)
+            db:       Database session
+            process:  Process row (already created by log_feed_start)
             tmp_name: Path to the temporary file containing the feed data
         """
+        feed_type = FLoader.get_feed_type(process.process_name)
         try:
-            match feed.feedType:
+            match feed_type:
                 case FeedTypes.F42:
-                    return F42Loader.load_file(db, feed=feed, tmp_name=tmp_name)
+                    return F42Loader.load_file(db, process=process, tmp_name=tmp_name)
                 case FeedTypes.F7:
-                    return F7Loader.load_file(db, feed=feed, tmp_name=tmp_name)
+                    return F7Loader.load_file(db, process=process, tmp_name=tmp_name)
                 case _:
-                    task = Task(
-                        name=f"Load {feed.feedType} file: {feed.feedName}",
-                        status=Task.RUNNING,
-                        status_on_error=Task.ERROR,
-                    )
-                    task.add_error(f"No loader implemented for feed type '{feed.feedType}'")
-                    task.close()
-                    result = task
+                    task = process.create_task(f"Load {feed_type} file: {process.process_name}")
+                    task.add_error(f"No loader implemented for feed type '{feed_type}'")
+                    task.close(status=task.ERROR)
 
         except Exception as e:  # noqa: BLE001
-            result = {"status": "error", "error": str(e)}
+            process._tasks = [{"status": "error", "error": str(e)}]
 
         finally:
             FLoader.delete_temp_file(tmp_name)
 
-        return FLoader.log_feed_end(db, feed, result=result)
+        return FLoader.log_feed_end(db, process)

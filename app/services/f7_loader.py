@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from app.constants import DraftPositionConstants, RealMatchPeriod
 from app.models import (
-    Feed,
     RealMatch,
     RealMatchTeam,
     RealPlayer,
@@ -17,8 +16,8 @@ from app.services.f7_events import load_booking, load_goal, load_substitution
 from app.services.f7_parser import F7Parser
 from app.services.f7_standings import calc_player_points, process_events
 from app.utils.dt import to_datetime, utc_now
+from app.utils.processes import Process, Task
 from app.utils.scalars import to_int
-from app.utils.tasks import Task
 
 
 class F7Loader:
@@ -26,22 +25,22 @@ class F7Loader:
 
     @staticmethod
     def load_file(
-        db: Session, feed: Feed, tmp_name: str | None = None
-    ) -> Feed:
+        db: Session, process: Process, tmp_name: str | None = None
+    ) -> Process:
         """Parse and load an F7 file.
 
         Args:
             db: Database session
-            feed: Feed log row
+            process: Process row (already created by log_feed_start)
             tmp_name: Path to the temporary file containing the F7 data
 
         Returns:
-            Feed row stamped with processing results.
+            Process row stamped with processing results.
         """
         from app.services.f_loader import FLoader  # lazy — avoids circular import
 
-        file_path = tmp_name or feed.feedName
-        task = Task(
+        file_path = tmp_name or process.process_name
+        task = process.create_task(
             name=f"Load F7 file: {file_path}",
             status=Task.RUNNING,
             status_on_error=Task.ERROR,
@@ -50,8 +49,7 @@ class F7Loader:
         # Phase 1: Foundation layer (parse + build caches)
         foundation = None
         try:
-            f_task, foundation = F7Loader._get_foundation(db, file_path)
-            task.add_subtask(f_task)
+            foundation = F7Loader._get_foundation(db, process, file_path)
         except Exception as e:
             task.add_error(f"Error in foundation [{type(e).__name__}]: {e!s}")
         finally:
@@ -59,38 +57,37 @@ class F7Loader:
 
         if foundation is None or task.errors:
             task.close()
-            return FLoader.log_feed_end(db, feed, result=task)
+            return FLoader.log_feed_end(db, process)
 
         # Phase 2: Process F7 data into in-memory structures
         processed_data = None
         try:
-            p_task, processed_data = F7Loader._process_f7_data(
+            processed_data = F7Loader._process_f7_data(
+                process,
                 foundation["parsed_data"],
                 foundation["players_cache"],
             )
-            task.add_subtask(p_task)
         except Exception as e:
             task.add_error(f"Error processing F7 data [{type(e).__name__}]: {e!s}")
 
         if processed_data is None or task.errors:
             task.close()
-            return FLoader.log_feed_end(db, feed, result=task)
+            return FLoader.log_feed_end(db, process)
 
         # Phase 3: Persist
-        s_task = F7Loader._save(db, foundation, processed_data)
-        task.add_subtask(s_task)
+        F7Loader._save(db, process, foundation, processed_data)
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
-        return FLoader.log_feed_end(db, feed, result=task)
+        return FLoader.log_feed_end(db, process)
 
     @staticmethod
-    def _get_foundation(db: Session, file_path: str) -> tuple[Task, dict | None]:
+    def _get_foundation(db: Session, process: Process, file_path: str) -> dict | None:
         """Get foundation layer data (parse file + build caches).
 
         Returns:
-            (task, foundation_dict) or (task, None) if a critical step failed.
+            foundation_dict or None if a critical step failed.
         """
-        task = Task(name="Foundation", status=Task.RUNNING, status_on_error=Task.ERROR)
+        task = process.create_task("Foundation", status=Task.RUNNING, status_on_error=Task.ERROR)
 
         # Parse the file
         try:
@@ -99,7 +96,7 @@ class F7Loader:
         except Exception as e:
             task.add_error(f"Error parsing file [{type(e).__name__}]: {e!s}")
             task.close()
-            return task, None
+            return None
 
         # Get RealCompetitions record — enriches the parser competition dict with DB data
         try:
@@ -109,7 +106,7 @@ class F7Loader:
                 f"Failed to get RealCompetitions [{type(e).__name__}]: {e!s}"
             )
             task.close()
-            return task, None
+            return None
 
         real_competition_id = competition["realCompetitionID"]
 
@@ -121,7 +118,7 @@ class F7Loader:
         except Exception as e:
             task.add_error(f"Failed to build teams cache [{type(e).__name__}]: {e!s}")
             task.close()
-            return task, None
+            return None
 
         # Get match IDs
         try:
@@ -129,11 +126,11 @@ class F7Loader:
             if not match_ids:
                 task.add_error("Match not found in database")
                 task.close()
-                return task, None
+                return None
         except Exception as e:
             task.add_error(f"Failed to get match IDs [{type(e).__name__}]: {e!s}")
             task.close()
-            return task, None
+            return None
 
         # Build players cache with lineup data
         try:
@@ -149,7 +146,7 @@ class F7Loader:
         except Exception as e:
             task.add_error(f"Failed to build players cache [{type(e).__name__}]: {e!s}")
             task.close()
-            return task, None
+            return None
 
         # Populate oppositeRealTeamUID on each player — required by _process_goal
         # to call _process_match_clean_sheet on the correct team's players
@@ -161,7 +158,7 @@ class F7Loader:
             )
 
         task.close(status=Task.COMPLETED)
-        return task, {
+        return {
             "parsed_data": parsed_data,
             "competition": competition,
             "match_ids": match_ids,
@@ -171,19 +168,17 @@ class F7Loader:
 
     @staticmethod
     def _process_f7_data(
+        process: Process,
         parsed_data: dict,
         players_cache: dict,
-    ) -> tuple[Task, dict]:
+    ) -> dict:
         """Process F7 data into in-memory structures.
 
         Returns:
-            (task, processed_data) where processed_data contains:
-            - match_data: raw match data from parser
-            - match_events: sorted list of events with eventKey for deduplication
-            - standings_data: player standings/performance data
+            processed_data dict with match_data, match_events, standings_data.
         """
-        task = Task(
-            name="Process F7 Data", status=Task.RUNNING, status_on_error=Task.ERROR
+        task = process.create_task(
+            "Process F7 Data", status=Task.RUNNING, status_on_error=Task.ERROR
         )
         task.init_info("goals", "bookings", "substitutions")
 
@@ -219,14 +214,14 @@ class F7Loader:
         players_cache = calc_player_points(players_cache)
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
-        return task, {
+        return {
             "match_data": match_data,
             "match_events": events_cache,
             "standings_data": players_cache,
         }
 
     @staticmethod
-    def _save_quick_mode(db: Session, foundation: dict, processed_data: dict) -> Task:
+    def _save_quick_mode(db: Session, process: Process, foundation: dict, processed_data: dict) -> None:
         """Save data in Quick mode (updates only).
 
         Quick mode updates:
@@ -234,8 +229,8 @@ class F7Loader:
         - RealMatchTeams
         - RealStandings (teams and players)
         """
-        task = Task(
-            name="Save Quick Mode", status=Task.RUNNING, status_on_error=Task.ERROR
+        task = process.create_task(
+            "Save Quick Mode", status=Task.RUNNING, status_on_error=Task.ERROR
         )
         task.init_info(
             "matches_updated",
@@ -307,18 +302,17 @@ class F7Loader:
                 )
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
-        return task
 
     @staticmethod
-    def _save(db: Session, foundation: dict, processed_data: dict) -> Task:
+    def _save(db: Session, process: Process, foundation: dict, processed_data: dict) -> None:
         """Persist all F7 data: match, standings, teams, and players.
 
         Order matters: RealTeams and RealPlayers (+ RealTeamMembers/RealStandings for new
         players) are written first so that when quick-mode standings UPDATEs run, the rows
         for newly inserted players already exist and can be stamped with match performance.
         """
-        task = Task(
-            name="Save Full Mode", status=Task.RUNNING, status_on_error=Task.ERROR
+        task = process.create_task(
+            "Save Full Mode", status=Task.RUNNING, status_on_error=Task.ERROR
         )
         task.init_info("teams_updated", "players_updated", "players_inserted")
 
@@ -372,11 +366,9 @@ class F7Loader:
                 task.add_error(f"sync_new_real_players failed [{type(e).__name__}]: {e!s}")
 
         # 4. Quick mode: RealMatches, RealMatchTeams, RealStandings (teams + players)
-        q_task = F7Loader._save_quick_mode(db, foundation, processed_data)
-        task.add_subtask(q_task)
+        F7Loader._save_quick_mode(db, process, foundation, processed_data)
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
-        return task
 
     @staticmethod
     def _update_teams_full_mode(

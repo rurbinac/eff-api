@@ -2,7 +2,7 @@
 
 import xml.etree.ElementTree as ET
 
-from app.utils.tasks import Task
+from app.utils.processes import Task
 
 
 class F7Parser:

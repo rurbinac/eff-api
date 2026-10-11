@@ -10,13 +10,15 @@ from app.models import Match, MatchDaysStatus, MatchTeam, Team
 from app.services import QueryService
 from app.utils.dt import utc_now
 from app.utils.lineup import Lineup
+from app.utils.processes import Process, Task
 from app.utils.readers import RSReader
 
 
 class SettleMatches:
-    def __init__(self, db: Session, reader: RSReader):
+    def __init__(self, db: Session, reader: RSReader, process: Process | None = None):
         self._db = db
         self._reader = reader
+        self._process = process
         self._base_rc_id: int | None = None
         self._extra_rc_id: int | None = None
         self._rc_id: int | None = None
@@ -35,12 +37,28 @@ class SettleMatches:
         self._next_group_fields = ["teamID", "teamName", "teamSeeding", "mapDayMapKey"]
 
     def execute(self, rc_id: int | None = None, now: datetime | None = None) -> None:
+        task = (
+            self._process.create_task("execute", status=Task.RUNNING, status_on_error=Task.ERROR)
+            if self._process is not None
+            else None
+        )
         self._base_rc_id = QueryService.get_base_competition_id(self._db, rc_id)
         self._extra_rc_id = QueryService.get_extra_competition_id(self._db, rc_id)
         now = utc_now() if now is None else now
         if self._get_match_day(now):
-            self._process_rr()
-            self._process_ko()
+            if task is not None:
+                task.assign("rc_id", self._rc_id)
+                task.assign("match_day", self._rc_md)
+            rr_task = self._process_rr()
+            if task is not None and rr_task is not None:
+                task.add_subtask(rr_task)
+            ko_task = self._process_ko()
+            if task is not None and ko_task is not None:
+                task.add_subtask(ko_task)
+        if task is not None:
+            task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+        if self._process is not None:
+            self._process.finish()
 
     def _get_match_day(self, now: datetime) -> bool:
         row = self._db.execute(
@@ -68,15 +86,39 @@ class SettleMatches:
             self._rc_md_sort = None
             return False
 
-    def _process_rr(self) -> None:
+    def _process_rr(self) -> Task | None:
+        task = (
+            Task(process=self._process, name="_process_rr", status=Task.RUNNING, status_on_error=Task.ERROR)
+            if self._process is not None
+            else None
+        )
+        if task is not None:
+            task.init_info("iterations", default=0)
         for matches in self._read_matches_for_rr():
+            if task is not None:
+                task.inc("iterations")
             self._settle_matches_rr(matches)
             self._save_matches_rr(matches)
+        if task is not None:
+            task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+        return task
 
-    def _process_ko(self) -> None:
+    def _process_ko(self) -> Task | None:
+        task = (
+            Task(process=self._process, name="_process_ko", status=Task.RUNNING, status_on_error=Task.ERROR)
+            if self._process is not None
+            else None
+        )
+        if task is not None:
+            task.init_info("iterations", default=0)
         for groups in self._read_groups_for_ko():
+            if task is not None:
+                task.inc("iterations")
             self._settle_matches_ko(groups)
             self._save_matches_ko(groups)
+        if task is not None:
+            task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
+        return task
 
     def _settle_matches_rr(self, matches: dict[int, dict]) -> None:
         invalid = [k for k, m in matches.items() if "Home" not in m or "Away" not in m]
