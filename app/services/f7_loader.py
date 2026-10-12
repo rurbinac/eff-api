@@ -1,11 +1,12 @@
 # ruff: noqa: BLE001  – broad except blocks are intentional diagnostic catches
 """F7 OPTA feed loader - loads single match detailed results."""
 
-from sqlalchemy import text, update
-from sqlalchemy.orm import Session
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session, aliased
 
 from app.constants import DraftPositionConstants, RealMatchPeriod
 from app.models import (
+    RealCompetition,
     RealMatch,
     RealMatchTeam,
     RealPlayer,
@@ -549,23 +550,12 @@ class F7Loader:
 
         row = (
             db.execute(
-                text("""
-                    SELECT `realCompetitionID`,
-                           `baseRealCompetitionID`,
-                           `extraRealCompetitionID`,
-                           `realCompetitionUID`,
-                           `realCompetitionSeasonId`,
-                           `realCompetitionCountry`,
-                           `realCompetitionFirstMatchDay`,
-                           `realCompetitionLastMatchDay`
-                    FROM `RealCompetitions`
-                    WHERE `realCompetitionSYMID` = :symid
-                    ORDER BY `updatedIn` DESC
-                    LIMIT 1
-                """),
-                {"symid": symid},
+                select(RealCompetition)
+                .where(RealCompetition.realCompetitionSYMID == symid)
+                .order_by(RealCompetition.updatedIn.desc())
+                .limit(1)
             )
-            .mappings()
+            .scalars()
             .first()
         )
 
@@ -573,7 +563,16 @@ class F7Loader:
             raise ValueError(f"RealCompetition not found for symid={symid!r}")
 
         # Merge: DB data takes precedence for shared keys (e.g. realCompetitionUID)
-        return dict(row) | competition
+        return {
+            "realCompetitionID": row.realCompetitionID,
+            "baseRealCompetitionID": row.baseRealCompetitionID,
+            "extraRealCompetitionID": row.extraRealCompetitionID,
+            "realCompetitionUID": row.realCompetitionUID,
+            "realCompetitionSeasonId": row.realCompetitionSeasonId,
+            "realCompetitionCountry": row.realCompetitionCountry,
+            "realCompetitionFirstMatchDay": row.realCompetitionFirstMatchDay,
+            "realCompetitionLastMatchDay": row.realCompetitionLastMatchDay,
+        } | competition
 
     @staticmethod
     def _build_teams_cache(
@@ -588,42 +587,27 @@ class F7Loader:
 
         results = (
             db.execute(
-                text("""
-                    SELECT `realTeamID`,
-                           `realTeamUID`,
-                           `realTeamMemberKey`,
-                           `realTeamName`,
-                           `realTeamShortName`,
-                           `baseRealTeamID`,
-                           `baseRealTeamUID`,
-                           `baseRealTeamName`,
-                           `baseRealTeamShortName`
-                    FROM `RealTeams`
-                    WHERE `realCompetitionID` = :comp_id
-                      AND (`realTeamUID` = :home_uid
-                           OR `realTeamUID` = :away_uid)
-                """),
-                {
-                    "comp_id": real_competition_id,
-                    "home_uid": home_team_uid,
-                    "away_uid": away_team_uid,
-                },
+                select(RealTeam)
+                .where(
+                    RealTeam.realCompetitionID == real_competition_id,
+                    RealTeam.realTeamUID.in_([home_team_uid, away_team_uid]),
+                )
             )
-            .mappings()
+            .scalars()
             .all()
         )
 
         teams_cache = {}
         for row in results:
-            teams_cache[row["realTeamUID"]] = {
-                "realTeamID": row["realTeamID"],
-                "realTeamMemberKey": row["realTeamMemberKey"],
-                "realTeamName": row["realTeamName"],
-                "realTeamShortName": row["realTeamShortName"],
-                "baseRealTeamID": row["baseRealTeamID"],
-                "baseRealTeamUID": row["baseRealTeamUID"],
-                "baseRealTeamName": row["baseRealTeamName"],
-                "baseRealTeamShortName": row["baseRealTeamShortName"],
+            teams_cache[row.realTeamUID] = {
+                "realTeamID": row.realTeamID,
+                "realTeamMemberKey": row.realTeamMemberKey,
+                "realTeamName": row.realTeamName,
+                "realTeamShortName": row.realTeamShortName,
+                "baseRealTeamID": row.baseRealTeamID,
+                "baseRealTeamUID": row.baseRealTeamUID,
+                "baseRealTeamName": row.baseRealTeamName,
+                "baseRealTeamShortName": row.baseRealTeamShortName,
             }
 
         # Add score and side from match data
@@ -651,37 +635,31 @@ class F7Loader:
         if not home_uid or not away_uid:
             return None
 
+        t1 = aliased(RealMatchTeam)
+        t2 = aliased(RealMatchTeam)
         result = db.execute(
-            text("""
-                SELECT `m`.`realMatchID` AS `mID`,
-                       `t1`.`realMatchTeamID` AS `mtID_Home`,
-                       `t2`.`realMatchTeamID` AS `mtID_Away`
-                FROM `RealMatches` `m`
-                INNER JOIN `RealMatchTeams` `t1`
-                    ON `m`.`realMatchID` = `t1`.`realMatchID`
-                    AND `t1`.`realTeamNumber` = 1
-                INNER JOIN `RealMatchTeams` `t2`
-                    ON `m`.`realMatchID` = `t2`.`realMatchID`
-                    AND `t2`.`realTeamNumber` = 2
-                WHERE `m`.`realCompetitionID` = :comp_id
-                  AND `t1`.`realTeamUID` = :home_uid
-                  AND `t2`.`realTeamUID` = :away_uid
-                LIMIT 1
-            """),
-            {
-                "comp_id": real_competition_id,
-                "home_uid": home_uid,
-                "away_uid": away_uid,
-            },
+            select(
+                RealMatch.realMatchID,
+                t1.realMatchTeamID.label("mtID_Home"),
+                t2.realMatchTeamID.label("mtID_Away"),
+            )
+            .join(t1, (t1.realMatchID == RealMatch.realMatchID) & (t1.realTeamNumber == 1))
+            .join(t2, (t2.realMatchID == RealMatch.realMatchID) & (t2.realTeamNumber == 2))
+            .where(
+                RealMatch.realCompetitionID == real_competition_id,
+                t1.realTeamUID == home_uid,
+                t2.realTeamUID == away_uid,
+            )
+            .limit(1)
         ).first()
 
         if not result:
             return None
 
         return {
-            "realMatchID": result[0],
-            "realMatchTeamID_Home": result[1],
-            "realMatchTeamID_Away": result[2],
+            "realMatchID": result.realMatchID,
+            "realMatchTeamID_Home": result.mtID_Home,
+            "realMatchTeamID_Away": result.mtID_Away,
         }
 
     @staticmethod
@@ -710,58 +688,36 @@ class F7Loader:
         if players_cache:
             player_uids = list(players_cache.keys())
 
-            # Build IN clause for query
-            placeholders = ",".join([f":uid_{i}" for i in range(len(player_uids))])
-            params = {f"uid_{i}": uid for i, uid in enumerate(player_uids)}
-            params["comp_id"] = real_competition_id
-
             results = (
                 db.execute(
-                    text(f"""
-                        SELECT `realPlayerID`,
-                               `realPlayerUID`,
-                               `realTeamMemberKey`,
-                               `draftPosition`,
-                               `realTeamID`,
-                               `realTeamUID`,
-                               `baseRealTeamID`,
-                               `baseRealTeamUID`,
-                               `baseRealTeamName`,
-                               `baseRealTeamShortName`,
-                               `firstName`,
-                               `lastName`,
-                               `knownName`,
-                               `position`,
-                               `realPosition`,
-                               `jerseyNumber`
-                        FROM `RealPlayers`
-                        WHERE `realCompetitionID` = :comp_id
-                          AND `realPlayerUID` IN ({placeholders})
-                    """),
-                    params,
+                    select(RealPlayer)
+                    .where(
+                        RealPlayer.realCompetitionID == real_competition_id,
+                        RealPlayer.realPlayerUID.in_(player_uids),
+                    )
                 )
-                .mappings()
+                .scalars()
                 .all()
             )
 
             for row in results:
-                player_uid = row["realPlayerUID"]
+                player_uid = row.realPlayerUID
                 db_fields = {
-                    "realPlayerID": row["realPlayerID"],
-                    "realTeamMemberKey": row["realTeamMemberKey"],
-                    "draftPosition": row["draftPosition"],
-                    "db_realTeamID": row["realTeamID"],
-                    "db_realTeamUID": row["realTeamUID"],
-                    "db_baseRealTeamID": row["baseRealTeamID"],
-                    "db_baseRealTeamUID": row["baseRealTeamUID"],
-                    "db_baseRealTeamName": row["baseRealTeamName"],
-                    "db_baseRealTeamShortName": row["baseRealTeamShortName"],
-                    "db_firstName": row["firstName"],
-                    "db_lastName": row["lastName"],
-                    "db_knownName": row["knownName"],
-                    "db_position": row["position"],
-                    "db_realPosition": row["realPosition"],
-                    "db_jerseyNumber": row["jerseyNumber"],
+                    "realPlayerID": row.realPlayerID,
+                    "realTeamMemberKey": row.realTeamMemberKey,
+                    "draftPosition": row.draftPosition,
+                    "db_realTeamID": row.realTeamID,
+                    "db_realTeamUID": row.realTeamUID,
+                    "db_baseRealTeamID": row.baseRealTeamID,
+                    "db_baseRealTeamUID": row.baseRealTeamUID,
+                    "db_baseRealTeamName": row.baseRealTeamName,
+                    "db_baseRealTeamShortName": row.baseRealTeamShortName,
+                    "db_firstName": row.firstName,
+                    "db_lastName": row.lastName,
+                    "db_knownName": row.knownName,
+                    "db_position": row.position,
+                    "db_realPosition": row.realPosition,
+                    "db_jerseyNumber": row.jerseyNumber,
                 }
                 if player_uid in players_cache:
                     players_cache[player_uid].update(db_fields)

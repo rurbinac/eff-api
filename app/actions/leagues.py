@@ -3,7 +3,7 @@ from random import shuffle
 from typing import ClassVar
 
 from fastapi import HTTPException, status
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.constants import (
@@ -444,45 +444,27 @@ class LeaguesJoinAction:
             )
 
         # Check for available teams with draft not started
-        available_team_result = db.execute(
-            text("""
-                SELECT t.teamID, t.leagueID, t.divisionID, d.draftStatus
-                FROM Teams t
-                INNER JOIN Divisions d ON t.divisionID = d.divisionID
-                WHERE t.leagueID = :leagueID
-                  AND t.userID IS NULL
-                ORDER BY t.divisionID, t.teamID
-                LIMIT 1
-            """),
-            {"leagueID": league_id}
+        row = db.execute(
+            select(Team, Division)
+            .join(Division, Division.divisionID == Team.divisionID)
+            .where(Team.leagueID == league_id, Team.userID.is_(None))
+            .order_by(Team.divisionID, Team.teamID)
+            .limit(1)
         ).first()
 
-        if not available_team_result:
+        if not row:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No available teams in this league"
             )
 
+        available_team, division = row
+
         # Verify draft has not started
-        if available_team_result[3] != DraftConstants.DRAFT_STATUS_NOT_DRAFTED:
+        if division.draftStatus != DraftConstants.DRAFT_STATUS_NOT_DRAFTED:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Draft has already started in this division"
-            )
-
-        # Get the actual team object
-        team_id = available_team_result[0]
-        available_team = db.query(Team).filter(Team.teamID == team_id).first()
-
-        # Get the division
-        division = db.query(Division).filter(
-            Division.divisionID == available_team.divisionID
-        ).first()
-
-        if not division:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Division not found"
             )
 
         # Assign team to user

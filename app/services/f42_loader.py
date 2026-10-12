@@ -3,8 +3,8 @@
 
 from datetime import datetime
 
-from sqlalchemy import text, update
-from sqlalchemy.orm import Session
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session, aliased
 
 from app.constants import DraftPositionConstants, RealMatchPeriod
 from app.models import (
@@ -120,19 +120,12 @@ class F42Loader:
                 team_uid = team_data.get("realTeamUID")
                 if team_uid in team_id_mapping:
                     team_result = db.execute(
-                        text("""
-                        SELECT `realTeamID`,
-                               `realTeamName`,
-                               `realTeamShortName`
-                           FROM `RealTeams`
-                           WHERE `realCompetitionID` = :realCompetitionID
-                             AND `realTeamUID` = :realTeamUID
-                           LIMIT 1
-                    """),
-                        {
-                            "realCompetitionID": comp_data["realCompetitionID"],
-                            "realTeamUID": team_uid,
-                        },
+                        select(RealTeam.realTeamID, RealTeam.realTeamName, RealTeam.realTeamShortName)
+                        .where(
+                            RealTeam.realCompetitionID == comp_data["realCompetitionID"],
+                            RealTeam.realTeamUID == team_uid,
+                        )
+                        .limit(1)
                     ).first()
                     if team_result:
                         teams_cache[team_uid] = list(team_result)
@@ -209,23 +202,20 @@ class F42Loader:
         # Query for existing competition
         row = (
             db.execute(
-                text("""
-                    SELECT `realCompetitionID`,
-                           `baseRealCompetitionID`,
-                           `extraRealCompetitionID`,
-                           `realCompetitionUID`,
-                           `realCompetitionCountry`,
-                           `realCompetitionFirstMatchDay`,
-                           `realCompetitionLastMatchDay`
-                    FROM `RealCompetitions`
-                    WHERE `realCompetitionSYMID` = :realCompetitionSYMID
-                      AND `realCompetitionSeasonId` = :realCompetitionSeasonId
-                    LIMIT 1
-                """),
-                {
-                    "realCompetitionSYMID": comp_data["realCompetitionSYMID"],
-                    "realCompetitionSeasonId": comp_data["realCompetitionSeasonId"],
-                },
+                select(
+                    RealCompetition.realCompetitionID,
+                    RealCompetition.baseRealCompetitionID,
+                    RealCompetition.extraRealCompetitionID,
+                    RealCompetition.realCompetitionUID,
+                    RealCompetition.realCompetitionCountry,
+                    RealCompetition.realCompetitionFirstMatchDay,
+                    RealCompetition.realCompetitionLastMatchDay,
+                )
+                .where(
+                    RealCompetition.realCompetitionSYMID == comp_data["realCompetitionSYMID"],
+                    RealCompetition.realCompetitionSeasonId == comp_data["realCompetitionSeasonId"],
+                )
+                .limit(1)
             )
             .mappings()
             .first()
@@ -266,25 +256,20 @@ class F42Loader:
                 continue
 
             # Query for existing team
-            result = db.execute(
-                text("""
-                    SELECT `realTeamID`
-                    FROM `RealTeams`
-                    WHERE `realCompetitionID` = :realCompetitionID
-                      AND `realTeamUID` = :realTeamUID
-                    LIMIT 1
-                """),
-                {
-                    "realCompetitionID": comp_data["realCompetitionID"],
-                    "realTeamUID": team_data["realTeamUID"],
-                },
+            result = db.scalars(
+                select(RealTeam.realTeamID)
+                .where(
+                    RealTeam.realCompetitionID == comp_data["realCompetitionID"],
+                    RealTeam.realTeamUID == team_data["realTeamUID"],
+                )
+                .limit(1)
             ).first()
 
             if result:
                 # Update existing
                 db.execute(
                     update(RealTeam)
-                    .where(RealTeam.realTeamID == result[0])
+                    .where(RealTeam.realTeamID == result)
                     .values(
                         realTeamName=team_data["realTeamName"],
                         realTeamSYMID=team_data["realTeamSYMID"],
@@ -327,7 +312,7 @@ class F42Loader:
 
             # Also store existing team IDs in mapping
             if result and team_data["realTeamUID"] not in team_uid_mapping:
-                team_uid_mapping[team_data["realTeamUID"]] = result[0]
+                team_uid_mapping[team_data["realTeamUID"]] = result
 
         task.close(status=Task.COMPLETED if not task.errors else Task.ERROR)
         return (task, team_uid_mapping)
@@ -367,18 +352,13 @@ class F42Loader:
                 continue
 
             # Check for existing player
-            result = db.execute(
-                text("""
-                    SELECT `realPlayerID`
-                    FROM `RealPlayers`
-                    WHERE `realCompetitionID` = :realCompetitionID
-                      AND `realPlayerUID` = :realPlayerUID
-                    LIMIT 1
-                """),
-                {
-                    "realCompetitionID": comp_data["realCompetitionID"],
-                    "realPlayerUID": player_data["realPlayerUID"],
-                },
+            result = db.scalars(
+                select(RealPlayer.realPlayerID)
+                .where(
+                    RealPlayer.realCompetitionID == comp_data["realCompetitionID"],
+                    RealPlayer.realPlayerUID == player_data["realPlayerUID"],
+                )
+                .limit(1)
             ).first()
 
             # Calculate draft position
@@ -395,7 +375,7 @@ class F42Loader:
                 # Update existing
                 db.execute(
                     update(RealPlayer)
-                    .where(RealPlayer.realPlayerID == result[0])
+                    .where(RealPlayer.realPlayerID == result)
                     .values(
                         firstName=player_data.get("firstName"),
                         lastName=player_data.get("lastName"),
@@ -459,24 +439,20 @@ class F42Loader:
         """
         cache = {}
 
+        t1 = aliased(RealMatchTeam)
+        t2 = aliased(RealMatchTeam)
         results = (
             db.execute(
-                text("""
-                    SELECT `m`.`realMatchID` AS `mID`,
-                           `t1`.`realMatchTeamID` AS `mtID_1`,
-                           `t2`.`realMatchTeamID` AS `mtID_2`,
-                           `t1`.`realTeamUID` AS `tUID_1`,
-                           `t2`.`realTeamUID` AS `tUID_2`
-                    FROM `RealMatches` `m`
-                    INNER JOIN `RealMatchTeams` `t1`
-                        ON `m`.`realMatchID` = `t1`.`realMatchID`
-                        AND `t1`.`realTeamNumber` = 1
-                    INNER JOIN `RealMatchTeams` `t2`
-                        ON `m`.`realMatchID` = `t2`.`realMatchID`
-                        AND `t2`.`realTeamNumber` = 2
-                    WHERE `m`.`realCompetitionID` = :realCompetitionID
-                """),
-                {"realCompetitionID": comp_data["realCompetitionID"]},
+                select(
+                    RealMatch.realMatchID.label("mID"),
+                    t1.realMatchTeamID.label("mtID_1"),
+                    t2.realMatchTeamID.label("mtID_2"),
+                    t1.realTeamUID.label("tUID_1"),
+                    t2.realTeamUID.label("tUID_2"),
+                )
+                .join(t1, (t1.realMatchID == RealMatch.realMatchID) & (t1.realTeamNumber == 1))
+                .join(t2, (t2.realMatchID == RealMatch.realMatchID) & (t2.realTeamNumber == 2))
+                .where(RealMatch.realCompetitionID == comp_data["realCompetitionID"])
             )
             .mappings()
             .all()

@@ -433,6 +433,76 @@ class RealStanding(SQLModel, table=True):
     updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
+class RealTeamMember(SQLModel, table=True):
+    __tablename__ = "RealTeamMembers"
+
+    realTeamMemberID: int | None = Field(default=None, primary_key=True)
+    realTeamMemberKey: str = Field(max_length=10)
+    prevRealTeamMemberKey: str | None = Field(default=None, max_length=10)
+    nextRealTeamMemberKey: str | None = Field(default=None, max_length=10)
+    baseRealCompetitionID: int
+    extraRealCompetitionID: int | None = None
+    isTeam: int = Field(sa_type=TINYINT)
+    isPlayer: int = Field(sa_type=TINYINT)
+    realTeamID: int | None = None
+    realTeamUID: str = Field(max_length=20)
+    realTeamName: str = Field(max_length=128)
+    realTeamShortName: str | None = Field(default=None, max_length=10)
+    realPlayerID: int | None = None
+    realPlayerUID: str | None = Field(default=None, max_length=20)
+    firstName: str | None = Field(default=None, max_length=100)
+    lastName: str | None = Field(default=None, max_length=100)
+    knownName: str | None = Field(default=None, max_length=100)
+    name: str = Field(max_length=100)
+    sortName: str = Field(max_length=100)
+    position: str | None = Field(default=None, max_length=20)
+    draftPosition: str | None = Field(default=None, max_length=20)
+    draftPositionOrder: int | None = Field(default=None, sa_type=TINYINT)
+    birthDate: str | None = Field(default=None, max_length=10)
+    weight: float | None = None
+    height: float | None = None
+    jerseyNumber: int | None = None
+    enabled: int = Field(sa_type=TINYINT)
+    last_ranking: int | None = None
+    last_timePlayed: int | None = None
+    last_gamePlayed: int | None = None
+    last_goals: int | None = None
+    last_assists: int | None = None
+    last_goalsConceded: int | None = None
+    last_yellowCards: int | None = None
+    last_redCards: int | None = None
+    last_cleanSheet: int | None = None
+    last_played: int | None = None
+    last_won: int | None = None
+    last_draw: int | None = None
+    last_lost: int | None = None
+    last_goalsFor: int | None = None
+    last_goalsAgainst: int | None = None
+    last_pointsL1: float | None = None
+    ranking: int | None = None
+    timePlayed: int | None = None
+    gamePlayed: int | None = None
+    goals: int | None = None
+    assists: int | None = None
+    goalsConceded: int | None = None
+    yellowCards: int | None = None
+    redCards: int | None = None
+    cleanSheet: int | None = None
+    played: int | None = None
+    won: int | None = None
+    draw: int | None = None
+    lost: int | None = None
+    goalsFor: int | None = None
+    goalsAgainst: int | None = None
+    pointsL1: float | None = None
+    livePointsL1: float | None = None
+    lastF7Date: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
+    lastF42Date: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
+    lastFDate: datetime = Field(default_factory=utc_lowest, sa_type=UTCDateTime())
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
+
+
 class MatchTeam(SQLModel, table=True):
     __tablename__ = "MatchTeams"
 

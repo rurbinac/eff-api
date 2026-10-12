@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, ClassVar
 
-from sqlalchemy import bindparam, select, text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlmodel import SQLModel
 
@@ -15,6 +15,7 @@ from app.models import (
     MatchDaysStatus,
     RealCompetition,
     RealStanding,
+    RealTeamMember,
     Team,
     User,
 )
@@ -290,12 +291,10 @@ class QueryService:
         """
         if not keys:
             return {}
-        rows = db.execute(
-            text("SELECT * FROM `RealTeamMembers` WHERE `realTeamMemberKey` IN :keys")
-            .bindparams(bindparam("keys", expanding=True)),
-            {"keys": keys},
-        ).mappings().all()
-        return {row["realTeamMemberKey"]: dict(row) for row in rows}
+        rows = db.scalars(
+            select(RealTeamMember).where(RealTeamMember.realTeamMemberKey.in_(keys))
+        ).all()
+        return {r.realTeamMemberKey: r.model_dump() for r in rows}
 
     @staticmethod
     def get_real_team_members_by_rc_id(db: Session, rc_id: int | None = None) -> dict[str, dict]:
@@ -309,11 +308,10 @@ class QueryService:
         base_rc_id = QueryService.get_base_competition_id(db, rc_id)
         if not base_rc_id:
             return {}
-        rows = db.execute(
-            text("SELECT * FROM `RealTeamMembers` WHERE `baseRealCompetitionID` = :base_rc_id"),
-            {"base_rc_id": base_rc_id},
-        ).mappings().all()
-        return {row["realTeamMemberKey"]: dict(row) for row in rows}
+        rows = db.scalars(
+            select(RealTeamMember).where(RealTeamMember.baseRealCompetitionID == base_rc_id)
+        ).all()
+        return {r.realTeamMemberKey: r.model_dump() for r in rows}
 
     @staticmethod
     def _to_dict(
@@ -903,15 +901,13 @@ class QueryService:
         """Batch-fetch RealStandings rows for a list of member keys."""
         if not keys:
             return []
-        rows = db.execute(
-            text(
-                "SELECT * FROM `RealStandings`"
-                " WHERE `realCompetitionID` = :rc_id"
-                "   AND `realCompetitionMatchDay` = :rc_md"
-                "   AND `realTeamMemberKey` IN :keys"
-            ).bindparams(bindparam("keys", expanding=True)),
-            {"rc_id": real_competition_id, "rc_md": real_competition_match_day, "keys": keys},
-        ).mappings().all()
+        rows = db.scalars(
+            select(RealStanding).where(
+                RealStanding.realCompetitionID == real_competition_id,
+                RealStanding.realCompetitionMatchDay == real_competition_match_day,
+                RealStanding.realTeamMemberKey.in_(keys),
+            )
+        ).all()
         include = [
             "realTeamMemberKey", "realTeamMemberID", "realMatchID", "realMatchStatus",
             "realTeamID", "realTeamUID", "realTeamName", "realTeamShortName", "realTeamSide",
@@ -924,8 +920,5 @@ class QueryService:
             "matchPointsL1", "pointsL1", "livePointsL1",
             "matchTeamMemberRole", "matchTeamMemberPlayed", "matchTeamID", "teamID", "matchStatus",
         ]
-        return [
-            {k: dict(row).get(k) for k in include}
-            for row in rows
-        ]
+        return [QueryService._to_dict(row, include=include) for row in rows]
 

@@ -1,7 +1,8 @@
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.guards import require_league_member
+from app.models import RealTeamMember, Team
 
 
 class DraftResultAction:
@@ -9,16 +10,18 @@ class DraftResultAction:
     @staticmethod
     def execute(db: Session, division_id: int, user_id: int | None = None) -> list[dict]:
         require_league_member(db, user_id, division_id=division_id)
-        stmt = text("""
-            SELECT teamID, baseRealCompetitionID, leagueID, divisionID, commissionerID,
-                   userID, seasonNum, draftOrder, randomOrder, teamName, isCommissioner,
-                   cntEPLTeam, cntPlayer, cntGoalkeeper, cntDefender, cntMidfielder,
-                   cntStriker, teamMembers, draftMembers
-            FROM Teams
-            WHERE divisionID = :divisionID
-            ORDER BY draftOrder ASC
-        """)
-        team_rows = [dict(r) for r in db.execute(stmt, {"divisionID": division_id}).mappings()]
+        stmt = (
+            select(
+                Team.teamID, Team.baseRealCompetitionID, Team.leagueID, Team.divisionID,
+                Team.commissionerID, Team.userID, Team.seasonNum, Team.draftOrder,
+                Team.randomOrder, Team.teamName, Team.isCommissioner, Team.cntEPLTeam,
+                Team.cntPlayer, Team.cntGoalkeeper, Team.cntDefender, Team.cntMidfielder,
+                Team.cntStriker, Team.teamMembers, Team.draftMembers,
+            )
+            .where(Team.divisionID == division_id)
+            .order_by(Team.draftOrder)
+        )
+        team_rows = [dict(r) for r in db.execute(stmt).mappings()]
 
         members = _build_members(db, team_rows)
         members.sort(key=lambda m: m["draftingMemberOrder"])
@@ -61,13 +64,12 @@ def _build_members(db: Session, teams: list[dict]) -> list[dict]:
 
 
 def _get_member_details(db: Session, keys: list[str]) -> list[dict]:
-    placeholders = ", ".join(f":key{i}" for i in range(len(keys)))
-    params = {f"key{i}": key for i, key in enumerate(keys)}
-    stmt = text(f"""
-        SELECT realTeamMemberKey, realTeamID, realTeamUID, realTeamName, realTeamShortName,
-               realPlayerID, realPlayerUID, firstName, lastName, knownName, name,
-               draftPosition, draftPositionOrder
-        FROM RealTeamMembers
-        WHERE realTeamMemberKey IN ({placeholders})
-    """)
-    return [dict(r) for r in db.execute(stmt, params).mappings()]
+    rows = db.scalars(
+        select(RealTeamMember).where(RealTeamMember.realTeamMemberKey.in_(keys))
+    ).all()
+    fields = [
+        "realTeamMemberKey", "realTeamID", "realTeamUID", "realTeamName", "realTeamShortName",
+        "realPlayerID", "realPlayerUID", "firstName", "lastName", "knownName", "name",
+        "draftPosition", "draftPositionOrder",
+    ]
+    return [{f: getattr(r, f) for f in fields} for r in rows]

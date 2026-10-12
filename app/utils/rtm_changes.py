@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.constants import (
@@ -30,23 +30,16 @@ class RTMChange:
     def _read_division_keys(
         self, db: Session, team: Team, other_team: Team | None = None
     ) -> Keys:
-        rows = (
-            db.execute(
-                text(
-                    "SELECT `teamMembers` FROM `Teams` WHERE `divisionID` = :div AND `teamID` != :tid_1 AND `teamID` != :tid_2"
-                ),
-                {
-                    "div": team.divisionID,
-                    "tid_1": team.teamID,
-                    "tid_2": team.teamID if other_team is None else other_team.teamID,
-                },
+        exclude_ids = {team.teamID, other_team.teamID if other_team is not None else team.teamID}
+        rows = db.execute(
+            select(Team.teamMembers).where(
+                Team.divisionID == team.divisionID,
+                Team.teamID.notin_(exclude_ids),
             )
-            .mappings()
-            .all()
-        )
+        ).all()
         division_keys = Keys(allow_dups=None)
         for row in rows:
-            for key in Keys.to_list(row.get("teamMembers") or "") or []:
+            for key in Keys.to_list(row.teamMembers or "") or []:
                 division_keys.append(key)
         return division_keys
 
@@ -438,9 +431,8 @@ class SettleWaivers(AddDrop):
                         break
             if changes:
                 self._db.commit()
-        self._db.execute(
-            text("UPDATE Teams SET membersWaivers = '' WHERE divisionID = :div"),
-            {"div": teams[0].divisionID},
+        self._db.query(Team).filter(Team.divisionID == teams[0].divisionID).update(
+            {Team.membersWaivers: ""}
         )
         self._db.commit()
 
