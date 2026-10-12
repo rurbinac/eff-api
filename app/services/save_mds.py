@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlmodel import select, text
 
 from app.constants import MatchDayStatusConstants, RealMatchPeriod
-from app.models import MatchDaysStatus
+from app.models import MatchDaysMap, MatchDaysStatus
 from app.services.query import QueryService
 from app.utils.dt import (
     add_to_datetime,
@@ -600,28 +600,23 @@ class SaveMDS:
         Rows are ordered by firstRealCompetitionMatchDay, competitionType,
         maxNumTeams, and matchDay.
         """
-        sql = text("""
-                   SELECT `firstRealCompetitionMatchDay`,
-                          `competitionType`,
-                          `maxNumTeams`,
-                          `matchDay`,
-                          `realCompetitionID`,
-                          `realCompetitionMatchDay`
-                      FROM `MatchDaysMap`
-                      WHERE `baseRealCompetitionID` = :baseRealCompetitionID
-                      ORDER BY `firstRealCompetitionMatchDay`,
-                               `competitionType`,
-                               `maxNumTeams`,
-                               `matchDay`
-                   """)
-        rows = (
-            self._db.execute(  # type: ignore[call-overload]  # raw text() query needs .mappings()
-                sql,
-                {"baseRealCompetitionID": self._base_rc_id},
+        rows = self._db.execute(
+            select(
+                MatchDaysMap.firstRealCompetitionMatchDay,
+                MatchDaysMap.competitionType,
+                MatchDaysMap.maxNumTeams,
+                MatchDaysMap.matchDay,
+                MatchDaysMap.realCompetitionID,
+                MatchDaysMap.realCompetitionMatchDay,
             )
-            .mappings()
-            .all()
-        )
+            .where(MatchDaysMap.baseRealCompetitionID == self._base_rc_id)
+            .order_by(
+                MatchDaysMap.firstRealCompetitionMatchDay,
+                MatchDaysMap.competitionType,
+                MatchDaysMap.maxNumTeams,
+                MatchDaysMap.matchDay,
+            )
+        ).mappings().all()
         self._mmd = {}
         for row in rows:
             d_or_l = "D" if row["competitionType"] != 3 else "L"
