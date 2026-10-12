@@ -1,9 +1,10 @@
 from collections.abc import Iterator
 from datetime import datetime, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import func, update
 
 from app.actions.draft.draft_base import DraftBase, DraftHelperProtocol
+from app.models import Team
 from app.actions.draft.draft_exception import (
     MemberNotAvailableException,
     NotAvailableDraftPositionsException,
@@ -232,23 +233,20 @@ class DraftMember(DraftBase):
     def _update_other_teams(self) -> None:
         """_summary_"""
         d = self.division
-        sql = text("""
-            UPDATE `Teams`
-               SET `membersRanking` = REPLACE(`membersRanking`, :key, ''),
-                   `matchDayMapKey` = :matchDayMapKey,
-                   `leagueMatches` = :leagueMatches,
-                   `divisionMatches` = :divisionMatches
-             WHERE `divisionID` = :divisionID
-               AND `teamID` <> :teamID
-        """)
-        self._dh.db.execute(sql, {
-            "key": self._selected_key + Keys.SUFFIX,
-            "matchDayMapKey": d.get("matchDayMapKey"),
-            "leagueMatches": d.get("leagueMatches"),
-            "divisionMatches": d.get("divisionMatches"),
-            "divisionID": d.get("divisionID"),
-            "teamID": self._dh.draft_values.get_member_team_id(self._selected_key),
-        })
+        key_with_suffix = self._selected_key + Keys.SUFFIX
+        self._dh.db.execute(
+            update(Team)
+            .where(
+                Team.divisionID == d.get("divisionID"),
+                Team.teamID != self._dh.draft_values.get_member_team_id(self._selected_key),
+            )
+            .values(
+                membersRanking=func.replace(Team.membersRanking, key_with_suffix, ""),
+                matchDayMapKey=d.get("matchDayMapKey"),
+                leagueMatches=d.get("leagueMatches"),
+                divisionMatches=d.get("divisionMatches"),
+            )
+        )
 
     def _get_event_data(self) -> dict:
         """_summary_
