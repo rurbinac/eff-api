@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.context import RequestContext
+from app.models import MatchDaysStatus
 from app.services.query import QueryService
 
 # Days added to the current datetime when searching for the next schedule template.
@@ -276,17 +277,17 @@ def _find(db: Session, dt: datetime, key: str) -> str | None:
         The matched matchDayMapKey string, or None if no row qualifies.
     """
     date = dt + timedelta(days=ADD_DAYS)
-    stmt = text("""
-        SELECT `matchDayMapKey`
-        FROM `MatchDaysStatus`
-        WHERE `active` = 1
-            AND `prevActiveMatchDayStatusID` IS NULL
-            AND `startPreMatch` >= :date
-            AND `matchDayMapKey` LIKE :key
-        ORDER BY `matchDayMapKey`
-    """)
-    row = db.execute(stmt, {"date": date, "key": key}).mappings().first()
-    return row["matchDayMapKey"] if row else None
+    return db.scalars(
+        select(MatchDaysStatus.matchDayMapKey)
+        .where(
+            MatchDaysStatus.active == 1,
+            MatchDaysStatus.prevActiveMatchDayStatusID.is_(None),
+            MatchDaysStatus.startPreMatch >= date,
+            MatchDaysStatus.matchDayMapKey.like(key),
+        )
+        .order_by(MatchDaysStatus.matchDayMapKey)
+        .limit(1)
+    ).first()
 
 
 def _get_rc_id(db: Session, rcID: int | None = None) -> int | None:
