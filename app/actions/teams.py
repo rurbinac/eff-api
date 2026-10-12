@@ -1,4 +1,4 @@
-from sqlalchemy import text
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.constants import WaiversConstants
@@ -9,7 +9,7 @@ from app.guards import (
     require_team,
     require_team_owner,
 )
-from app.models import Team
+from app.models import RealStanding, RealTeamMember, Team
 from app.services import QueryService
 from app.utils.dt import to_iso, utc_now
 from app.utils.readers import RTMReader
@@ -192,27 +192,16 @@ class TeamsWaiverMembersDetailAction:
         members = []
         for g, group in enumerate(kg):
             for k, key in enumerate(group):
-                # Query RealStandings for this member
-                rs_stmt = text("""
-                    SELECT *
-                    FROM `RealStandings`
-                    WHERE `realTeamMemberKey` = :key
-                      AND `realCompetitionID` = :realCompetitionID
-                      AND `realCompetitionMatchDay` = :realCompetitionMatchDay
-                    LIMIT 1
-                """)
-                rs_result = db.execute(
-                    rs_stmt,
-                    {
-                        "key": key,
-                        "realCompetitionID": real_competition_id,
-                        "realCompetitionMatchDay": real_competition_match_day,
-                    },
-                )
-                rs_row = rs_result.mappings().first()
+                rs_row = db.scalars(
+                    select(RealStanding).where(
+                        RealStanding.realTeamMemberKey == key,
+                        RealStanding.realCompetitionID == real_competition_id,
+                        RealStanding.realCompetitionMatchDay == real_competition_match_day,
+                    ).limit(1)
+                ).first()
 
                 if rs_row:
-                    member_dict = dict(rs_row)
+                    member_dict = rs_row.model_dump()
                     member_dict["waiversGroup"] = g + 1
                     member_dict["waiversAction"] = "add" if k == 0 else "drop"
                     members.append(member_dict)
@@ -256,18 +245,12 @@ class TeamsGetRealMembersRankingAction:
         team_set: set[str] = set(Keys.to_list(team.teamMembers) or [])
 
         # Collect division member keys from all other teams in the same division
-        division_teams_stmt = text("""
-            SELECT `teamMembers`
-            FROM `Teams`
-            WHERE `divisionID` = :divisionID
-              AND `teamID` != :teamID
-        """)
-        division_teams_result = db.execute(
-            division_teams_stmt, {"divisionID": division_id, "teamID": team_id}
-        )
         division_set: set[str] = set()
-        for div_row in division_teams_result.mappings():
-            div_keys = Keys.to_list(div_row.get("teamMembers"))
+        for tm in db.scalars(
+            select(Team.teamMembers)
+            .where(Team.divisionID == division_id, Team.teamID != team_id)
+        ).all():
+            div_keys = Keys.to_list(tm)
             if div_keys:
                 division_set.update(div_keys)
 
@@ -275,20 +258,19 @@ class TeamsGetRealMembersRankingAction:
         ranking_set: set[str] = set(ranking_order)
 
         # Load all enabled members for this competition into an in-memory dict
-        members_stmt = text("""
-            SELECT *
-            FROM `RealTeamMembers`
-            WHERE `enabled` = 1
-              AND `baseRealCompetitionID` = :baseRealCompetitionID
-            ORDER BY IFNULL(`last_ranking`, 1000000000), `name`
-        """)
-        members_result = db.execute(
-            members_stmt, {"baseRealCompetitionID": base_competition_id}
-        )
-
         all_members: dict[str, dict] = {}
-        for row in members_result.mappings():
-            member_dict = dict(row)
+        for row in db.scalars(
+            select(RealTeamMember)
+            .where(
+                RealTeamMember.enabled == 1,
+                RealTeamMember.baseRealCompetitionID == base_competition_id,
+            )
+            .order_by(
+                func.coalesce(RealTeamMember.last_ranking, 1000000000),
+                RealTeamMember.name,
+            )
+        ).all():
+            member_dict = row.model_dump()
             member_key = member_dict.get("realTeamMemberKey")
             if member_key is None:
                 continue
@@ -360,19 +342,12 @@ class TeamsAddAndDropMembersAction:
 
     @staticmethod
     def _read_division_keys(db: Session, team: Team) -> Keys:
-        rows = (
-            db.execute(
-                text(
-                    "SELECT `teamMembers` FROM `Teams` WHERE `divisionID` = :div AND `teamID` != :tid"
-                ),
-                {"div": team.divisionID, "tid": team.teamID},
-            )
-            .mappings()
-            .all()
-        )
         division_keys = Keys(allow_dups=None)
-        for row in rows:
-            for key in Keys.to_list(row.get("teamMembers") or "") or []:
+        for tm in db.scalars(
+            select(Team.teamMembers)
+            .where(Team.divisionID == team.divisionID, Team.teamID != team.teamID)
+        ).all():
+            for key in Keys.to_list(tm or "") or []:
                 division_keys.append(key)
         return division_keys
 
@@ -433,21 +408,11 @@ class TeamsSetFranchiseWishListAction:
 
 
 def _get_member_keys_field(db: Session, team_id: int, field: str) -> list[dict]:
-    team_row = (
-        db.execute(
-            text(
-                f"SELECT `{field}`, `baseRealCompetitionID` FROM `Teams` WHERE `teamID` = :teamID LIMIT 1"
-            ),
-            {"teamID": team_id},
-        )
-        .mappings()
-        .first()
-    )
-    if not team_row:
+    team = db.get(Team, team_id)
+    if not team:
         return []
-    keys = Keys.to_list(team_row.get(field) or "")
-    base_competition_id = team_row.get("baseRealCompetitionID")
-    if not keys or not base_competition_id:
+    keys = Keys.to_list(getattr(team, field, None) or "")
+    if not keys or not team.baseRealCompetitionID:
         return []
     members_by_key = QueryService.get_real_team_members_by_keys(db, keys)
     return [members_by_key[k] for k in keys if k in members_by_key]
@@ -457,9 +422,7 @@ def _set_member_keys_field(
     db: Session, team_id: int, field: str, keys: Keys | KeyGroups
 ) -> dict:
     packed = keys.pack()
-    db.execute(
-        text(f"UPDATE `Teams` SET `{field}` = :value WHERE `teamID` = :teamID"),
-        {"value": packed, "teamID": team_id},
-    )
+    team = db.get(Team, team_id)
+    setattr(team, field, packed)
     db.commit()
     return {"success": True, "teamID": team_id, field: packed}
