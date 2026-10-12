@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import null, select
 from sqlalchemy.orm import Session
 
 from app.constants import (
@@ -12,6 +12,7 @@ from app.constants import (
     MatchCreationConstants,
     MatchStatusConstants,
 )
+from app.models import Division, Match, MatchDaysMap, MatchTeam, Team
 from app.utils.match_day_map_keys import league_map_days_map_key
 
 
@@ -86,34 +87,24 @@ class MatchFactory(ABC):
         return None
 
     def _load_mmd(self) -> bool:
-        stmt = text("""
-            SELECT `totalMatchDays`,
-                   `rounds`,
-                   `firstRealCompetitionMatchDaySort`,
-                   `matchDay`,
-                   `realCompetitionID`,
-                   `realCompetitionMatchDay`,
-                   `realCompetitionMatchDaySort`
-              FROM `MatchDaysMap`
-             WHERE `baseRealCompetitionID` = :baseRealCompetitionID
-               AND `competitionType` = :competitionType
-               AND `firstRealCompetitionMatchDay` = :firstRealCompetitionMatchDay
-               AND `minNumTeams` <= :numTeams
-               AND `maxNumTeams` >= :numTeams
-        """)
-        rows = (
-            self._db.execute(
-                stmt,
-                {
-                    "baseRealCompetitionID": self.base_real_competition_id,
-                    "competitionType": self.competition_type,
-                    "firstRealCompetitionMatchDay": self.first_real_competition_match_day,
-                    "numTeams": self.num_teams,
-                },
+        rows = self._db.execute(
+            select(
+                MatchDaysMap.totalMatchDays,
+                MatchDaysMap.rounds,
+                MatchDaysMap.firstRealCompetitionMatchDaySort,
+                MatchDaysMap.matchDay,
+                MatchDaysMap.realCompetitionID,
+                MatchDaysMap.realCompetitionMatchDay,
+                MatchDaysMap.realCompetitionMatchDaySort,
             )
-            .mappings()
-            .all()
-        )
+            .where(
+                MatchDaysMap.baseRealCompetitionID == self.base_real_competition_id,
+                MatchDaysMap.competitionType == self.competition_type,
+                MatchDaysMap.firstRealCompetitionMatchDay == self.first_real_competition_match_day,
+                MatchDaysMap.minNumTeams <= self.num_teams,
+                MatchDaysMap.maxNumTeams >= self.num_teams,
+            )
+        ).mappings().all()
         if rows:
             self._mmd = [dict(row) for row in rows]
             return True
@@ -143,15 +134,26 @@ class MatchFactory(ABC):
 
     def _load_teams(self) -> bool:
         is_league = self.competition_type == CompetitionTypeConstants.LEAGUE_KNOCK_OUT
+        id_col = Team.leagueID if is_league else Team.divisionID
         id_val = self.leagueID if is_league else self.divisionID
-        rows = (
-            self._db.execute(
-                text(self._sql_teams()),
-                {"competitionType": self.competition_type, "id": id_val},
-            )
-            .mappings()
-            .all()
+        ct = self.competition_type
+        seeding_col = (
+            Team.seedingC1 if ct == CompetitionTypeConstants.DIVISION_ROUND_ROBIN else
+            Team.seedingC2 if ct == CompetitionTypeConstants.DIVISION_KNOCK_OUT else
+            Team.seedingC3 if ct == CompetitionTypeConstants.LEAGUE_KNOCK_OUT else
+            null()
         )
+        rows = self._db.execute(
+            select(
+                Team.teamID,
+                Team.divisionID,
+                Team.userID,
+                Team.teamName,
+                seeding_col.label("seeding"),
+            )
+            .where(id_col == id_val)
+            .order_by(seeding_col)
+        ).mappings().all()
         self._teams = [dict(row) for row in rows]
         num_teams = 0
         for division in self._divisions:
@@ -255,73 +257,13 @@ class MatchFactory(ABC):
         }
 
     def _insert_match(self, values: dict) -> int | None:
-        stmt = text("""
-            INSERT INTO `Matches` (
-                `matchStatus`, `leagueID`, `divisionID`, `season`, `seasonNum`,
-                `realCompetitionID`, `realCompetitionMatchDay`, `realCompetitionMatchDaySort`,
-                `competitionType`, `competitionMatchDay`, `competitionLastMatchDay`,
-                `competitionMatchNumber`, `competitionMatchGroup`, `competitionMatchNextGroup`,
-                `competitionMatchRound`, `competitionMatchLastRound`,
-                `matchGroupWinnerTeamID`, `lastCompetitionMatchDay`,
-                `createdBy`, `createdIn`, `updatedBy`, `updatedIn`
-            ) VALUES (
-                :matchStatus, :leagueID, :divisionID, :season, :seasonNum,
-                :realCompetitionID, :realCompetitionMatchDay, :realCompetitionMatchDaySort,
-                :competitionType, :competitionMatchDay, :competitionLastMatchDay,
-                :competitionMatchNumber, :competitionMatchGroup, :competitionMatchNextGroup,
-                :competitionMatchRound, :competitionMatchLastRound,
-                :matchGroupWinnerTeamID, :lastCompetitionMatchDay,
-                :createdBy, :createdIn, :updatedBy, :updatedIn
-            )
-        """)
-        result = self._db.execute(stmt, values)
-        return result.lastrowid
+        match = Match(**values)
+        self._db.add(match)
+        self._db.flush()
+        return match.matchID
 
     def _insert_match_team(self, values: dict) -> None:
-        stmt = text("""
-            INSERT INTO `MatchTeams` (
-                `matchID`, `matchTeamNum`, `userID`, `teamID`, `teamName`,
-                `teamScore`, `teamPoints`, `teamSeeding`, `matchDayMapKey`,
-                `lineup`, `cntEPLTeam`, `cntGoalkeeper`, `cntDefender`,
-                `cntMidfielder`, `cntStriker`, `cntSubstitute`, `cntInactive`,
-                `place`, `won`, `draw`, `lost`, `scoreFor`, `scoreAgainst`, `points`,
-                `wonHome`, `drawHome`, `lostHome`, `scoreForHome`, `scoreAgainstHome`, `pointsHome`,
-                `wonAway`, `drawAway`, `lostAway`, `scoreForAway`, `scoreAgainstAway`, `pointsAway`,
-                `createdBy`, `createdIn`, `updatedBy`, `updatedIn`
-            ) VALUES (
-                :matchID, :matchTeamNum, :userID, :teamID, :teamName,
-                :teamScore, :teamPoints, :teamSeeding, :matchDayMapKey,
-                :lineup, :cntEPLTeam, :cntGoalkeeper, :cntDefender,
-                :cntMidfielder, :cntStriker, :cntSubstitute, :cntInactive,
-                :place, :won, :draw, :lost, :scoreFor, :scoreAgainst, :points,
-                :wonHome, :drawHome, :lostHome, :scoreForHome, :scoreAgainstHome, :pointsHome,
-                :wonAway, :drawAway, :lostAway, :scoreForAway, :scoreAgainstAway, :pointsAway,
-                :createdBy, :createdIn, :updatedBy, :updatedIn
-            )
-        """)
-        self._db.execute(stmt, values)
-
-    def _sql_teams(self) -> str:
-        if self.competition_type != CompetitionTypeConstants.LEAGUE_KNOCK_OUT:
-            id_name = "divisionID"
-        else:
-            id_name = "leagueID"
-        return f"""
-SELECT `teamID`,
-       `divisionID`,
-       `userID`,
-       `teamName`,
-       CASE :competitionType
-          WHEN 1 THEN `seedingC1`
-          WHEN 2 THEN `seedingC2`
-          WHEN 3 THEN `seedingC3`
-          ELSE NULL
-       END AS `seeding`
-   FROM `Teams`
-   WHERE `{id_name}` = :id
-   ORDER BY `seeding`
-         """
-
+        self._db.add(MatchTeam(**values))
 
 class DivisionRRFactory(MatchFactory):
     def __init__(self, db: Session, division: dict, user_id: int, now: datetime):
@@ -338,21 +280,11 @@ class DivisionRRFactory(MatchFactory):
         )
 
     def _save(self) -> bool:
-        self._db.execute(
-            text("""
-                UPDATE `Divisions`
-                   SET `divisionMatches` = :divisionMatches,
-                       `updatedBy` = :updatedBy,
-                       `updatedIn` = :updatedIn
-                 WHERE `divisionID` = :divisionID
-            """),
-            {
-                "divisionMatches": MatchCreationConstants.CREATING,
-                "updatedBy": self._user_id,
-                "updatedIn": self._now,
-                "divisionID": self.divisionID,
-            },
-        )
+        division = self._db.get(Division, self.divisionID)
+        if division is not None:
+            division.divisionMatches = MatchCreationConstants.CREATING
+            division.updatedBy = self._user_id
+            division.updatedIn = self._now
         self._db.commit()
         return True
 
@@ -517,21 +449,11 @@ class DivisionKOFactory(MatchFactory):
         return isinstance(self._pairs, list) and len(self._pairs) == len(self._mmd)
 
     def _save(self) -> bool:
-        self._db.execute(
-            text("""
-                UPDATE `Divisions`
-                   SET `divisionMatches` = :divisionMatches,
-                       `updatedBy` = :updatedBy,
-                       `updatedIn` = :updatedIn
-                 WHERE `divisionID` = :divisionID
-            """),
-            {
-                "divisionMatches": MatchCreationConstants.CREATED,
-                "updatedBy": self._user_id,
-                "updatedIn": self._now,
-                "divisionID": self.divisionID,
-            },
-        )
+        division = self._db.get(Division, self.divisionID)
+        if division is not None:
+            division.divisionMatches = MatchCreationConstants.CREATED
+            division.updatedBy = self._user_id
+            division.updatedIn = self._now
         self._db.commit()
         return True
 
@@ -602,54 +524,27 @@ class LeagueKOFactory(DivisionKOFactory):
         return self._save_remaining()
 
     def _save_division(self, division: dict) -> None:
-        self._db.execute(
-            text("""
-                UPDATE `Divisions`
-                SET `leagueMatches` = :leagueMatches,
-                    `matchDayMapKey` = :matchDayMapKey,
-                    `updatedBy` = :updatedBy,
-                    `updatedIn` = :updatedIn
-                WHERE `divisionID` = :divisionID
-            """),
-            {
-                "leagueMatches": MatchCreationConstants.CREATED,
-                "matchDayMapKey": division["matchDayMapKey"],
-                "updatedBy": self._user_id,
-                "updatedIn": self._now,
-                "divisionID": division["divisionID"],
-            },
-        )
+        d = self._db.get(Division, division["divisionID"])
+        if d is not None:
+            d.leagueMatches = MatchCreationConstants.CREATED
+            d.matchDayMapKey = division["matchDayMapKey"]
+            d.updatedBy = self._user_id
+            d.updatedIn = self._now
 
     def _save_teams(self) -> None:
-        self._db.execute(
-            text("""
-                UPDATE `Teams` `t`
-                LEFT OUTER JOIN `Divisions` `d` ON `d`.`divisionID` = `t`.`divisionID`
-                SET `t`.`matchDayMapKey` = `d`.`matchDayMapKey`,
-                    `t`.`updatedBy` = :updatedBy,
-                    `t`.`updatedIn` = :updatedIn
-                WHERE `t`.`leagueID` = :leagueID
-            """),
-            {
-                "updatedBy": self._user_id,
-                "updatedIn": self._now,
-                "leagueID": self.leagueID,
-            },
-        )
+        for team_dict in self._teams:
+            team = self._db.get(Team, team_dict["teamID"])
+            if team is not None:
+                team.matchDayMapKey = team_dict["matchDayMapKey"]
+                team.updatedBy = self._user_id
+                team.updatedIn = self._now
 
     def _save_match_teams(self) -> None:
-        self._db.execute(
-            text("""
-                UPDATE `MatchTeams` `mt`
-                INNER JOIN `Teams` `t` ON `t`.`teamID` = `mt`.`teamID`
-                SET `mt`.`matchDayMapKey` = `t`.`matchDayMapKey`,
-                    `mt`.`updatedBy` = :updatedBy,
-                    `mt`.`updatedIn` = :updatedIn
-                WHERE `t`.`leagueID` = :leagueID
-            """),
-            {
-                "updatedBy": self._user_id,
-                "updatedIn": self._now,
-                "leagueID": self.leagueID,
-            },
-        )
+        team_ids = [t["teamID"] for t in self._teams]
+        key_map = {t["teamID"]: t["matchDayMapKey"] for t in self._teams}
+        for mt in self._db.scalars(
+            select(MatchTeam).where(MatchTeam.teamID.in_(team_ids))
+        ).all():
+            mt.matchDayMapKey = key_map.get(mt.teamID)
+            mt.updatedBy = self._user_id
+            mt.updatedIn = self._now
