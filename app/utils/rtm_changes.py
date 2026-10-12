@@ -124,12 +124,14 @@ class Transfer(AddDrop):
             return "Incorrect add_drop keys", ""
         if other_a_d is None:
             return "Incorrect other_add_drop keys", ""
-        return "", KeyGroups.DELIM.join([
-            Keys.to_str(req) or "",
-            Keys.to_str(off) or "",
-            Keys.to_str(a_d) or "",
-            Keys.to_str(other_a_d) or "",
-        ])
+        return "", KeyGroups.DELIM.join(
+            [
+                Keys.to_str(req) or "",
+                Keys.to_str(off) or "",
+                Keys.to_str(a_d) or "",
+                Keys.to_str(other_a_d) or "",
+            ]
+        )
 
     @staticmethod
     def unpack(keys) -> tuple[str, Keys, Keys, Keys, Keys]:
@@ -137,9 +139,14 @@ class Transfer(AddDrop):
         if not isinstance(unpacked, KeyGroups):
             return "Cannot unpack the transfer keys", None, None, None, None
         if len(unpacked) != 4:
-            return f"There are {len(unpacked)} groups of transfer keys instead of 4", None, None, None, None
+            return (
+                f"There are {len(unpacked)} groups of transfer keys instead of 4",
+                None,
+                None,
+                None,
+                None,
+            )
         return "", unpacked[0], unpacked[1], unpacked[2], unpacked[3]
-
 
     def __init__(self, db: Session, reader: KeysReader):
         super().__init__(db, reader)
@@ -164,7 +171,9 @@ class Transfer(AddDrop):
         other_add_drop: Keys | None = None,
     ) -> None:
         if team.divisionID != other_team.divisionID:
-            raise CannotSaveException("teamMembers", "teams must be in the same division")
+            raise CannotSaveException(
+                "teamMembers", "teams must be in the same division"
+            )
 
         team_set = set(Keys.to_list(team.teamMembers or "") or [])
         other_set = set(Keys.to_list(other_team.teamMembers or "") or [])
@@ -175,14 +184,19 @@ class Transfer(AddDrop):
 
         for key in requested:
             if key not in other_set:
-                raise CannotSaveException("memberKeys", f"{key} is not in the other team's roster")
+                raise CannotSaveException(
+                    "memberKeys", f"{key} is not in the other team's roster"
+                )
 
         requested_set = set(requested)
         offered_set = set(offered)
-        free_adds = [k for k in add_drop if k not in team_set and k not in requested_set]
+        free_adds = [
+            k for k in add_drop if k not in team_set and k not in requested_set
+        ]
         other_free_adds = (
             [k for k in other_add_drop if k not in other_set and k not in offered_set]
-            if other_add_drop is not None else []
+            if other_add_drop is not None
+            else []
         )
         if free_adds or other_free_adds:
             div_keys = self._read_division_keys(self._db, team, other_team)
@@ -199,18 +213,31 @@ class Transfer(AddDrop):
         if other_add_drop is not None:
             self._other_members = MemberKeys(self._reader)
             self._other_members.unpack(other_team.teamMembers)
-            self._other_to_add, self._other_to_drop = self._other_members.get_add_drops(other_add_drop)
+            self._other_to_add, self._other_to_drop = self._other_members.get_add_drops(
+                other_add_drop
+            )
             self._reader.load(
-                keys=self._members + self._to_add + self._other_members + self._other_to_add
+                keys=self._members
+                + self._to_add
+                + self._other_members
+                + self._other_to_add
             )
             if not self._members.try_change(self._to_add, self._to_drop):
-                raise CannotSaveException("teamMembers", "invalid team composition after transfer")
-            if not self._other_members.try_change(self._other_to_add, self._other_to_drop):
-                raise CannotSaveException("teamMembers", "invalid team composition after transfer")
+                raise CannotSaveException(
+                    "teamMembers", "invalid team composition after transfer"
+                )
+            if not self._other_members.try_change(
+                self._other_to_add, self._other_to_drop
+            ):
+                raise CannotSaveException(
+                    "teamMembers", "invalid team composition after transfer"
+                )
         else:
             self._reader.load(keys=self._members + self._to_add)
             if not self._members.try_change(self._to_add, self._to_drop):
-                raise CannotSaveException("teamMembers", "invalid team composition after transfer")
+                raise CannotSaveException(
+                    "teamMembers", "invalid team composition after transfer"
+                )
 
 
 class RequestTransfer(Transfer):
@@ -277,7 +304,9 @@ class AcceptTransfer(Transfer):
         offered = transfer_keys[1] if len(transfer_keys) > 1 else Keys()
         team_add_drop = transfer_keys[2] if len(transfer_keys) > 2 else Keys()
 
-        self._check_keys(team, other_team, requested, offered, team_add_drop, other_add_drop)
+        self._check_keys(
+            team, other_team, requested, offered, team_add_drop, other_add_drop
+        )
 
         team.teamMembers = self._members.pack()
         team.cntAdd += len(self._to_add)
@@ -314,14 +343,22 @@ class SettleWaivers(AddDrop):
     def __init__(self, db: Session, reader: KeysReader):
         super().__init__(db, reader)
 
+    def execute(
+        self, competition_id: int | None = None, now: datetime | None = None
+    ) -> bool:
+        self._reader.load(rc_id=competition_id)
+        base_competition_id = QueryService.get_base_competition_id(
+            self._db, competition_id
+        )
+        now = utc_now() if now is None else now
+        for teams in self._iter_divisions(base_competition_id, now):
+            self._process_division(teams)
+
     def _iter_teams(self, base_competition_id: int, now):
-        eligible_keys = (
-            select(MatchDaysStatus.matchDayMapKey)
-            .where(
-                MatchDaysStatus.baseRealCompetitionID == base_competition_id,
-                MatchDaysStatus.startWaiversSettle <= now,
-                MatchDaysStatus.finishBaseMatchDay > now,
-            )
+        eligible_keys = select(MatchDaysStatus.matchDayMapKey).where(
+            MatchDaysStatus.baseRealCompetitionID == base_competition_id,
+            MatchDaysStatus.startWaiversSettle <= now,
+            MatchDaysStatus.finishBaseMatchDay > now,
         )
         yield from self._db.execute(
             select(Team)
@@ -344,12 +381,14 @@ class SettleWaivers(AddDrop):
 
     def _get_keys(self, teams: list[Team]) -> list[dict]:
         div_keys = set()
-        teams_keys:list[dict] = []
+        teams_keys: list[dict] = []
         for team in teams:
             members = MemberKeys(self._reader)
             members.unpack(team.teamMembers)
-            team_keys = {"members": members,
-                         "waivers": KeyGroups.to_list(team.membersWaivers)}
+            team_keys = {
+                "members": members,
+                "waivers": KeyGroups.to_list(team.membersWaivers),
+            }
             teams_keys.append(team_keys)
             for key in team_keys["members"]:
                 div_keys.add(key)
@@ -393,7 +432,9 @@ class SettleWaivers(AddDrop):
                         team.updatedIn = utc_now()
                         for k in keys:
                             used.add(k)
-                        _save_log(self._db, TeamMemberLogConstants.WAIVER, team, prev_members)
+                        _save_log(
+                            self._db, TeamMemberLogConstants.WAIVER, team, prev_members
+                        )
                         break
             if changes:
                 self._db.commit()
@@ -402,14 +443,6 @@ class SettleWaivers(AddDrop):
             {"div": teams[0].divisionID},
         )
         self._db.commit()
-
-
-    def execute(self, competition_id: int | None = None, now: datetime | None = None) -> bool:
-        self._reader.load(rc_id=competition_id)
-        base_competition_id = QueryService.get_base_competition_id(self._db, competition_id)
-        now = utc_now() if now is None else now
-        for teams in self._iter_divisions(base_competition_id, now):
-            self._process_division(teams)
 
 
 def _save_log(
