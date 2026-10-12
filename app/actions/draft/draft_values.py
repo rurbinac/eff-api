@@ -2,12 +2,12 @@ import json
 from collections.abc import Iterator
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.constants import DraftPositionConstants
 from app.exceptions import CannotSaveException
-from app.models import Division, Team
+from app.models import Division, RealTeamMember, Team
 from app.utils import optimistic_update
 from app.utils.rtm_keys import Keys
 
@@ -94,14 +94,10 @@ class DraftValues:
         self._members = None
         if not isinstance(self._teams, list) or self._division is None:
             return False
-        stmt = text("""
-            SELECT realTeamMemberKey, draftPosition
-            FROM RealTeamMembers
-            WHERE baseRealCompetitionID = :baseRealCompetitionID
-            ORDER BY ranking
-        """)
         rows = self._db.execute(
-            stmt, {"baseRealCompetitionID": self._division["baseRealCompetitionID"]}
+            select(RealTeamMember.realTeamMemberKey, RealTeamMember.draftPosition)
+            .where(RealTeamMember.baseRealCompetitionID == self._division["baseRealCompetitionID"])
+            .order_by(RealTeamMember.ranking)
         ).mappings()
         self._members = {
             row["realTeamMemberKey"]: [row["draftPosition"], None] for row in rows
