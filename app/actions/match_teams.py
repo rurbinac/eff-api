@@ -1,42 +1,46 @@
 from datetime import datetime
 
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
 from app.constants import MatchStatusConstants
 from app.context import RequestContext
 from app.guards import require_league_member, require_team_owner
-from app.models import Match, MatchTeam
+from app.models import Match, MatchTeam, Team
 from app.services.query import QueryService
 from app.utils.dt import to_iso
 from app.utils.lineup import Lineup
 from app.utils.readers import RSReader
 
-_LINEUP_SQL = """
-    SELECT `mt`.`matchTeamID`,
-           `mt`.`matchID`,
-           `mt`.`userID`,
-           `mt`.`teamID`,
-           `mt`.`matchTeamNum`,
-           `m`.`realCompetitionID`,
-           `m`.`realCompetitionMatchDay`,
-           `m`.`realCompetitionMatchDaySort`,
-           `m`.`matchStatus`,
-           `m`.`competitionType`,
-           `m`.`competitionMatchDay`,
-           `mt`.`matchDayMapKey`,
-           `mt`.`lineup`,
-           `t`.`teamMembers`
-       FROM `MatchTeams` `mt`
-       INNER JOIN `Matches` `m` ON `m`.`matchID` = `mt`.`matchID`
-       LEFT OUTER JOIN `Teams` `t` ON `t`.`teamID` = `mt`.`teamID`
-"""
+
+def _lineup_stmt():
+    return (
+        select(
+            MatchTeam.matchTeamID,
+            MatchTeam.matchID,
+            MatchTeam.userID,
+            MatchTeam.teamID,
+            MatchTeam.matchTeamNum,
+            Match.realCompetitionID,
+            Match.realCompetitionMatchDay,
+            Match.realCompetitionMatchDaySort,
+            Match.matchStatus,
+            Match.competitionType,
+            Match.competitionMatchDay,
+            MatchTeam.matchDayMapKey,
+            MatchTeam.lineup,
+            Team.teamMembers,
+        )
+        .join(Match, Match.matchID == MatchTeam.matchID)
+        .outerjoin(Team, Team.teamID == MatchTeam.teamID)
+    )
 
 
 def read_lineup_by_match_team(db: Session, match_team_id: int) -> RowMapping | None:
-    sql = _LINEUP_SQL + "WHERE `mt`.`matchTeamID` = :matchTeamID"
-    return db.execute(text(sql), {"matchTeamID": match_team_id}).mappings().first()
+    return db.execute(
+        _lineup_stmt().where(MatchTeam.matchTeamID == match_team_id)
+    ).mappings().first()
 
 
 def read_lineup_by_team_id(
@@ -45,24 +49,13 @@ def read_lineup_by_team_id(
     competition_type: int,
     competition_match_day: int,
 ) -> RowMapping | None:
-    sql = (
-        _LINEUP_SQL
-        + "WHERE `mt`.`teamID` = :teamID"
-        + "  AND `m`.`competitionType` = :competitionType"
-        + "  AND `m`.`competitionMatchDay` = :competitionMatchDay"
-    )
-    return (
-        db.execute(
-            text(sql),
-            {
-                "teamID": team_id,
-                "competitionType": competition_type,
-                "competitionMatchDay": competition_match_day,
-            },
+    return db.execute(
+        _lineup_stmt().where(
+            MatchTeam.teamID == team_id,
+            Match.competitionType == competition_type,
+            Match.competitionMatchDay == competition_match_day,
         )
-        .mappings()
-        .first()
-    )
+    ).mappings().first()
 
 
 def read_prev_lineup(
@@ -71,36 +64,32 @@ def read_prev_lineup(
     competition_type: int,
     competition_match_day: int,
 ) -> str | None:
-    sql = """
-        SELECT `lineup`
-           FROM `MatchTeams` `mt`
-           INNER JOIN `Matches` `m` ON `m`.`matchID` = `mt`.`matchID`
-           WHERE `mt`.`teamID` = :teamID
-             AND `m`.`competitionType` = :competitionType
-             AND `m`.`competitionMatchDay` < :competitionMatchDay
-           ORDER BY `m`.`competitionMatchDay` DESC
-    """
-    rows = db.execute(
-        text(sql),
-        {
-            "teamID": team_id,
-            "competitionType": competition_type,
-            "competitionMatchDay": competition_match_day,
-        },
-    ).mappings().all()
-    for row in rows:
-        if not Lineup.is_empty(row["lineup"]):
-            lineup_txt = Lineup.clean_up(row["lineup"])
+    lineups = db.scalars(
+        select(MatchTeam.lineup)
+        .join(Match, Match.matchID == MatchTeam.matchID)
+        .where(
+            MatchTeam.teamID == team_id,
+            Match.competitionType == competition_type,
+            Match.competitionMatchDay < competition_match_day,
+        )
+        .order_by(Match.competitionMatchDay.desc())
+    ).all()
+    for lineup in lineups:
+        if not Lineup.is_empty(lineup):
+            lineup_txt = Lineup.clean_up(lineup)
             if lineup_txt is not None:
                 return lineup_txt
     return None
 
 
 def read_lineups_by_match_ids(db: Session, match_ids: list[int]) -> list[RowMapping]:
-    params = {f"id{i}": v for i, v in enumerate(match_ids)}
-    placeholders = ",".join(f":id{i}" for i in range(len(match_ids)))
-    sql = _LINEUP_SQL + f"WHERE `mt`.`matchID` IN ({placeholders}) ORDER BY `mt`.`matchID`, `mt`.`matchTeamID`"
-    return list(db.execute(text(sql), params).mappings().all())
+    return list(
+        db.execute(
+            _lineup_stmt()
+            .where(MatchTeam.matchID.in_(match_ids))
+            .order_by(MatchTeam.matchID, MatchTeam.matchTeamID)
+        ).mappings().all()
+    )
 
 
 def read_lineups_by_match_day(
@@ -111,36 +100,30 @@ def read_lineups_by_match_day(
     division_id: int | None = None,
 ) -> list[RowMapping]:
     from app.constants import CompetitionTypeConstants
-    sql = (
-        _LINEUP_SQL
-        + "WHERE `m`.`competitionType` = :competitionType"
-        + "  AND `m`.`competitionMatchDay` = :competitionMatchDay"
-        + "  AND `m`.`leagueID` = :leagueID"
+    stmt = (
+        _lineup_stmt()
+        .where(
+            Match.competitionType == competition_type,
+            Match.competitionMatchDay == competition_match_day,
+            Match.leagueID == league_id,
+        )
+        .order_by(MatchTeam.matchID, MatchTeam.matchTeamID)
     )
-    params: dict = {
-        "competitionType": competition_type,
-        "competitionMatchDay": competition_match_day,
-        "leagueID": league_id,
-    }
     if competition_type != CompetitionTypeConstants.LEAGUE_KNOCK_OUT:
-        sql += "  AND `m`.`divisionID` = :divisionID"
-        params["divisionID"] = division_id
-    sql += " ORDER BY `mt`.`matchID`, `mt`.`matchTeamID`"
-    return list(db.execute(text(sql), params).mappings().all())
+        stmt = stmt.where(Match.divisionID == division_id)
+    return list(db.execute(stmt).mappings().all())
 
 
 def save_lineup(db: Session, match_team_id: int, lineup_txt: str) -> None:
-    db.execute(
-        text("UPDATE `MatchTeams` SET `lineup` = :lineup WHERE `matchTeamID` = :matchTeamID"),
-        {"lineup": lineup_txt, "matchTeamID": match_team_id},
-    )
+    mt = db.get(MatchTeam, match_team_id)
+    if mt is not None:
+        mt.lineup = lineup_txt
 
 
 def save_match_status(db: Session, match_id: int, match_status: int) -> None:
-    db.execute(
-        text("UPDATE `Matches` SET `matchStatus` = :matchStatus WHERE `matchID` = :matchID"),
-        {"matchStatus": match_status, "matchID": match_id},
-    )
+    m = db.get(Match, match_id)
+    if m is not None:
+        m.matchStatus = match_status
 
 
 class MatchTeamsReadListAction:
@@ -381,12 +364,7 @@ class ClearLineupByMatchTeamIDAction:
             return None
         if match_team.userID != user_id:
             raise PermissionError
-        db.execute(
-            text(
-                "UPDATE `MatchTeams` SET `lineup` = '' WHERE `matchTeamID` = :matchTeamID"
-            ),
-            {"matchTeamID": match_team_id},
-        )
+        match_team.lineup = ""
         db.commit()
         return {"matchTeamID": match_team_id}
 
