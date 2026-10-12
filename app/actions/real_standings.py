@@ -1,7 +1,7 @@
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import RealStanding
+from app.models import RealStanding, Team
 from app.utils.dt import to_iso
 
 
@@ -190,25 +190,16 @@ class RealStandingsReadListAction:
             dict mapping teamMembers string to team data dict
         """
         teams_map = {}
-        result = db.execute(
-            text("""
-                SELECT teamID, teamName, teamMembers, fantasyPoints, isCommissioner
-                FROM Teams
-                WHERE divisionID = :divisionID
-            """),
-            {"divisionID": division_id},
-        )
-
-        for row in result:
-            team_members_str = row[2]  # teamMembers
-            team_data = {
-                "teamID": row[0],
-                "teamName": row[1],
-                "fantasyPoints": row[3],
-                "isCommissioner": row[4],
+        for row in db.execute(
+            select(Team.teamID, Team.teamName, Team.teamMembers, Team.fantasyPoints, Team.isCommissioner)
+            .where(Team.divisionID == division_id)
+        ).mappings():
+            teams_map[row.teamMembers] = {
+                "teamID": row.teamID,
+                "teamName": row.teamName,
+                "fantasyPoints": row.fantasyPoints,
+                "isCommissioner": row.isCommissioner,
             }
-            teams_map[team_members_str] = team_data
-
         return teams_map
 
     @staticmethod
