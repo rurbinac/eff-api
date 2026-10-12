@@ -1,9 +1,9 @@
 import pusher
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import User
+from app.models import Team, User
 from app.utils.dt import utc_now
 
 DRAFT_CHANNEL_PREFIX = "presence-draft-"
@@ -34,15 +34,12 @@ class PusherAuthAction:
             return None
 
         # User must have a team in this division
-        row = db.execute(
-            text("""
-                SELECT `teamID` FROM `Teams`
-                WHERE `divisionID` = :divisionID AND `userID` = :userID
-                LIMIT 1
-            """),
-            {"divisionID": division_id, "userID": user_id},
-        ).mappings().first()
-        if not row:
+        team_id = db.scalars(
+            select(Team.teamID)
+            .where(Team.divisionID == division_id, Team.userID == user_id)
+            .limit(1)
+        ).first()
+        if not team_id:
             return None
 
         user = db.get(User, user_id)
