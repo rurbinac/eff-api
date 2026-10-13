@@ -29,7 +29,9 @@ from app.exceptions import (
     RequiredValueException,
     UnauthorizedException,
 )
-from app.models import Division, League, Team, TeamMemberTransfers
+
+_ADMIN_USER_LEVEL = 3
+from app.models import Division, League, Team, TeamMemberTransfers, User
 from app.utils.rtm_keys import KeyGroups, Keys
 from app.utils.scalars import parse_int, parse_pos_int, to_int
 
@@ -303,6 +305,14 @@ def require_authentication(current_user: int | None) -> None:
         raise UnauthorizedException()
 
 
+def require_admin(db: Session, user_id: int | None) -> None:
+    if user_id is None:
+        raise UnauthorizedException()
+    user = db.get(User, user_id)
+    if user is None or user.userLevel != _ADMIN_USER_LEVEL:
+        raise UnauthorizedException()
+
+
 def require_value(
     value, value_name: str | None = None, context: str | None = None
 ) -> None:
@@ -419,12 +429,23 @@ def require_keys(value, context: str | None = None) -> Keys:
 
 
 def require_key_groups(
-    value, context: str | None = None, allow_dups: bool | None = False
+    value,
+    context: str | None = None,
+    allow_dups: bool | None = False,
+    size: int | None = None,
+    min_size: int | None = None,
+    max_size: int | None = None,
 ) -> KeyGroups:
     try:
         keys = KeyGroups.create(value, allow_dups=allow_dups)
         if keys is None:
             raise ValueError
+        if size is not None and len(keys) != size:
+            raise RequiredValueException("RealTeamMemberKey", context)
+        if min_size is not None and len(keys) < min_size:
+            raise RequiredValueException("RealTeamMemberKey", context)
+        if max_size is not None and len(keys) > max_size:
+            raise RequiredValueException("RealTeamMemberKey", context)
         return keys
     except (ValueError, TypeError):
         raise RequiredValueException("RealTeamMemberKey", context)

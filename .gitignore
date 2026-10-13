@@ -13,3 +13,7 @@ lt3cil7v_eff_new.sql
 infra/SFTP_ACCESS.md
 # Feed files — local only, not tracked in git
 feeds/
+# Admin Vue build artifacts
+admin/node_modules/
+admin/dist/
+admin/.env

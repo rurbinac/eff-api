@@ -1,3 +1,12 @@
+# --- Stage 1: build Vue admin panel ---
+FROM node:24-slim AS admin-build
+WORKDIR /admin
+COPY admin/package*.json ./
+RUN npm ci
+COPY admin/ ./
+RUN npm run build
+
+# --- Stage 2: Python API ---
 FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -10,6 +19,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+COPY --from=admin-build /admin/dist ./admin/dist
 
 EXPOSE 8080
 

@@ -1,11 +1,14 @@
 import logging
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 logging.basicConfig(level=logging.INFO)
 
 from app.routers import (
+    admin,
     auth,
     division_notes,
     divisions,
@@ -27,15 +30,20 @@ from app.routers import (
 
 app = FastAPI(title="EFF API")
 
+_cors_origins = ["https://effootball.com"]
+if os.getenv("ADMIN_DEV_CORS"):
+    _cors_origins.append("http://localhost:5173")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://effootball.com"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include routers
+app.include_router(admin.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(users.legacy_router)
@@ -59,3 +67,8 @@ app.include_router(pusher_auth.router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+_admin_dist = os.path.join(os.path.dirname(__file__), "..", "admin", "dist")
+if os.path.isdir(_admin_dist):
+    app.mount("/admin", StaticFiles(directory=_admin_dist, html=True), name="admin")

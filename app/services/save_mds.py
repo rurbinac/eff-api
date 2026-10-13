@@ -2,11 +2,12 @@ from collections.abc import Generator
 from datetime import datetime
 from itertools import pairwise
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlmodel import select, text
 
 from app.constants import MatchDayStatusConstants, RealMatchPeriod
-from app.models import MatchDaysMap, MatchDaysStatus
+from app.models import MatchDaysMap, MatchDaysStatus, RealMatch
 from app.services.query import QueryService
 from app.utils.dt import (
     add_to_datetime,
@@ -30,7 +31,12 @@ class SaveMDS:
     BASE_MD_HOURS = 5
     BASE_MD_DAYS = 1
 
-    def __init__(self, db: Session, real_competition_id: int | None = None, process: Process | None = None):
+    def __init__(
+        self,
+        db: Session,
+        real_competition_id: int | None = None,
+        process: Process | None = None,
+    ):
         """Initialise SaveMDS for a given competition.
 
         Args:
@@ -387,7 +393,9 @@ class SaveMDS:
         Returns:
             datetime: _description_
         """
-        return add_to_datetime(self._mds[i]["minRealMatchDate"], minutes=-self.MINUTES_BEFORE_MATCH)
+        return add_to_datetime(
+            self._mds[i]["minRealMatchDate"], minutes=-self.MINUTES_BEFORE_MATCH
+        )
 
     def _finish_match_day(self, i: int) -> datetime:
         """_summary_
@@ -411,7 +419,11 @@ class SaveMDS:
         """
         if i == 0:
             return utc_lowest()
-        return add_to_datetime(self._mds[i - 1]["finishMatchDay"], days=self.BASE_MD_DAYS, hours=self.BASE_MD_HOURS)
+        return add_to_datetime(
+            self._mds[i - 1]["finishMatchDay"],
+            days=self.BASE_MD_DAYS,
+            hours=self.BASE_MD_HOURS,
+        )
 
     def _finish_waivers_settle(self, i: int) -> datetime:
         """_summary_
@@ -435,9 +447,9 @@ class SaveMDS:
         Returns:
             datetime: _description_
         """
-        return add_to_datetime(self._mds[i]["startWaivers"], days=self.WAIVERS_DAYS).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        return add_to_datetime(
+            self._mds[i]["startWaivers"], days=self.WAIVERS_DAYS
+        ).replace(hour=0, minute=0, second=0, microsecond=0)
 
     def _finish_open_waivers(self, i: int) -> datetime:
         """_summary_
@@ -501,7 +513,7 @@ class SaveMDS:
         """Update prevActiveMatchDayStatusID."""
         sql = text("""
                    UPDATE `MatchDaysStatus` `m1`
-                      INNER JOIN `MatchDaysStatus` `m2`
+                      LEFT JOIN `MatchDaysStatus` `m2`
                          ON `m1`.`matchDayMapKey` = `m2`.`matchDayMapKey` AND
                             `m1`.`prevActiveRealCompetitionID` = `m2`.`realCompetitionID` AND
                             `m1`.`prevActiveRealCompetitionMatchDay` = `m2`.`realCompetitionMatchDay`
@@ -514,7 +526,7 @@ class SaveMDS:
         """Update nextActiveMatchDayStatusID."""
         sql = text("""
                    UPDATE `MatchDaysStatus` `m1`
-                      INNER JOIN `MatchDaysStatus` `m2`
+                      LEFT JOIN `MatchDaysStatus` `m2`
                          ON `m1`.`matchDayMapKey` = `m2`.`matchDayMapKey` AND
                             `m1`.`nextActiveRealCompetitionID` = `m2`.`realCompetitionID` AND
                             `m1`.`nextActiveRealCompetitionMatchDay` = `m2`.`realCompetitionMatchDay`
@@ -600,23 +612,27 @@ class SaveMDS:
         Rows are ordered by firstRealCompetitionMatchDay, competitionType,
         maxNumTeams, and matchDay.
         """
-        rows = self._db.execute(
-            select(
-                MatchDaysMap.firstRealCompetitionMatchDay,
-                MatchDaysMap.competitionType,
-                MatchDaysMap.maxNumTeams,
-                MatchDaysMap.matchDay,
-                MatchDaysMap.realCompetitionID,
-                MatchDaysMap.realCompetitionMatchDay,
+        rows = (
+            self._db.execute(
+                select(
+                    MatchDaysMap.firstRealCompetitionMatchDay,
+                    MatchDaysMap.competitionType,
+                    MatchDaysMap.maxNumTeams,
+                    MatchDaysMap.matchDay,
+                    MatchDaysMap.realCompetitionID,
+                    MatchDaysMap.realCompetitionMatchDay,
+                )
+                .where(MatchDaysMap.baseRealCompetitionID == self._base_rc_id)
+                .order_by(
+                    MatchDaysMap.firstRealCompetitionMatchDay,
+                    MatchDaysMap.competitionType,
+                    MatchDaysMap.maxNumTeams,
+                    MatchDaysMap.matchDay,
+                )
             )
-            .where(MatchDaysMap.baseRealCompetitionID == self._base_rc_id)
-            .order_by(
-                MatchDaysMap.firstRealCompetitionMatchDay,
-                MatchDaysMap.competitionType,
-                MatchDaysMap.maxNumTeams,
-                MatchDaysMap.matchDay,
-            )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
         self._mmd = {}
         for row in rows:
             d_or_l = "D" if row["competitionType"] != 3 else "L"
@@ -639,27 +655,27 @@ class SaveMDS:
         ``minRealMatchDate`` and ``maxRealMatchDate`` for that match day.
         """
         ids = [self._base_rc_id] + ([self._extra_rc_id] if self._extra_rc_id else [])
-        sql = text("""
-                   SELECT  `realCompetitionID`,
-                           `realCompetitionMatchDay`,
-                           MIN(`realMatchDate`) AS `minRealMatchDate`,
-                           MAX(`realMatchDate`) AS `maxRealMatchDate`
-                      FROM `RealMatches`
-                      WHERE `realCompetitionID` IN :ids
-                        AND `realMatchPeriod` <> :realMatchPeriod
-                        AND `realMatchIgnore` <> 1
-                      GROUP BY `realCompetitionID`,
-                               `realCompetitionMatchDay`
-                      ORDER BY `realCompetitionID`,
-                               `realCompetitionMatchDay`
-                   """)
         rows = (
             self._db.execute(
-                sql, {"ids": ids, "realMatchPeriod": RealMatchPeriod.POSTPONED}
+                select(
+                    RealMatch.realCompetitionID,
+                    RealMatch.realCompetitionMatchDay,
+                    func.min(RealMatch.realMatchDate).label("minRealMatchDate"),
+                    func.max(RealMatch.realMatchDate).label("maxRealMatchDate"),
+                )
+                .where(
+                    RealMatch.realCompetitionID.in_(ids),
+                    func.upper(func.coalesce(RealMatch.realMatchPeriod, "")).notin_(
+                        [RealMatchPeriod.ABANDONED.upper(), RealMatchPeriod.POSTPONED.upper()]
+                    ),
+                    RealMatch.realMatchIgnore != 1,
+                )
+                .group_by(RealMatch.realCompetitionID, RealMatch.realCompetitionMatchDay)
+                .order_by(RealMatch.realCompetitionID, RealMatch.realCompetitionMatchDay)
             )
             .mappings()
             .all()
-        )  # type: ignore[call-overload]  # aggregate text() query
+        )
         self._rm = {}
         for row in rows:
             key = (row["realCompetitionID"], row["realCompetitionMatchDay"])
