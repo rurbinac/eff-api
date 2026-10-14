@@ -8,6 +8,7 @@ import {
   mdiSoccer,
   mdiAccountMultiple,
   mdiChartBar,
+  mdiCog,
   mdiDatabaseArrowUp,
   mdiLogout,
 } from '@mdi/js'
@@ -57,6 +58,11 @@ export const menuAsideMain = [
     to: '/real-standings',
     icon: mdiChartBar,
     label: 'Real Standings',
+  },
+  {
+    to: '/processes',
+    icon: mdiCog,
+    label: 'Processes',
   },
   {
     to: '/backup',

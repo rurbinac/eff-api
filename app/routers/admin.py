@@ -9,7 +9,7 @@ from sqlalchemy import select, text
 from app.config import settings
 from app.database import CurrentUser, DbSession
 from app.guards import require_admin, require_division
-from app.models import Division, League, MatchDaysMap, MatchDaysStatus, RealCompetition, RealStanding, RealTeamMember, Team, User
+from app.models import Division, League, MatchDaysMap, MatchDaysStatus, Process, RealCompetition, RealStanding, RealTeamMember, Team, User
 from app.services.query import QueryService
 from app.utils.dt import to_iso, utc_now
 
@@ -604,3 +604,33 @@ def admin_restore_backup_run(
     )
     logger.info("Restore of backup %s started by user %s: %s", body.backup_id, current_user, op.get("name"))
     return {"operationId": op.get("name"), "status": op.get("status")}
+
+
+@router.get("/api/v1/admin/processes")
+def admin_list_processes(db: DbSession, current_user: CurrentUser, process_type: str | None = None):
+    require_admin(db, current_user)
+    q = select(Process).order_by(Process.startDate.desc()).limit(500)
+    if process_type:
+        q = q.where(Process.processType == process_type)
+    rows = db.exec(q).all()
+    result = []
+    for r in rows:
+        result.append({
+            "processID": r.processID,
+            "prevProcessID": r.prevProcessID,
+            "processType": r.processType,
+            "processName": r.processName,
+            "startDate": to_iso(r.startDate),
+            "finishDate": to_iso(r.finishDate) if r.finishDate else None,
+            "duration": r.duration,
+            "versions": r.versions,
+            "tasks": r.tasks,
+        })
+    return result
+
+
+@router.get("/api/v1/admin/processes/types")
+def admin_list_process_types(db: DbSession, current_user: CurrentUser):
+    require_admin(db, current_user)
+    rows = db.exec(select(Process.processType).distinct()).all()
+    return sorted(rows)

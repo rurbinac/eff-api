@@ -63,6 +63,12 @@ const routes = [
     component: () => import('@/views/RealStandingsView.vue'),
   },
   {
+    meta: { title: 'Processes' },
+    path: '/processes',
+    name: 'processes',
+    component: () => import('@/views/ProcessesView.vue'),
+  },
+  {
     meta: { title: 'Backup' },
     path: '/backup',
     name: 'backup',
