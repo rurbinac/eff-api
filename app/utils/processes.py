@@ -56,6 +56,7 @@ class Process:
         )
         if row is None:
             self._startDate = utc_now()
+            self._versions = 1
             self._tasks = []
             new_row = ProcessModel(
                 processType=self._process_type,
