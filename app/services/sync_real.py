@@ -9,6 +9,7 @@ from collections.abc import Generator
 from functools import cmp_to_key
 
 from sqlalchemy import and_, or_, select, text
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.orm import Session
 
 from app.constants import DraftPositionConstants, RealCompetitionConstants
@@ -1082,25 +1083,18 @@ class SyncRealService:
         comp_symid = comp["realCompetitionSYMID"]
 
         if to_insert:
-            col_names = list(to_insert[0].keys())
-            cols = ", ".join(f"`{c}`" for c in col_names)
-            placeholders = ", ".join(f":{c}" for c in col_names)
-            db.execute(
-                text(f"INSERT INTO `RealStandings` ({cols}) VALUES ({placeholders})"),
-                to_insert,
-            )
+            db.execute(mysql_insert(RealStanding), to_insert)
             task.inc(f"{comp_symid}(ins)", len(to_insert))
 
         if to_update:
-            update_cols = [col for col in to_update[0].keys() if col != "realStandingID"]
-            set_clause = ", ".join(f"`{col}` = :{col}" for col in update_cols)
-            db.execute(
-                text(
-                    f"UPDATE `RealStandings` SET {set_clause}"
-                    " WHERE `realStandingID` = :realStandingID"
-                ),
-                to_update,
+            # INSERT ... ON DUPLICATE KEY UPDATE: one multi-row statement per batch via
+            # SQLAlchemy's insertmanyvalues, no per-row SELECT needed.
+            update_cols = [c for c in to_update[0] if c != "realStandingID"]
+            stmt = mysql_insert(RealStanding)
+            stmt = stmt.on_duplicate_key_update(
+                {c: stmt.inserted[c] for c in update_cols}
             )
+            db.execute(stmt, to_update)
             task.inc(f"{comp_symid}(upd)", len(to_update))
 
         db.flush()
