@@ -1,8 +1,8 @@
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, aliased
 
 from app.guards import (
     require_commissioner,
@@ -10,7 +10,7 @@ from app.guards import (
     require_league_commissioner,
     require_league_member,
 )
-from app.models import Team
+from app.models import Team, TeamMemberLog, TeamMemberTransfers
 from app.services import QueryService
 from app.utils.dt import to_iso, utc_now
 from app.utils.rtm_keys import Keys
@@ -114,39 +114,46 @@ class DivisionsTransactionsDetailAction:
 
     @staticmethod
     def _read_TeamMemberLog(db: Session, division_id: int) -> list[dict]:
-        results = db.execute(
-            text("""
-            SELECT `t1`.`baseRealCompetitionID` AS `realCompetitionID`,
-                   `tml1`.`teamMemberLogID`,
-                   `tml1`.`teamMemberTransferID`,
-                   `tml1`.`leagueID`,
-                   `tml1`.`divisionID`,
-                   `tml1`.`teamID`,
-                   `tml1`.`userID`,
-                   `t1`.`teamName`,
-                   `tml1`.`requester`,
-                   `tml1`.`transactionType`,
-                   `tml1`.`membersBefore`,
-                   `tml1`.`membersAfter`,
-                   `tml2`.`teamID` AS `otherTeamID`,
-                   `tml2`.`userID` AS `otherUserID`,
-                   `t2`.`teamName` AS `otherTeamName`,
-                   `tml2`.`membersBefore` AS `otherMembersBefore`,
-                   `tml2`.`membersAfter` AS `otherMembersAfter`,
-                   `tml1`.`createdIn` AS `processDate`,
-                   `tmt`.`createdIn` AS `requestDate`
-            FROM `TeamMemberLog` `tml1`
-            LEFT OUTER JOIN `Teams` `t1` ON `tml1`.`teamID` = `t1`.`teamID`
-            LEFT OUTER JOIN `TeamMemberTransfers` `tmt` ON `tml1`.`teamMemberTransferID` = `tmt`.`teamMemberTransferID`
-            LEFT OUTER JOIN `TeamMemberLog` `tml2` ON `tml2`.`teamMemberTransferID` = `tmt`.`teamMemberTransferID`
-            LEFT OUTER JOIN `Teams` `t2` ON `tml2`.`teamID` = `t2`.`teamID`
-            WHERE `tml1`.`divisionID` = :divisionID
-              AND `tml1`.`createdIn` >= NOW() - INTERVAL 14 DAY
-            ORDER BY `tml1`.`createdIn` DESC
-        """),
-            {"divisionID": division_id},
+        tml2 = aliased(TeamMemberLog)
+        t2 = aliased(Team)
+        cutoff = utc_now() - timedelta(days=14)
+        stmt = (
+            select(
+                Team.baseRealCompetitionID.label("realCompetitionID"),
+                TeamMemberLog.teamMemberLogID,
+                TeamMemberLog.teamMemberTransferID,
+                TeamMemberLog.leagueID,
+                TeamMemberLog.divisionID,
+                TeamMemberLog.teamID,
+                TeamMemberLog.userID,
+                Team.teamName,
+                TeamMemberLog.requester,
+                TeamMemberLog.transactionType,
+                TeamMemberLog.membersBefore,
+                TeamMemberLog.membersAfter,
+                tml2.teamID.label("otherTeamID"),
+                tml2.userID.label("otherUserID"),
+                t2.teamName.label("otherTeamName"),
+                tml2.membersBefore.label("otherMembersBefore"),
+                tml2.membersAfter.label("otherMembersAfter"),
+                TeamMemberLog.createdIn.label("processDate"),
+                TeamMemberTransfers.createdIn.label("requestDate"),
+            )
+            .select_from(TeamMemberLog)
+            .outerjoin(Team, Team.teamID == TeamMemberLog.teamID)
+            .outerjoin(
+                TeamMemberTransfers,
+                TeamMemberTransfers.teamMemberTransferID == TeamMemberLog.teamMemberTransferID,
+            )
+            .outerjoin(tml2, tml2.teamMemberTransferID == TeamMemberTransfers.teamMemberTransferID)
+            .outerjoin(t2, t2.teamID == tml2.teamID)
+            .where(
+                TeamMemberLog.divisionID == division_id,
+                TeamMemberLog.createdIn >= cutoff,
+            )
+            .order_by(TeamMemberLog.createdIn.desc())
         )
-        return [dict(row) for row in results.mappings()]
+        return [dict(row) for row in db.execute(stmt).mappings()]
 
     @staticmethod
     def _split_members(row: dict) -> dict:

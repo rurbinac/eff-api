@@ -8,13 +8,13 @@ across competitions and seasons.
 from collections.abc import Generator
 from functools import cmp_to_key
 
-from sqlalchemy import text
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.constants import DraftPositionConstants, RealCompetitionConstants
+from app.models import RealMatch, RealMatchTeam, RealStanding, RealTeamMember
 from app.utils.dt import utc_now
 from app.utils.processes import Process, Task
-from app.utils.sql_text import sql_insert, sql_update
 
 
 class SyncRealService:
@@ -902,7 +902,6 @@ class SyncRealService:
                 return task
 
             # Load members and build the competition list (base always included; extra only when configured)
-            sql_cache = {}
             match_teams = {}
             members = SyncRealService._read_real_team_members(db, base_comp)
             comp_list = [base_comp]
@@ -922,7 +921,7 @@ class SyncRealService:
                 for row in SyncRealService._read_real_standings(db, comp):
                     if match_day != row["realCompetitionMatchDay"]:
                         SyncRealService._save_members(
-                            db, members, comp, match_teams, match_day, sql_cache, task
+                            db, members, comp, match_teams, match_day, task
                         )
                         match_day = row["realCompetitionMatchDay"]
                         match_teams = SyncRealService._read_real_match_teams(
@@ -934,7 +933,7 @@ class SyncRealService:
                             members[key], match_teams, row
                         )
                 SyncRealService._save_members(
-                    db, members, comp, match_teams, match_day, sql_cache, task
+                    db, members, comp, match_teams, match_day, task
                 )
 
         except Exception as e:
@@ -1051,7 +1050,6 @@ class SyncRealService:
         comp: dict,
         match_teams: dict,
         match_day: int | None,
-        sql_cache: dict,
         task: Task,
     ) -> None:
         """Sort members, then INSERT or UPDATE their RealStandings row for this match day.
@@ -1077,17 +1075,15 @@ class SyncRealService:
                 member, comp, match_teams, match_day
             )
             if "realStandingID" not in values:
-                cmd = "ins"
-                if cmd not in sql_cache:
-                    sql_cache[cmd] = sql_insert("RealStandings", values)
+                db.add(RealStanding(**values))
+                task.inc(f"{comp['realCompetitionSYMID']}(ins)")
             else:
-                cmd = "upd"
-                if cmd not in sql_cache:
-                    sql_cache[cmd] = sql_update(
-                        "RealStandings", values, id_name="realStandingID"
-                    )
-            db.execute(text(sql_cache[cmd]), values)
-            task.inc(f"{comp['realCompetitionSYMID']}({cmd})")
+                standing = db.get(RealStanding, values["realStandingID"])
+                if standing is not None:
+                    for key, value in values.items():
+                        setattr(standing, key, value)
+                task.inc(f"{comp['realCompetitionSYMID']}(upd)")
+        db.flush()
         SyncRealService._clean_members(members)
 
     @staticmethod
@@ -1528,49 +1524,43 @@ class SyncRealService:
             dict keyed by realTeamID mapping to the row dict (match + match-team fields).
         """
         match_team_rows = db.execute(
-            text("""
-                 SELECT `m`.`realMatchID`,
-                        `m`.`realMatchStatus`,
-                        `m`.`realMatchDate`,
-                        `m`.`realMatchTime`,
-                        `m`.`realCompetitionID`,
-                        `m`.`realCompetitionUID`,
-                        `m`.`realCompetitionSYMID`,
-                        `m`.`realCompetitionSeasonId`,
-                        `m`.`realCompetitionMatchDay`,
-                        `m`.`realCompetitionLastMatchDay`,
-                        `m`.`baseRealCompetitionID`,
-                        `m`.`extraRealCompetitionID`,
-                        `mt`.`realMatchTeamID`,
-                        `mt`.`realTeamMemberID`,
-                        `mt`.`realTeamMemberKey`,
-                        `mt`.`realTeamID`,
-                        `mt`.`realTeamUID`,
-                        `mt`.`realTeamName`,
-                        `mt`.`realTeamShortName`,
-                        `mt`.`realTeamScore`,
-                        `mt`.`realTeamRealScore`,
-                        `mt`.`realTeamSide`
-                    FROM `RealMatchTeams` `mt`
-                    INNER JOIN `RealMatches` `m` ON `m`.`realMatchID` = `mt`.`realMatchID`
-                    WHERE `m`.`realCompetitionID` = :comp_id
-                      AND `m`.`realCompetitionMatchDay` = :match_day
-                      AND `mt`.`realTeamSide` IN ('Home', 'Away')
-                 """),
-            {
-                "comp_id": comp["realCompetitionID"],
-                "match_day": match_day,
-            },
-        ).fetchall()
+            select(
+                RealMatch.realMatchID,
+                RealMatch.realMatchStatus,
+                RealMatch.realMatchDate,
+                RealMatch.realMatchTime,
+                RealMatch.realCompetitionID,
+                RealMatch.realCompetitionUID,
+                RealMatch.realCompetitionSYMID,
+                RealMatch.realCompetitionSeasonId,
+                RealMatch.realCompetitionMatchDay,
+                RealMatch.realCompetitionLastMatchDay,
+                RealMatch.baseRealCompetitionID,
+                RealMatch.extraRealCompetitionID,
+                RealMatchTeam.realMatchTeamID,
+                RealMatchTeam.realTeamMemberID,
+                RealMatchTeam.realTeamMemberKey,
+                RealMatchTeam.realTeamID,
+                RealMatchTeam.realTeamUID,
+                RealMatchTeam.realTeamName,
+                RealMatchTeam.realTeamShortName,
+                RealMatchTeam.realTeamScore,
+                RealMatchTeam.realTeamRealScore,
+                RealMatchTeam.realTeamSide,
+            )
+            .select_from(RealMatchTeam)
+            .join(RealMatch, RealMatch.realMatchID == RealMatchTeam.realMatchID)
+            .where(
+                RealMatch.realCompetitionID == comp["realCompetitionID"],
+                RealMatch.realCompetitionMatchDay == match_day,
+                RealMatchTeam.realTeamSide.in_(["Home", "Away"]),
+            )
+        ).mappings().fetchall()
 
         matches = {}
         match_teams = {}
         for row in match_team_rows:
-            row_dict = (
-                dict(row._mapping)
-                if hasattr(row, "_mapping")
-                else dict(zip(row.keys(), row))
-            )
+            row_dict = dict(row)
             match_teams[row_dict.get("realTeamID")] = row_dict
             if row_dict["realMatchID"] not in matches:
                 matches[row_dict["realMatchID"]] = []
@@ -1645,51 +1635,44 @@ class SyncRealService:
         dp_t = DraftPositionConstants.EPL_TEAM
 
         member_rows = db.execute(
-            text("""
-                 SELECT `realTeamMemberID`,
-                        `realTeamMemberKey`,
-                        `prevRealTeamMemberKey`,
-                        `nextRealTeamMemberKey`,
-                        IF(LEFT(`realTeamMemberKey`, 1) = 'T',1,0) AS `isTeam`,
-                        IF(LEFT(`realTeamMemberKey`, 1) = 'P',1,0) AS `isPlayer`,
-                        `realTeamID`,
-                        `realTeamUID`,
-                        `realTeamName`,
-                        `realTeamShortName`,
-                        `realPlayerID`,
-                        `realPlayerUID`,
-                        `firstName`,
-                        `lastName`,
-                        `knownName`,
-                        `name`,
-                        `sortName`,
-                        `position`,
-                        `draftPosition`,
-                        `draftPositionOrder`
-                FROM `RealTeamMembers`
-                WHERE `baseRealCompetitionID` = :base_id
-                  AND `extraRealCompetitionID` = :extra_id
-                  AND ((LEFT(`realTeamMemberKey`, 1) = 'T') OR
-                       ((LEFT(`realTeamMemberKey`, 1) = 'P') AND
-                        (`draftPosition` IN (:dp_g, :dp_d, :dp_m, :dp_s))))
-            """),
-            {
-                "base_id": comp["baseRealCompetitionID"],
-                "extra_id": comp["extraRealCompetitionID"],
-                "dp_g": dp_g,
-                "dp_d": dp_d,
-                "dp_m": dp_m,
-                "dp_s": dp_s,
-            },
-        ).fetchall()
+            select(
+                RealTeamMember.realTeamMemberID,
+                RealTeamMember.realTeamMemberKey,
+                RealTeamMember.prevRealTeamMemberKey,
+                RealTeamMember.nextRealTeamMemberKey,
+                RealTeamMember.isTeam,
+                RealTeamMember.isPlayer,
+                RealTeamMember.realTeamID,
+                RealTeamMember.realTeamUID,
+                RealTeamMember.realTeamName,
+                RealTeamMember.realTeamShortName,
+                RealTeamMember.realPlayerID,
+                RealTeamMember.realPlayerUID,
+                RealTeamMember.firstName,
+                RealTeamMember.lastName,
+                RealTeamMember.knownName,
+                RealTeamMember.name,
+                RealTeamMember.sortName,
+                RealTeamMember.position,
+                RealTeamMember.draftPosition,
+                RealTeamMember.draftPositionOrder,
+            )
+            .where(
+                RealTeamMember.baseRealCompetitionID == comp["baseRealCompetitionID"],
+                RealTeamMember.extraRealCompetitionID == comp["extraRealCompetitionID"],
+                or_(
+                    RealTeamMember.isTeam == 1,
+                    and_(
+                        RealTeamMember.isPlayer == 1,
+                        RealTeamMember.draftPosition.in_([dp_g, dp_d, dp_m, dp_s]),
+                    ),
+                ),
+            )
+        ).mappings().fetchall()
 
         members = {}
         for row in member_rows:
-            member = (
-                dict(row._mapping)
-                if hasattr(row, "_mapping")
-                else dict(zip(row.keys(), row))
-            )
+            member = dict(row)
             if member["isTeam"]:
                 member["realPlayerID"] = None
                 member["realPlayerUID"] = None
@@ -1773,46 +1756,37 @@ class SyncRealService:
             dict with keys: realStandingID, realTeamMemberKey,
             realCompetitionMatchDay, and all match* stat columns.
         """
-        result = db.execute(
-            text("""
-                 SELECT `realStandingID`,
-                        `realTeamMemberKey`,
-                        `realCompetitionMatchDay`,
-                        `matchTimePlayed`,
-                        `matchGamePlayed`,
-                        `matchGoals`,
-                        `matchAssists`,
-                        `matchYellowCards`,
-                        `matchRedCards`,
-                        `matchGoalsConceded`,
-                        `matchCleanSheet`,
-                        `matchDayPlayed`,
-                        `matchPointsL1Played`,
-                        `matchPointsL1GoalsAllowed`,
-                        `matchPointsL1CleanSheet`,
-                        `matchPointsL1Cards`,
-                        `matchPointsL1Goals`,
-                        `matchPointsL1Assists`,
-                        `matchPointsL1OwnGoals`,
-                        `matchPointsL1`
-                    FROM `RealStandings`
-                    WHERE `realCompetitionID` = :realCompetitionID
-                      AND `realCompetitionMatchDay` >= :realCompetitionFirstMatchDay
-                      AND `realCompetitionMatchDay` <= :realCompetitionLastMatchDay
-                    ORDER BY `realCompetitionMatchDay`
-            """),
-            {
-                "realCompetitionID": rc["realCompetitionID"],
-                "realCompetitionFirstMatchDay": rc["realCompetitionFirstMatchDay"],
-                "realCompetitionLastMatchDay": rc["realCompetitionLastMatchDay"],
-            },
-        )
-        for row in result:
-            yield (
-                dict(row._mapping)
-                if hasattr(row, "_mapping")
-                else dict(zip(row.keys(), row))
+        rows = db.execute(
+            select(
+                RealStanding.realStandingID,
+                RealStanding.realTeamMemberKey,
+                RealStanding.realCompetitionMatchDay,
+                RealStanding.matchTimePlayed,
+                RealStanding.matchGamePlayed,
+                RealStanding.matchGoals,
+                RealStanding.matchAssists,
+                RealStanding.matchYellowCards,
+                RealStanding.matchRedCards,
+                RealStanding.matchGoalsConceded,
+                RealStanding.matchCleanSheet,
+                RealStanding.matchDayPlayed,
+                RealStanding.matchPointsL1Played,
+                RealStanding.matchPointsL1GoalsAllowed,
+                RealStanding.matchPointsL1CleanSheet,
+                RealStanding.matchPointsL1Cards,
+                RealStanding.matchPointsL1Goals,
+                RealStanding.matchPointsL1Assists,
+                RealStanding.matchPointsL1OwnGoals,
+                RealStanding.matchPointsL1,
             )
+            .where(
+                RealStanding.realCompetitionID == rc["realCompetitionID"],
+                RealStanding.realCompetitionMatchDay >= rc["realCompetitionFirstMatchDay"],
+                RealStanding.realCompetitionMatchDay <= rc["realCompetitionLastMatchDay"],
+            )
+            .order_by(RealStanding.realCompetitionMatchDay)
+        ).mappings()
+        yield from (dict(row) for row in rows)
 
     @staticmethod
     def _exec(

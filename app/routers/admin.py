@@ -4,12 +4,12 @@ from datetime import datetime
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.config import settings
 from app.database import CurrentUser, DbSession
 from app.guards import require_admin, require_division
-from app.models import Division, League, Team
+from app.models import Division, League, MatchDaysMap, MatchDaysStatus, RealCompetition, RealStanding, RealTeamMember, Team, User
 from app.services.query import QueryService
 from app.utils.dt import to_iso, utc_now
 
@@ -97,6 +97,112 @@ def list_backups(authorization: str | None = Header(default=None)) -> list[dict]
 # ---------------------------------------------------------------------------
 # Admin panel endpoints (JWT auth — userLevel=3)
 # ---------------------------------------------------------------------------
+
+
+@router.get("/api/v1/admin/users")
+def admin_list_users(db: DbSession, current_user: CurrentUser) -> list[dict]:
+    """List all users."""
+    require_admin(db, current_user)
+    rows = db.execute(
+        select(
+            User.userID,
+            User.userEmail,
+            User.userName,
+            User.firstName,
+            User.lastName,
+            User.userLevel,
+            User.lastSignInDate,
+            User.lastSignInIP,
+            User.createdIn,
+        ).order_by(User.userID)
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
+@router.get("/api/v1/admin/match-day-statuses/seasons")
+def admin_mds_seasons(db: DbSession, current_user: CurrentUser) -> list[str]:
+    """Distinct season IDs in MatchDaysStatus, newest first."""
+    require_admin(db, current_user)
+    rows = db.execute(
+        select(MatchDaysStatus.realCompetitionSeasonId)
+        .distinct()
+        .order_by(MatchDaysStatus.realCompetitionSeasonId.desc())
+    ).scalars().all()
+    return list(rows)
+
+
+@router.get("/api/v1/admin/match-day-statuses/map-keys")
+def admin_mds_map_keys(
+    db: DbSession,
+    current_user: CurrentUser,
+    season_id: str | None = None,
+) -> list[str]:
+    """Distinct matchDayMapKey values for a season."""
+    require_admin(db, current_user)
+    q = (
+        select(MatchDaysStatus.matchDayMapKey)
+        .distinct()
+        .where(MatchDaysStatus.matchDayMapKey.isnot(None))
+    )
+    if season_id:
+        q = q.where(MatchDaysStatus.realCompetitionSeasonId == season_id)
+    rows = db.execute(q.order_by(MatchDaysStatus.matchDayMapKey)).scalars().all()
+    return list(rows)
+
+
+@router.get("/api/v1/admin/match-day-statuses")
+def admin_list_mds(
+    db: DbSession,
+    current_user: CurrentUser,
+    season_id: str | None = None,
+    match_day_map_key: str | None = None,
+) -> list[dict]:
+    """List MatchDaysStatus records filtered by season and optional map key."""
+    require_admin(db, current_user)
+    if season_id is None:
+        season_id = str(QueryService.get_season_id())
+    q = (
+        select(
+            MatchDaysStatus.matchDayStatusID,
+            MatchDaysStatus.matchDayMapKey,
+            MatchDaysStatus.realCompetitionSYMID,
+            MatchDaysStatus.realCompetitionMatchDay,
+            MatchDaysStatus.prevActiveRealCompetitionSYMID,
+            MatchDaysStatus.prevActiveRealCompetitionMatchDay,
+            MatchDaysStatus.nextActiveRealCompetitionSYMID,
+            MatchDaysStatus.nextActiveRealCompetitionMatchDay,
+            MatchDaysStatus.active,
+            MatchDaysStatus.overlapped,
+            MatchDaysStatus.locked,
+            MatchDaysStatus.scriptsStatus,
+            MatchDaysStatus.minRealMatchDate,
+            MatchDaysStatus.maxRealMatchDate,
+            MatchDaysStatus.startWaivers,
+            MatchDaysStatus.finishWaivers,
+            MatchDaysStatus.startWaiversSettle,
+            MatchDaysStatus.finishWaiversSettle,
+            MatchDaysStatus.startOpenWaivers,
+            MatchDaysStatus.finishOpenWaivers,
+            MatchDaysStatus.startOpenWaiversSettle,
+            MatchDaysStatus.finishOpenWaiversSettle,
+            MatchDaysStatus.startPreMatch,
+            MatchDaysStatus.finishPreMatch,
+            MatchDaysStatus.startMatch,
+            MatchDaysStatus.finishMatch,
+            MatchDaysStatus.startPostMatch,
+            MatchDaysStatus.finishPostMatch,
+            MatchDaysStatus.finishMatchDay,
+            MatchDaysStatus.finishBaseMatchDay,
+            MatchDaysStatus.minAllowedRealMatchDate,
+            MatchDaysStatus.maxAllowedRealMatchDate,
+        )
+        .where(MatchDaysStatus.realCompetitionSeasonId == season_id)
+        .order_by(MatchDaysStatus.realCompetitionMatchDay, MatchDaysStatus.realCompetitionMatchDaySort)
+    )
+    if match_day_map_key:
+        q = q.where(MatchDaysStatus.matchDayMapKey == match_day_map_key)
+    rows = db.execute(q).mappings().all()
+    return [dict(r) for r in rows]
 
 
 @router.get("/api/v1/admin/competitions")
@@ -196,3 +302,305 @@ def admin_shuffle_teams(division_id: int, db: DbSession, current_user: CurrentUs
 
     db.commit()
     return [{"teamID": t.teamID, "teamName": t.teamName, "draftOrder": t.draftOrder} for t in teams]
+
+
+# ---------------------------------------------------------------------------
+# Match Days Map endpoints (JWT auth — userLevel=3)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/v1/admin/match-days-map/groups")
+def admin_mdm_groups(db: DbSession, current_user: CurrentUser) -> list[dict]:
+    """Distinct groups (SYMID, season, firstMatchDay) for the dropdown."""
+    require_admin(db, current_user)
+    rows = db.execute(
+        select(
+            MatchDaysMap.realCompetitionSYMID,
+            MatchDaysMap.realCompetitionSeasonId,
+            MatchDaysMap.firstRealCompetitionMatchDay,
+        )
+        .distinct()
+        .order_by(
+            MatchDaysMap.realCompetitionSeasonId.desc(),
+            MatchDaysMap.realCompetitionSYMID,
+            MatchDaysMap.firstRealCompetitionMatchDay,
+        )
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
+@router.get("/api/v1/admin/match-days-map")
+def admin_list_mdm(
+    db: DbSession,
+    current_user: CurrentUser,
+    symid: str | None = None,
+    season_id: str | None = None,
+    first_md: int | None = None,
+) -> list[dict]:
+    """List MatchDaysMap rows filtered by competition, season and first match day."""
+    require_admin(db, current_user)
+    q = (
+        select(
+            MatchDaysMap.matchDayMapID,
+            MatchDaysMap.competitionType,
+            MatchDaysMap.minNumTeams,
+            MatchDaysMap.maxNumTeams,
+            MatchDaysMap.rounds,
+            MatchDaysMap.totalMatchDays,
+            MatchDaysMap.matchDay,
+            MatchDaysMap.realCompetitionSYMID,
+            MatchDaysMap.realCompetitionSeasonId,
+            MatchDaysMap.realCompetitionMatchDay,
+            MatchDaysMap.firstRealCompetitionMatchDay,
+        )
+        .order_by(
+            MatchDaysMap.minNumTeams,
+            MatchDaysMap.maxNumTeams,
+            MatchDaysMap.matchDay,
+        )
+    )
+    if symid:
+        q = q.where(MatchDaysMap.realCompetitionSYMID == symid)
+    if season_id:
+        q = q.where(MatchDaysMap.realCompetitionSeasonId == season_id)
+    if first_md is not None:
+        q = q.where(MatchDaysMap.firstRealCompetitionMatchDay == first_md)
+    rows = db.execute(q).mappings().all()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Real Competitions (JWT auth)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/v1/admin/real-competitions")
+def admin_list_real_competitions(db: DbSession, current_user: CurrentUser) -> list[dict]:
+    """List all real competitions ordered by season desc, then ID."""
+    require_admin(db, current_user)
+    rows = db.execute(
+        select(
+            RealCompetition.realCompetitionID,
+            RealCompetition.realCompetitionUID,
+            RealCompetition.realCompetitionSYMID,
+            RealCompetition.realCompetitionName,
+            RealCompetition.realCompetitionCountry,
+            RealCompetition.realCompetitionSeasonId,
+            RealCompetition.realCompetitionSeasonName,
+            RealCompetition.realCompetitionLastMatchDay,
+            RealCompetition.baseRealCompetitionID,
+            RealCompetition.extraRealCompetitionID,
+        ).order_by(
+            RealCompetition.realCompetitionSeasonId.desc(),
+            RealCompetition.realCompetitionID,
+        )
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Real Matches (JWT auth)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/v1/admin/real-matches")
+def admin_list_real_matches(
+    db: DbSession,
+    current_user: CurrentUser,
+    symid: str | None = None,
+    season_id: str | None = None,
+) -> list[dict]:
+    """List real matches for a competition/season, joining team rows."""
+    require_admin(db, current_user)
+    if not symid or not season_id:
+        return []
+    q = text("""
+        SELECT
+            m.realMatchID,
+            m.realCompetitionSYMID,
+            m.realCompetitionMatchDay,
+            m.realMatchDate,
+            m.realMatchPeriod,
+            m.realMatchAttendance,
+            t1.realTeamSide        AS firstSide,
+            t1.realTeamName        AS firstName,
+            t1.realTeamShortName   AS firstShortName,
+            t1.realTeamScore       AS firstScore,
+            t2.realTeamSide        AS secondSide,
+            t2.realTeamName        AS secondName,
+            t2.realTeamShortName   AS secondShortName,
+            t2.realTeamScore       AS secondScore
+        FROM RealMatches m
+        JOIN RealMatchTeams t1 ON t1.realMatchID = m.realMatchID AND t1.realTeamNumber = 1
+        JOIN RealMatchTeams t2 ON t2.realMatchID = m.realMatchID AND t2.realTeamNumber = 2
+        WHERE m.realCompetitionSYMID = :symid
+          AND m.realCompetitionSeasonId = :season_id
+        ORDER BY m.realMatchDate, m.realMatchID
+    """)
+    rows = db.execute(q, {"symid": symid, "season_id": season_id}).mappings().all()
+    result = []
+    for r in rows:
+        row = dict(r)
+        row["realMatchDate"] = to_iso(row["realMatchDate"])
+        result.append(row)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Real Team Members (JWT auth)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/v1/admin/real-team-members/seasons")
+def admin_rtm_seasons(db: DbSession, current_user: CurrentUser) -> list[str]:
+    """Distinct seasons that have RealTeamMember rows, newest first."""
+    require_admin(db, current_user)
+    rows = db.execute(
+        select(RealCompetition.realCompetitionSeasonId)
+        .distinct()
+        .where(
+            RealCompetition.realCompetitionID.in_(
+                select(RealTeamMember.baseRealCompetitionID).distinct()
+            )
+        )
+        .order_by(RealCompetition.realCompetitionSeasonId.desc())
+    ).scalars().all()
+    return list(rows)
+
+
+@router.get("/api/v1/admin/real-team-members")
+def admin_list_real_team_members(
+    db: DbSession,
+    current_user: CurrentUser,
+    season_id: str | None = None,
+) -> list[dict]:
+    """List RealTeamMembers for a season, joined to RealCompetition for the season filter."""
+    require_admin(db, current_user)
+    if not season_id:
+        return []
+    q = text("""
+        SELECT
+            rtm.realTeamMemberKey  AS `key`,
+            rtm.name,
+            rtm.position,
+            rtm.realTeamName       AS teamName,
+            rtm.realTeamShortName  AS teamShortName
+        FROM RealTeamMembers rtm
+        JOIN RealCompetitions rc ON rc.realCompetitionID = rtm.baseRealCompetitionID
+        WHERE rc.realCompetitionSeasonId = :season_id
+        ORDER BY rtm.sortName
+    """)
+    rows = db.execute(q, {"season_id": season_id}).mappings().all()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Real Standings (JWT auth)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/v1/admin/real-standings/seasons")
+def admin_rs_seasons(db: DbSession, current_user: CurrentUser) -> list[str]:
+    """Distinct seasons in RealStandings, newest first."""
+    require_admin(db, current_user)
+    rows = db.execute(
+        select(RealStanding.realCompetitionSeasonId)
+        .distinct()
+        .order_by(RealStanding.realCompetitionSeasonId.desc())
+    ).scalars().all()
+    return list(rows)
+
+
+@router.get("/api/v1/admin/real-standings/match-days")
+def admin_rs_match_days(
+    db: DbSession,
+    current_user: CurrentUser,
+    season_id: str | None = None,
+) -> list[int]:
+    """Distinct match days for a season in RealStandings, ascending."""
+    require_admin(db, current_user)
+    q = select(RealStanding.realCompetitionMatchDay).distinct()
+    if season_id:
+        q = q.where(RealStanding.realCompetitionSeasonId == season_id)
+    rows = db.execute(q.order_by(RealStanding.realCompetitionMatchDay)).scalars().all()
+    return list(rows)
+
+
+@router.get("/api/v1/admin/real-standings")
+def admin_list_real_standings(
+    db: DbSession,
+    current_user: CurrentUser,
+    season_id: str | None = None,
+    match_day: int | None = None,
+) -> list[dict]:
+    """List RealStandings for a season and match day."""
+    require_admin(db, current_user)
+    if not season_id or match_day is None:
+        return []
+    rows = db.execute(
+        select(
+            RealStanding.realTeamMemberKey,
+            RealStanding.name,
+            RealStanding.position,
+            RealStanding.realTeamName,
+            RealStanding.realTeamShortName,
+        )
+        .where(RealStanding.realCompetitionSeasonId == season_id)
+        .where(RealStanding.realCompetitionMatchDay == match_day)
+        .order_by(RealStanding.sortName)
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Backup / restore — JWT auth (admin panel UI)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/v1/admin/backup-runs")
+def admin_list_backup_runs(db: DbSession, current_user: CurrentUser) -> list[dict]:
+    """List Cloud SQL backup runs."""
+    require_admin(db, current_user)
+    project, instance = _parse_instance()
+    result = _sql_service().backupRuns().list(project=project, instance=instance).execute()
+    return [
+        {"id": b["id"], "status": b["status"], "startTime": b.get("startTime"), "endTime": b.get("endTime")}
+        for b in result.get("items", [])
+    ]
+
+
+@router.post("/api/v1/admin/backup-runs")
+def admin_create_backup_run(db: DbSession, current_user: CurrentUser) -> dict:
+    """Trigger a new Cloud SQL backup."""
+    require_admin(db, current_user)
+    project, instance = _parse_instance()
+    op = _sql_service().backupRuns().insert(project=project, instance=instance).execute()
+    logger.info("Backup started by user %s: %s", current_user, op.get("name"))
+    return {"operationId": op.get("name"), "status": op.get("status")}
+
+
+class RestoreRunRequest(BaseModel):
+    backup_id: int
+
+
+@router.post("/api/v1/admin/backup-runs/restore")
+def admin_restore_backup_run(
+    body: RestoreRunRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Restore from a Cloud SQL backup. WARNING: replaces all current data."""
+    require_admin(db, current_user)
+    project, instance = _parse_instance()
+    op = (
+        _sql_service()
+        .instances()
+        .restoreBackup(
+            project=project,
+            instance=instance,
+            body={"restoreBackupContext": {"backupRunId": body.backup_id, "project": project}},
+        )
+        .execute()
+    )
+    logger.info("Restore of backup %s started by user %s: %s", body.backup_id, current_user, op.get("name"))
+    return {"operationId": op.get("name"), "status": op.get("status")}
