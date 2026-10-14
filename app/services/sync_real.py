@@ -1132,7 +1132,7 @@ class SyncRealService:
         for start in range(0, len(rows), chunk_size):
             chunk = rows[start : start + chunk_size]
             values_sql = ", ".join([row_placeholder] * len(chunk))
-            flat = [row.get(c) for row in chunk for c in insert_cols]
+            flat = tuple(row.get(c) for row in chunk for c in insert_cols)
             sql = (
                 f"INSERT INTO `{table}` ({cols_sql})"
                 f" VALUES {values_sql}"
