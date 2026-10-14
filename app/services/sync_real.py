@@ -9,7 +9,6 @@ from collections.abc import Generator
 from functools import cmp_to_key
 
 from sqlalchemy import and_, or_, select, text
-from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.orm import Session
 
 from app.constants import DraftPositionConstants, RealCompetitionConstants
@@ -1081,24 +1080,67 @@ class SyncRealService:
                 to_update.append(values)
 
         comp_symid = comp["realCompetitionSYMID"]
+        all_cols = [c.name for c in RealStanding.__table__.columns]
+        update_cols = [c for c in all_cols if c not in ("realStandingID", "createdIn")]
 
         if to_insert:
-            db.execute(mysql_insert(RealStanding), to_insert)
+            ins_cols = [c for c in all_cols if c != "realStandingID"]
+            SyncRealService._multi_upsert(db, "RealStandings", ins_cols, [], to_insert)
             task.inc(f"{comp_symid}(ins)", len(to_insert))
 
         if to_update:
-            # INSERT ... ON DUPLICATE KEY UPDATE: one multi-row statement per batch via
-            # SQLAlchemy's insertmanyvalues, no per-row SELECT needed.
-            update_cols = [c for c in to_update[0] if c != "realStandingID"]
-            stmt = mysql_insert(RealStanding)
-            stmt = stmt.on_duplicate_key_update(
-                {c: stmt.inserted[c] for c in update_cols}
-            )
-            db.execute(stmt, to_update)
+            # Include createdIn with a placeholder value (NOT NULL satisfied); ODKU always
+            # fires because realStandingID exists, so this INSERT value is never committed.
+            now = utc_now()
+            normalized = [{**{c: row.get(c) for c in all_cols}, "createdIn": now} for row in to_update]
+            SyncRealService._multi_upsert(db, "RealStandings", all_cols, update_cols, normalized)
             task.inc(f"{comp_symid}(upd)", len(to_update))
 
         db.flush()
         SyncRealService._clean_members(members)
+
+    @staticmethod
+    def _multi_upsert(
+        db: Session,
+        table: str,
+        insert_cols: list[str],
+        update_cols: list[str],
+        rows: list[dict],
+        chunk_size: int = 500,
+    ) -> None:
+        """Execute multi-row INSERT [ON DUPLICATE KEY UPDATE] in one statement per chunk.
+
+        Uses raw SQL with explicit named params so every column is bound regardless of
+        None, bypassing SQLAlchemy's ORM None-exclusion behavior. Chunked to stay within
+        MySQL's max_allowed_packet limit. With update_cols empty, runs a plain INSERT.
+        Uses VALUES(col) syntax so columns absent from the INSERT return NULL in ODKU,
+        which is the correct behavior for None-valued team/player-specific fields.
+        """
+        if not rows:
+            return
+        cols_sql = ", ".join(f"`{c}`" for c in insert_cols)
+        odku_clause = (
+            " ON DUPLICATE KEY UPDATE "
+            + ", ".join(f"`{c}` = VALUES(`{c}`)" for c in update_cols)
+            if update_cols
+            else ""
+        )
+        for start in range(0, len(rows), chunk_size):
+            chunk = rows[start : start + chunk_size]
+            flat_params: dict = {}
+            value_groups: list[str] = []
+            for i, row in enumerate(chunk):
+                value_groups.append(
+                    "(" + ", ".join(f":p{i}_{c}" for c in insert_cols) + ")"
+                )
+                for c in insert_cols:
+                    flat_params[f"p{i}_{c}"] = row.get(c)
+            sql = (
+                f"INSERT INTO `{table}` ({cols_sql})"
+                f" VALUES {', '.join(value_groups)}"
+                f"{odku_clause}"
+            )
+            db.execute(text(sql), flat_params)
 
     @staticmethod
     def _get_rtm_values(
