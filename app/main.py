@@ -30,6 +30,26 @@ from app.routers import (
 
 app = FastAPI(title="EFF API")
 
+
+@app.on_event("startup")
+def _migrate_db() -> None:
+    """Apply any pending schema changes that create_all cannot handle (column additions)."""
+    from sqlalchemy import text
+    from app.database import engine
+    migrations = [
+        # 2026-10-14: prevProcessID added to Processes after initial table creation
+        "ALTER TABLE Processes ADD COLUMN prevProcessID INT(11) DEFAULT NULL AFTER processID",
+        # 2026-10-14: processID was created without AUTO_INCREMENT
+        "ALTER TABLE Processes MODIFY processID INT NOT NULL AUTO_INCREMENT",
+    ]
+    with engine.connect() as conn:
+        for sql in migrations:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                pass
+
 _cors_origins = ["https://effootball.com"]
 if os.getenv("ADMIN_DEV_CORS"):
     _cors_origins.append("http://localhost:5173")

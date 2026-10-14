@@ -18,7 +18,7 @@ from app.services.f42_parser import F42Parser
 from app.services.save_mds import SaveMDS
 from app.services.sync_fantasy import SyncFantasyService
 from app.services.sync_real import SyncRealService
-from app.utils.dt import utc_now
+from app.utils.dt import to_datetime, utc_now
 from app.utils.processes import Process, Task
 from app.utils.scalars import to_float, to_int
 
@@ -521,7 +521,7 @@ class F42Loader:
                         realMatchType=match_data.get("match_type"),
                         realMatchPeriod=match_data.get("period"),
                         realMatchRealPeriod=match_data.get("period"),
-                        realMatchDate=match_data.get("date_utc"),
+                        realMatchDate=to_datetime(match_data.get("date_utc")),
                         realCompetitionMatchDay=match_data.get("match_day"),
                         lastF42Date=task.start_time,
                         updatedIn=task.start_time,
@@ -550,7 +550,7 @@ class F42Loader:
                     ),
                     realMatchPeriod=match_data.get("period"),
                     realMatchRealPeriod=match_data.get("period"),
-                    realMatchDate=match_data.get("date_utc"),
+                    realMatchDate=to_datetime(match_data.get("date_utc")),
                     realMatchDateOffset=match_data.get("date_offset"),
                     realMatchEnded=RealMatchPeriod.to_match_ended(
                         match_data.get("period")
