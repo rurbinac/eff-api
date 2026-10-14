@@ -32,6 +32,7 @@ steps:
       - --set-env-vars=CLOUD_SQL_INSTANCE=${_CLOUD_SQL_INSTANCE}
       - --update-secrets=DB_PASSWORD=db-password:latest,DB_USER=db-user:latest,DB_NAME=db-name:latest
       - --allow-unauthenticated
+      - --timeout=300
 
 images:
   - gcr.io/$PROJECT_ID/${_SERVICE}:$BUILD_ID
