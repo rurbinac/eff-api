@@ -75,12 +75,18 @@ async def xml_feed_notify(
         logger.error("xml_feed_notify: GCS read failed: %s", e)
         return {"status": "error", "file": blob_name, "error": f"GCS read failed: {e!s}"}
 
-    # Open Feed log row (records size + sha256), process, stamp end time
-    # Returns None when the file content is identical to the previous version
-    process = FLoader.log_feed_start(db, blob_name, content)
-    logger.info("xml_feed_notify: log_feed_start returned process_id=%s", process.process_id if process else None)
+    # Create/reset the Process tracking row; returns None when content is unchanged
+    try:
+        process = FLoader.log_feed_start(db, blob_name, content)
+    except Exception:
+        logger.exception("xml_feed_notify: log_feed_start failed for %s", blob_name)
+        process = None
+
     if process is None:
-        return {"status": "skipped", "reason": "identical content (sha256 and size unchanged)", "file": blob_name}
+        logger.info("xml_feed_notify: skipped %s (identical content or process init error)", blob_name)
+        return {"status": "skipped", "reason": "identical content or process init error", "file": blob_name}
+
+    logger.info("xml_feed_notify: log_feed_start returned process_id=%s", process.process_id)
     try:
         tmp_name = FLoader.create_temp_file(content)
         process = FLoader.load_file(db, process, tmp_name)
