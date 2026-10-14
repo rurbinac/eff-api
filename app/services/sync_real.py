@@ -1106,41 +1106,39 @@ class SyncRealService:
         insert_cols: list[str],
         update_cols: list[str],
         rows: list[dict],
-        chunk_size: int = 500,
+        chunk_size: int = 100,
     ) -> None:
         """Execute multi-row INSERT [ON DUPLICATE KEY UPDATE] in one statement per chunk.
 
-        Uses raw SQL with explicit named params so every column is bound regardless of
-        None, bypassing SQLAlchemy's ORM None-exclusion behavior. Chunked to stay within
-        MySQL's max_allowed_packet limit. With update_cols empty, runs a plain INSERT.
-        Uses VALUES(col) syntax so columns absent from the INSERT return NULL in ODKU,
-        which is the correct behavior for None-valued team/player-specific fields.
+        Uses %s positional params via exec_driver_sql so the SQL string stays small
+        (~21KB per 100-row chunk vs ~750KB with named params). All columns are bound
+        explicitly, bypassing SQLAlchemy's ORM None-exclusion. VALUES(col) syntax in
+        ODKU means columns absent from INSERT (None-excluded rows) return NULL, which
+        is the correct behavior for team/player-specific fields. With update_cols empty,
+        runs a plain INSERT.
         """
         if not rows:
             return
+        n_cols = len(insert_cols)
         cols_sql = ", ".join(f"`{c}`" for c in insert_cols)
+        row_placeholder = "(" + ", ".join(["%s"] * n_cols) + ")"
         odku_clause = (
             " ON DUPLICATE KEY UPDATE "
             + ", ".join(f"`{c}` = VALUES(`{c}`)" for c in update_cols)
             if update_cols
             else ""
         )
+        connection = db.connection()
         for start in range(0, len(rows), chunk_size):
             chunk = rows[start : start + chunk_size]
-            flat_params: dict = {}
-            value_groups: list[str] = []
-            for i, row in enumerate(chunk):
-                value_groups.append(
-                    "(" + ", ".join(f":p{i}_{c}" for c in insert_cols) + ")"
-                )
-                for c in insert_cols:
-                    flat_params[f"p{i}_{c}"] = row.get(c)
+            values_sql = ", ".join([row_placeholder] * len(chunk))
+            flat = [row.get(c) for row in chunk for c in insert_cols]
             sql = (
                 f"INSERT INTO `{table}` ({cols_sql})"
-                f" VALUES {', '.join(value_groups)}"
+                f" VALUES {values_sql}"
                 f"{odku_clause}"
             )
-            db.execute(text(sql), flat_params)
+            connection.exec_driver_sql(sql, flat)
 
     @staticmethod
     def _get_rtm_values(
