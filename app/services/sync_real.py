@@ -1052,11 +1052,11 @@ class SyncRealService:
         match_day: int | None,
         task: Task,
     ) -> None:
-        """Sort members, then INSERT or UPDATE their RealStandings row for this match day.
+        """Sort members, then bulk-INSERT or bulk-UPDATE RealStandings for this match day.
 
-        Skips the entire save when match_day is None (no rows seen yet). SQL is built
-        once per command type (ins/upd) via sql_cache and reused for all members.
-        After saving, _clean_members resets per-match-day accumulated fields.
+        Collects all member value dicts, splits into insert/update lists, then executes
+        one raw-SQL statement per operation type via executemany — eliminating per-row
+        SELECTs. After saving, _clean_members resets per-match-day accumulated fields.
 
         Args:
             db: Database session.
@@ -1064,25 +1064,45 @@ class SyncRealService:
             comp: Competition dict used to fill competition columns in the row.
             match_teams: Dict keyed by realTeamID with match result data.
             match_day: Current match day number, or None if no rows have been processed.
-            sql_cache: Mutable cache dict; keys ``"ins"`` and ``"upd"`` store built SQL.
             task: Task whose per-competition insert/update counters are incremented.
         """
         if match_day is None:
             return
         SyncRealService._sort_members(members)
+
+        to_insert: list[dict] = []
+        to_update: list[dict] = []
         for member in members.values():
-            values = SyncRealService._get_rtm_values(
-                member, comp, match_teams, match_day
-            )
+            values = SyncRealService._get_rtm_values(member, comp, match_teams, match_day)
             if "realStandingID" not in values:
-                db.add(RealStanding(**values))
-                task.inc(f"{comp['realCompetitionSYMID']}(ins)")
+                to_insert.append(values)
             else:
-                standing = db.get(RealStanding, values["realStandingID"])
-                if standing is not None:
-                    for key, value in values.items():
-                        setattr(standing, key, value)
-                task.inc(f"{comp['realCompetitionSYMID']}(upd)")
+                to_update.append(values)
+
+        comp_symid = comp["realCompetitionSYMID"]
+
+        if to_insert:
+            col_names = list(to_insert[0].keys())
+            cols = ", ".join(f"`{c}`" for c in col_names)
+            placeholders = ", ".join(f":{c}" for c in col_names)
+            db.execute(
+                text(f"INSERT INTO `RealStandings` ({cols}) VALUES ({placeholders})"),
+                to_insert,
+            )
+            task.inc(f"{comp_symid}(ins)", len(to_insert))
+
+        if to_update:
+            update_cols = [col for col in to_update[0].keys() if col != "realStandingID"]
+            set_clause = ", ".join(f"`{col}` = :{col}" for col in update_cols)
+            db.execute(
+                text(
+                    f"UPDATE `RealStandings` SET {set_clause}"
+                    " WHERE `realStandingID` = :realStandingID"
+                ),
+                to_update,
+            )
+            task.inc(f"{comp_symid}(upd)", len(to_update))
+
         db.flush()
         SyncRealService._clean_members(members)
 
