@@ -615,6 +615,28 @@ class RealMatch(SQLModel, table=True):
     updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
+class RealMatchEvent(SQLModel, table=True):
+    __tablename__ = "RealMatchEvents"
+
+    realMatchEventID: int | None = Field(default=None, primary_key=True)
+    realMatchID: int
+    realMatchTeamID: int
+    realTeamID: int
+    realPlayerID: int
+    eventPosition: int
+    eventPeriod: int | None = Field(default=None, sa_type=TINYINT)
+    eventTime: int | None = Field(default=None, sa_type=TINYINT)
+    eventMin: int | None = Field(default=None, sa_type=TINYINT)
+    eventSec: int | None = Field(default=None, sa_type=TINYINT)
+    eventNumber: int | None = None
+    eventTimeStamp: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    eventReason: str = Field(max_length=20)
+    eventType: str | None = Field(default=None, max_length=20)
+    eventClass: str | None = Field(default=None, max_length=12)
+    createdIn: datetime = Field(sa_type=UTCDateTime())
+    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
+
+
 class RealMatchTeam(SQLModel, table=True):
     __tablename__ = "RealMatchTeams"
 

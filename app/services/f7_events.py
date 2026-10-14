@@ -2,6 +2,8 @@
 
 import xml.etree.ElementTree as ET
 
+from app.utils.scalars import to_pos_int
+
 
 def load_booking(
     events_cache: list, booking_elem: ET.Element, real_team_uid: str
@@ -14,6 +16,8 @@ def load_booking(
             "realPlayerUID": booking_elem.get("PlayerRef"),
             "eventPeriod": booking_elem.get("Period"),
             "eventTime": booking_elem.get("Time"),
+            "eventMin": booking_elem.get("Min"),
+            "eventSec": booking_elem.get("Sec"),
             "eventNumber": booking_elem.get("EventNumber"),
             "eventTimeStamp": booking_elem.get("TimeStamp"),
             "eventType": booking_elem.get("CardType"),
@@ -30,6 +34,8 @@ def load_substitution(
         "realTeamUID": real_team_uid,
         "eventPeriod": substitution_elem.get("Period"),
         "eventTime": substitution_elem.get("Time"),
+        "eventMin": substitution_elem.get("Min"),
+        "eventSec": substitution_elem.get("Sec"),
         "eventNumber": substitution_elem.get("EventNumber"),
         "eventTimeStamp": substitution_elem.get("TimeStamp"),
         "eventType": substitution_elem.get("Reason"),
@@ -72,6 +78,8 @@ def load_goal(events_cache: list, goal_elem: ET.Element, real_team_uid: str) -> 
         "secondRealPlayerUID": assist_player_ref,
         "eventPeriod": goal_elem.get("Period"),
         "eventTime": goal_elem.get("Time"),
+        "eventMin": goal_elem.get("Min"),
+        "eventSec": goal_elem.get("Sec"),
         "eventNumber": goal_elem.get("EventNumber"),
         "eventTimeStamp": goal_elem.get("TimeStamp"),
         "eventType": goal_type,
@@ -102,14 +110,18 @@ def _add_event(events_cache: list, event: dict) -> None:
         elif period == "2" or period == "secondhalf":
             event["eventPeriod"] = 2
         else:
-            event["eventPeriod"] = None
+            event["eventPeriod"] = 3
 
-        # Pad time to 4 digits
-        event_time = event.get("eventTime", "0")
-        event_time_4digit = ("0000" + str(event_time))[-4:]
+        event_time = to_pos_int(event.get("eventTime", "0"), 0)
+        event_min = to_pos_int(event.get("eventMin", "0"), 0)
+        event_sec = to_pos_int(event.get("eventSec", "0"), 0)
+
+        event["eventTime"] = event_time
+        event["eventMin"] = event_min
+        event["eventSec"] = event_sec
 
         # Build unique sort/dedup key (internal — not a DB column)
-        key = f"{event['eventPeriod']}_{event_time_4digit}_{event.get('eventTimeStamp', '')}"
+        key = f"{event['eventPeriod']}_{event_time:04d}_{event_min:04d}_{event_sec:04d}_{event.get('eventTimeStamp', '')}"
 
         # Add class suffix for deterministic ordering within the same timestamp
         event_class = event.get("eventClass", "Other")
@@ -117,14 +129,14 @@ def _add_event(events_cache: list, event: dict) -> None:
             key += "1"
         elif event_class == "Booking":
             key += "2"
-        elif event_class == "Goal":
-            key += "3"
         elif event_class == "Assist":
+            key += "3"
+        elif event_class == "Goal":
             key += "4"
         elif event_class == "SubOn":
             key += "5"
         else:
             key += "9"
 
-        event["eventKey"] = key
+        event["eventKey"] = key + f"_{len(events_cache):06d}"
         events_cache.append(event)

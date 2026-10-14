@@ -8,6 +8,7 @@ from app.constants import DraftPositionConstants, RealMatchPeriod
 from app.models import (
     RealCompetition,
     RealMatch,
+    RealMatchEvent,
     RealMatchTeam,
     RealPlayer,
     RealStanding,
@@ -256,6 +257,21 @@ class F7Loader:
             task.assign("match_teams_updated", teams_result.get("teams_updated", 0))
         except Exception as e:
             task.add_error(f"RealMatchTeams update failed [{type(e).__name__}]: {e!s}")
+
+        try:
+            events_result = F7Loader._save_events(
+                db,
+                match_ids,
+                processed_data.get("match_events", []),
+                foundation["teams_cache"],
+                foundation["players_cache"],
+            )
+            task.init_info("events_inserted", "events_updated", "events_skipped")
+            task.assign("events_inserted", events_result.get("events_inserted", 0))
+            task.assign("events_updated", events_result.get("events_updated", 0))
+            task.assign("events_skipped", events_result.get("events_skipped", 0))
+        except Exception as e:
+            task.add_error(f"RealMatchEvents save failed [{type(e).__name__}]: {e!s}")
 
         # Parse match day once for both standings updates
         real_match_day = None
@@ -924,6 +940,113 @@ class F7Loader:
             update_count += 1
 
         return {"status": "updated", "teams_updated": update_count}
+
+    @staticmethod
+    def _save_events(
+        db: Session,
+        match_ids: dict,
+        match_events: list,
+        teams_cache: dict,
+        players_cache: dict,
+    ) -> dict:
+        """Replace all RealMatchEvents for this match with the current event list.
+
+        Events are sorted by eventKey before insert; eventPosition is the 1-based
+        index in that sorted order and forms the unique key with realMatchID.
+        """
+        from sqlalchemy import delete as sa_delete, text
+
+        real_match_id = match_ids["realMatchID"]
+        now = utc_now()
+
+        # Build UID → (realTeamID, realMatchTeamID) lookup from the two teams
+        team_id_map: dict[str, tuple[int, int]] = {}
+        for uid, info in teams_cache.items():
+            real_team_id = info.get("realTeamID")
+            side = info.get("side")
+            mt_key = "realMatchTeamID_Home" if side == "Home" else "realMatchTeamID_Away"
+            real_match_team_id = match_ids.get(mt_key)
+            if real_team_id and real_match_team_id:
+                team_id_map[uid] = (real_team_id, real_match_team_id)
+
+        # Load existing events: eventPosition → realMatchEventID
+        rows = db.execute(
+            text("SELECT realMatchEventID, eventPosition FROM RealMatchEvents WHERE realMatchID = :match_id"),
+            {"match_id": real_match_id},
+        ).fetchall()
+        existing: dict[int, int] = {r.eventPosition: r.realMatchEventID for r in rows}
+
+        # Track which positions are in the new list; delete any that are no longer present
+        new_positions: set[int] = set()
+        inserted = 0
+        updated = 0
+        skipped = 0
+        for position, event in enumerate(match_events, start=1):
+            team_uid = event.get("realTeamUID")
+            player_uid = event.get("realPlayerUID")
+
+            team_ids = team_id_map.get(team_uid)
+            player_info = players_cache.get(player_uid)
+            player_id = player_info.get("realPlayerID") if player_info else None
+
+            if not team_ids or not player_id:
+                skipped += 1
+                continue
+
+            real_team_id, real_match_team_id = team_ids
+            event_reason = event.get("eventType") or event.get("eventClass") or "Unknown"
+            new_positions.add(position)
+
+            if position in existing:
+                db.execute(
+                    update(RealMatchEvent)
+                    .where(RealMatchEvent.realMatchEventID == existing[position])
+                    .values(
+                        realMatchTeamID=real_match_team_id,
+                        realTeamID=real_team_id,
+                        realPlayerID=player_id,
+                        eventPeriod=event.get("eventPeriod"),
+                        eventTime=event.get("eventTime"),
+                        eventMin=event.get("eventMin"),
+                        eventSec=event.get("eventSec"),
+                        eventNumber=to_int(event.get("eventNumber")),
+                        eventTimeStamp=to_datetime(event.get("eventTimeStamp")),
+                        eventReason=event_reason,
+                        eventType=event.get("eventType"),
+                        eventClass=event.get("eventClass"),
+                        updatedIn=now,
+                    )
+                )
+                updated += 1
+            else:
+                db.add(RealMatchEvent(
+                    realMatchID=real_match_id,
+                    realMatchTeamID=real_match_team_id,
+                    realTeamID=real_team_id,
+                    realPlayerID=player_id,
+                    eventPosition=position,
+                    eventPeriod=event.get("eventPeriod"),
+                    eventTime=event.get("eventTime"),
+                    eventMin=event.get("eventMin"),
+                    eventSec=event.get("eventSec"),
+                    eventNumber=to_int(event.get("eventNumber")),
+                    eventTimeStamp=to_datetime(event.get("eventTimeStamp")),
+                    eventReason=event_reason,
+                    eventType=event.get("eventType"),
+                    eventClass=event.get("eventClass"),
+                    createdIn=now,
+                    updatedIn=now,
+                ))
+                inserted += 1
+
+        # Delete positions that existed before but are no longer in the new event list
+        stale_ids = [existing[pos] for pos in existing if pos not in new_positions]
+        if stale_ids:
+            db.execute(
+                sa_delete(RealMatchEvent).where(RealMatchEvent.realMatchEventID.in_(stale_ids))
+            )
+
+        return {"events_inserted": inserted, "events_updated": updated, "events_skipped": skipped}
 
     @staticmethod
     def _update_standings_quick_mode(
