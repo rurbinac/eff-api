@@ -55,7 +55,7 @@ class Process:
             .first()
         )
         if row is None:
-            self._startDate = utc_now()
+            self._startDate = utc_now(microsecond=True)
             self._versions = 1
             self._tasks = []
             new_row = ProcessModel(
@@ -79,7 +79,7 @@ class Process:
     def reset(self, sha256: bytes | None = None) -> bool:
         if self._process_id is not None:
             self._prev_process_id = self._process_id
-            self._startDate = utc_now()
+            self._startDate = utc_now(microsecond=True)
             self._finishDate = None
             self._versions = (self._versions or 0) + 1
             self._sha256 = sha256
@@ -135,9 +135,9 @@ class Process:
 
     @property
     def duration(self) -> float | None:
-        if self._startDate is not None and self._finishDate is not None:
-            return (self._finishDate - self._startDate) / timedelta(microseconds=1)
-        return None
+        if self._startDate is None:
+            return None
+        return _duration(self._startDate, self._finishDate)
 
     def create_task(
         self,
@@ -151,7 +151,7 @@ class Process:
 
     def finish(self) -> None:
         if self._is_new and self._startDate is not None and self._finishDate is None:
-            self._finishDate = utc_now()
+            self._finishDate = utc_now(microsecond=True)
             self.save()
 
     def save(self) -> bool:
@@ -163,7 +163,7 @@ class Process:
             prevProcessID=self._prev_process_id,
             processType=self._process_type,
             processName=self._process_name,
-            startDate=self._startDate or utc_now(),
+            startDate=self._startDate or utc_now(microsecond=True),
             finishDate=self._finishDate,
             duration=self.duration,
             versions=self._versions,
@@ -193,7 +193,7 @@ class Task:
     errors: list[str] = field(default_factory=list)
     tasks: list[Task] = field(default_factory=list)
     _stopped_time: datetime | None = field(default=None, init=False, repr=False)
-    _paused_us: float = field(default=0.0, init=False, repr=False)
+    _paused_s: float = field(default=0.0, init=False, repr=False)
 
     @property
     def start_time(self) -> datetime:
@@ -250,9 +250,9 @@ class Task:
         """
         if self.is_closed or not self.is_paused:
             return False
-        self._paused_us += (
+        self._paused_s += (
             utc_now(microsecond=True) - self._stopped_time
-        ) / timedelta(microseconds=1)
+        ) / timedelta(seconds=1)
         self._stopped_time = None
         return True
 
@@ -267,12 +267,12 @@ class Task:
             float: Elapsed microseconds, excluding paused time.
         """
         if self.is_closed:
-            return (self.end - self.start) / timedelta(microseconds=1) - self._paused_us
+            return _duration(self.start, self.end, self._paused_s)
         now = utc_now(microsecond=True)
-        paused_us = self._paused_us
+        paused_s = self._paused_s
         if self.is_paused:
-            paused_us += (now - self._stopped_time) / timedelta(microseconds=1)
-        return (now - self.start) / timedelta(microseconds=1) - paused_us
+            paused_s += (now - self._stopped_time) / timedelta(seconds=1)
+        return _duration(self.start, now, paused_s)
 
     def add_subtask(self, subtask: Task) -> None:
         """Add a subtask to the task.
@@ -412,3 +412,10 @@ class Task:
         if self.tasks:
             data["tasks"] = [task.to_dict() for task in self.tasks]
         return data
+
+
+def _duration(start: datetime, end: datetime | None, paused_s: float  = 0) -> float:
+    if end is None:
+        end = utc_now(microsecond=True)
+    return (end - start) / timedelta(seconds=1) - paused_s
+

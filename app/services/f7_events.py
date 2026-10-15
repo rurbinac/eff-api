@@ -1,8 +1,16 @@
 """F7 event processing utilities."""
 
 import xml.etree.ElementTree as ET
+from datetime import UTC, datetime
 
 from app.utils.scalars import to_pos_int
+
+
+def _parse_ts(elem: ET.Element) -> datetime | None:
+    raw = elem.get("TimeStampUTC") or elem.get("TimeStamp")
+    if not raw:
+        return None
+    return datetime.strptime(raw, "%Y%m%dT%H%M%S%z").astimezone(UTC).replace(tzinfo=None)
 
 
 def load_booking(
@@ -19,7 +27,7 @@ def load_booking(
             "eventMin": booking_elem.get("Min"),
             "eventSec": booking_elem.get("Sec"),
             "eventNumber": booking_elem.get("EventNumber"),
-            "eventTimeStamp": booking_elem.get("TimeStamp"),
+            "eventTimeStamp": _parse_ts(booking_elem),
             "eventType": booking_elem.get("CardType"),
             "eventClass": "Booking",
         },
@@ -37,7 +45,7 @@ def load_substitution(
         "eventMin": substitution_elem.get("Min"),
         "eventSec": substitution_elem.get("Sec"),
         "eventNumber": substitution_elem.get("EventNumber"),
-        "eventTimeStamp": substitution_elem.get("TimeStamp"),
+        "eventTimeStamp": _parse_ts(substitution_elem),
         "eventType": substitution_elem.get("Reason"),
     }
 
@@ -81,7 +89,7 @@ def load_goal(events_cache: list, goal_elem: ET.Element, real_team_uid: str) -> 
         "eventMin": goal_elem.get("Min"),
         "eventSec": goal_elem.get("Sec"),
         "eventNumber": goal_elem.get("EventNumber"),
-        "eventTimeStamp": goal_elem.get("TimeStamp"),
+        "eventTimeStamp": _parse_ts(goal_elem),
         "eventType": goal_type,
         "eventClass": "Goal",
     }
@@ -121,7 +129,9 @@ def _add_event(events_cache: list, event: dict) -> None:
         event["eventSec"] = event_sec
 
         # Build unique sort/dedup key (internal — not a DB column)
-        key = f"{event['eventPeriod']}_{event_time:04d}_{event_min:04d}_{event_sec:04d}_{event.get('eventTimeStamp', '')}"
+        ts = event.get("eventTimeStamp")
+        ts_str = ts.strftime("%Y-%m-%d %H:%M:%S") if ts is not None else ""
+        key = f"{event['eventPeriod']}_{event_time:04d}_{event_min:04d}_{event_sec:04d}_{ts_str}"
 
         # Add class suffix for deterministic ordering within the same timestamp
         event_class = event.get("eventClass", "Other")

@@ -806,8 +806,8 @@ class Process(SQLModel, table=True):
     prevProcessID: int | None = Field(default=None, foreign_key="Processes.processID")
     processType: str = Field(max_length=20)
     processName: str = Field(max_length=128)
-    startDate: datetime = Field(sa_type=UTCDateTime())
-    finishDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    startDate: datetime = Field(sa_type=UTCDateTime(fsp=6))
+    finishDate: datetime | None = Field(default=None, sa_type=UTCDateTime(fsp=6))
     duration: float | None = None
     versions: int = Field(default=1)
     sha256: bytes | None = Field(default=None, sa_type=LargeBinary(32))

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone, tzinfo
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from zoneinfo import ZoneInfo
 
 from dateutil import parser as _dateutil_parser
@@ -6,10 +6,10 @@ from dateutil.parser import ParserError
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
 
-_UTC_LOWEST = datetime(1000, 1, 1, tzinfo=timezone.utc).replace(
+_UTC_LOWEST = datetime(1000, 1, 1, tzinfo=UTC).replace(
     tzinfo=None
 )  # MySQL DATETIME min
-_UTC_LARGEST = datetime(9999, 12, 31, 23, 59, 59, tzinfo=timezone.utc).replace(
+_UTC_LARGEST = datetime(9999, 12, 31, 23, 59, 59, tzinfo=UTC).replace(
     tzinfo=None
 )  # MySQL DATETIME max
 
@@ -21,7 +21,7 @@ def utc_now(microsecond: bool = False) -> datetime:
         microsecond: If True, keeps microsecond precision (for DATETIME(6) columns).
                      If False (default), truncates to seconds (for plain DATETIME columns).
     """
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     return now if microsecond else now.replace(microsecond=0)
 
 
@@ -40,7 +40,7 @@ def utc_largest() -> datetime:
 
 
 
-def to_tz(dt: datetime, tz: tzinfo | str | None = timezone.utc) -> datetime:
+def to_tz(dt: datetime, tz: tzinfo | str | None = UTC) -> datetime:
     """Convert dt to the given timezone.
 
     - Aware datetimes: converted to tz (instant preserved, e.g. values from UTCDateTime columns).
@@ -140,11 +140,17 @@ class UTCDateTime(TypeDecorator):
     impl = DateTime
     cache_ok = True
 
+    def __init__(self, fsp: int | None = None):
+        if fsp is not None:
+            from sqlalchemy.dialects.mysql import DATETIME as MySQLDATETIME
+            self.impl = MySQLDATETIME(fsp=fsp)
+        super().__init__()
+
     def process_bind_param(self, value: datetime | None, dialect) -> datetime | None:
         if value is None:
             return None
         if value.tzinfo is not None:
-            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+            value = value.astimezone(UTC).replace(tzinfo=None)
         return value
 
     def process_result_value(self, value: datetime | None, dialect) -> datetime | None:
