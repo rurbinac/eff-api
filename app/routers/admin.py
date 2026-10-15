@@ -662,8 +662,8 @@ def admin_list_processes(db: DbSession, current_user: CurrentUser, process_type:
             "prevProcessID": r.prevProcessID,
             "processType": r.processType,
             "processName": r.processName,
-            "startDate": to_iso(r.startDate),
-            "finishDate": to_iso(r.finishDate) if r.finishDate else None,
+            "startDate": to_iso(r.startDate, timespec="microseconds"),
+            "finishDate": to_iso(r.finishDate, timespec="microseconds") if r.finishDate else None,
             "duration": r.duration,
             "versions": r.versions,
             "tasks": r.tasks,
@@ -674,5 +674,5 @@ def admin_list_processes(db: DbSession, current_user: CurrentUser, process_type:
 @router.get("/api/v1/admin/processes/types")
 def admin_list_process_types(db: DbSession, current_user: CurrentUser):
     require_admin(db, current_user)
-    rows = db.exec(select(Process.processType).distinct()).all()
+    rows = db.execute(select(Process.processType).distinct()).scalars().all()
     return sorted(rows)
