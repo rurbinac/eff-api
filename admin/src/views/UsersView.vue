@@ -1,11 +1,14 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { mdiAccountGroup } from '@mdi/js'
 import SectionMain from '@/components/SectionMain.vue'
 import SectionTitleLineWithButton from '@/components/SectionTitleLineWithButton.vue'
 import CardBox from '@/components/CardBox.vue'
 import LayoutAuthenticated from '@/layouts/LayoutAuthenticated.vue'
 import api from '@/api.js'
+
+const router = useRouter()
 
 const users = ref([])
 const loading = ref(true)
@@ -51,11 +54,12 @@ onMounted(async () => {
               <th class="py-2 px-3 text-left font-semibold text-gray-600 dark:text-slate-300">Level</th>
               <th class="py-2 px-3 text-left font-semibold text-gray-600 dark:text-slate-300 hidden lg:table-cell">Last sign-in</th>
               <th class="py-2 px-3 text-left font-semibold text-gray-600 dark:text-slate-300 hidden lg:table-cell">Last IP</th>
+              <th class="py-2 px-3"></th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="6" class="py-4 px-3 text-gray-400">Loading…</td>
+              <td colspan="7" class="py-4 px-3 text-gray-400">Loading…</td>
             </tr>
             <tr
               v-for="user in users"
@@ -77,6 +81,16 @@ onMounted(async () => {
               </td>
               <td class="py-2 px-3 text-gray-500 dark:text-slate-400 hidden lg:table-cell">{{ fmtDate(user.lastSignInDate) }}</td>
               <td class="py-2 px-3 font-mono text-xs text-gray-400 hidden lg:table-cell">{{ user.lastSignInIP || '—' }}</td>
+              <td class="py-2 px-3 text-right whitespace-nowrap">
+                <button
+                  class="mr-1 rounded px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                  @click="router.push({ name: 'user-detail', params: { id: user.userID } })"
+                >Detail</button>
+                <button
+                  class="rounded px-2 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50"
+                  @click="router.push({ name: 'leagues', query: { userId: user.userID } })"
+                >Leagues</button>
+              </td>
             </tr>
           </tbody>
         </table>

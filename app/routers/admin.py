@@ -119,6 +119,36 @@ def admin_list_users(db: DbSession, current_user: CurrentUser) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+@router.get("/api/v1/admin/users/{user_id}")
+def admin_get_user(user_id: int, db: DbSession, current_user: CurrentUser) -> dict:
+    """Get full detail for a single user (no password)."""
+    require_admin(db, current_user)
+    row = db.execute(
+        select(
+            User.userID,
+            User.userEmail,
+            User.userName,
+            User.firstName,
+            User.lastName,
+            User.userLevel,
+            User.birthday,
+            User.country,
+            User.state,
+            User.city,
+            User.phoneNumber,
+            User.timeZone,
+            User.favoriteTeam,
+            User.lastSignInDate,
+            User.lastSignInIP,
+            User.createdIn,
+            User.updatedIn,
+        ).where(User.userID == user_id)
+    ).mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return dict(row)
+
+
 @router.get("/api/v1/admin/match-day-statuses/seasons")
 def admin_mds_seasons(db: DbSession, current_user: CurrentUser) -> list[str]:
     """Distinct season IDs in MatchDaysStatus, newest first."""
@@ -215,19 +245,31 @@ def admin_get_competitions(db: DbSession, current_user: CurrentUser) -> dict:
 
 
 @router.get("/api/v1/admin/leagues")
-def admin_list_leagues(db: DbSession, current_user: CurrentUser) -> list[dict]:
-    """List all leagues."""
+def admin_list_leagues(
+    db: DbSession,
+    current_user: CurrentUser,
+    user_id: int | None = None,
+) -> list[dict]:
+    """List leagues, optionally filtered to those where a user has a team."""
     require_admin(db, current_user)
-    rows = db.execute(
-        select(
-            League.leagueID,
-            League.leagueName,
-            League.season,
-            League.seasonNum,
-            League.commissionerID,
-            League.numDivisions,
-        ).order_by(League.leagueID.desc())
-    ).mappings().all()
+    q = select(
+        League.leagueID,
+        League.leagueName,
+        League.season,
+        League.seasonNum,
+        League.commissionerID,
+        League.numDivisions,
+    ).order_by(League.leagueID.desc())
+    if user_id is not None:
+        user_league_ids = (
+            select(Division.leagueID)
+            .join(Team, Team.divisionID == Division.divisionID)
+            .where(Team.userID == user_id)
+            .distinct()
+            .scalar_subquery()
+        )
+        q = q.where(League.leagueID.in_(user_league_ids))
+    rows = db.execute(q).mappings().all()
     return [dict(r) for r in rows]
 
 

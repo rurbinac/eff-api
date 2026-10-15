@@ -1,19 +1,27 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { mdiSoccerField } from '@mdi/js'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { mdiSoccerField, mdiArrowLeft } from '@mdi/js'
 import SectionMain from '@/components/SectionMain.vue'
 import SectionTitleLineWithButton from '@/components/SectionTitleLineWithButton.vue'
 import CardBox from '@/components/CardBox.vue'
 import LayoutAuthenticated from '@/layouts/LayoutAuthenticated.vue'
 import api from '@/api.js'
 
+const route = useRoute()
+const router = useRouter()
+
 const leagues = ref([])
 const loading = ref(true)
 const error = ref(null)
 
+const userId = computed(() => route.query.userId ? Number(route.query.userId) : null)
+const title = computed(() => userId.value ? `Leagues — user #${userId.value}` : 'Leagues')
+
 onMounted(async () => {
   try {
-    const res = await api.get('/api/v1/admin/leagues')
+    const params = userId.value ? { user_id: userId.value } : {}
+    const res = await api.get('/api/v1/admin/leagues', { params })
     leagues.value = res.data
   } catch (e) {
     error.value = e.response?.data?.detail || 'Failed to load leagues.'
@@ -26,7 +34,18 @@ onMounted(async () => {
 <template>
   <LayoutAuthenticated>
     <SectionMain>
-      <SectionTitleLineWithButton :icon="mdiSoccerField" title="Leagues" main />
+      <SectionTitleLineWithButton :icon="mdiSoccerField" :title="title" main>
+        <button
+          v-if="userId"
+          class="flex items-center gap-1 rounded px-3 py-1 text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+          @click="router.push({ name: 'user-detail', params: { id: userId } })"
+        >
+          <svg viewBox="0 0 24 24" class="w-4 h-4 fill-current" xmlns="http://www.w3.org/2000/svg">
+            <path :d="mdiArrowLeft" />
+          </svg>
+          User
+        </button>
+      </SectionTitleLineWithButton>
 
       <p v-if="error" class="mb-4 text-red-500">{{ error }}</p>
 

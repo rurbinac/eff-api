@@ -21,6 +21,12 @@ const routes = [
     component: () => import('@/views/UsersView.vue'),
   },
   {
+    meta: { title: 'User Detail' },
+    path: '/users/:id',
+    name: 'user-detail',
+    component: () => import('@/views/UserDetailView.vue'),
+  },
+  {
     meta: { title: 'Leagues & Divisions' },
     path: '/leagues',
     name: 'leagues',
