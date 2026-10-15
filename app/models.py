@@ -780,24 +780,6 @@ class TeamMemberLog(SQLModel, table=True):
     createdIn: datetime = Field(sa_type=UTCDateTime())
 
 
-class Feed(SQLModel, table=True):
-    __tablename__ = "Feeds"
-
-    feedID: int | None = Field(default=None, primary_key=True)
-    feedName: str | None = Field(default=None, max_length=128)
-    feedType: str = Field(max_length=4)
-    versions: int = Field(default=1)
-    startDate: datetime = Field(sa_type=UTCDateTime())
-    endDate: datetime | None = Field(default=None, sa_type=UTCDateTime())
-    duration: float | None = None
-    results: dict | None = Field(default=None, sa_type=JSON)
-    size: int = Field(default=0)
-    totalSize: int = Field(default=0)
-    sha256: bytes | None = Field(default=None, sa_type=LargeBinary(32))
-    compressedName: str | None = Field(default=None, max_length=128)
-    createdIn: datetime = Field(default_factory=datetime.utcnow, sa_type=UTCDateTime())
-    updatedIn: datetime | None = Field(default=None, sa_type=UTCDateTime())
-
 
 class Process(SQLModel, table=True):
     __tablename__ = "Processes"
