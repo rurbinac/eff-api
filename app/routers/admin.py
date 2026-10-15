@@ -654,7 +654,7 @@ def admin_list_processes(db: DbSession, current_user: CurrentUser, process_type:
     q = select(Process).order_by(Process.startDate.desc()).limit(500)
     if process_type:
         q = q.where(Process.processType == process_type)
-    rows = db.exec(q).all()
+    rows = db.execute(q).scalars().all()
     result = []
     for r in rows:
         result.append({
