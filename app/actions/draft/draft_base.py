@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Any, Protocol
+import logging
 
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.actions.draft.draft_exception import (
     CannotDraftYetException,
@@ -243,6 +246,8 @@ class DraftStart(DraftCommand):
         """
         now = self.start_time()
         draftTime = DraftConstants.DRAFT_TIME
+        fm_before = self.division.get("franchiseMembers")
+        logger.warning("DraftStart: franchiseMembers before=%r", fm_before)
         self.set_division_values(
             {
                 "draftStatus": DraftConstants.DRAFT_STATUS_DRAFTING,
@@ -258,6 +263,8 @@ class DraftStart(DraftCommand):
             },
             save_old=True,
         )
+        fm_after = self.division.get("franchiseMembers")
+        logger.warning("DraftStart: franchiseMembers after=%r", fm_after)
 
 
 class DraftPause(DraftCommand):
