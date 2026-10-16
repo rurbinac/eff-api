@@ -488,6 +488,74 @@ def admin_list_real_matches(
     return result
 
 
+@router.get("/api/v1/admin/real-matches/{match_id}")
+def admin_get_real_match(match_id: int, db: DbSession, current_user: CurrentUser) -> dict:
+    """Full detail for one real match: match fields, both teams, and events."""
+    require_admin(db, current_user)
+
+    match_q = text("""
+        SELECT
+            m.realMatchID, m.realMatchStatus, m.realMatchType,
+            m.realMatchPeriod, m.realMatchRealPeriod,
+            m.realMatchDate, m.realMatchDateOffset,
+            m.realMatchAttendance, m.realMatchResultType,
+            m.realMatchTime, m.realMatchFirstHalfTime, m.realMatchSecondHalfTime,
+            m.realMatchFirstHalfExtraTime, m.realMatchSecondHalfExtraTime,
+            m.realMatchEnded, m.realMatchIgnore,
+            m.realCompetitionSYMID, m.realCompetitionSeasonId, m.realCompetitionMatchDay,
+            m.enabled,
+            m.lastF7Date, m.lastF42Date, m.lastFDate,
+            t1.realMatchTeamID AS firstTeamID, t1.realTeamSide AS firstSide,
+            t1.realTeamName AS firstName, t1.realTeamShortName AS firstShortName,
+            t1.realTeamScore AS firstScore, t1.realTeamRealScore AS firstRealScore,
+            t1.realTeamCleanSheet AS firstCleanSheet, t1.realTeamResult AS firstResult,
+            t1.realTeamPoints AS firstPoints,
+            t2.realMatchTeamID AS secondTeamID, t2.realTeamSide AS secondSide,
+            t2.realTeamName AS secondName, t2.realTeamShortName AS secondShortName,
+            t2.realTeamScore AS secondScore, t2.realTeamRealScore AS secondRealScore,
+            t2.realTeamCleanSheet AS secondCleanSheet, t2.realTeamResult AS secondResult,
+            t2.realTeamPoints AS secondPoints
+        FROM RealMatches m
+        JOIN RealMatchTeams t1 ON t1.realMatchID = m.realMatchID AND t1.realTeamNumber = 1
+        JOIN RealMatchTeams t2 ON t2.realMatchID = m.realMatchID AND t2.realTeamNumber = 2
+        WHERE m.realMatchID = :match_id
+    """)
+    match_row = db.execute(match_q, {"match_id": match_id}).mappings().first()
+    if not match_row:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    match = dict(match_row)
+    for dt_col in ("realMatchDate", "lastF7Date", "lastF42Date", "lastFDate"):
+        match[dt_col] = to_iso(match[dt_col])
+
+    events_q = text("""
+        SELECT
+            e.realMatchEventID, e.realMatchTeamID,
+            e.eventPosition, e.eventPeriod, e.eventTime,
+            e.eventMin, e.eventSec, e.eventNumber,
+            e.eventTimeStamp, e.eventReason, e.eventType, e.eventClass,
+            COALESCE(tm.knownName, tm.name, CONCAT(tm.firstName, ' ', tm.lastName)) AS playerName,
+            mt.realTeamName AS teamName, mt.realTeamSide AS teamSide
+        FROM RealMatchEvents e
+        LEFT JOIN RealTeamMembers tm ON tm.realPlayerID = e.realPlayerID
+            AND tm.baseRealCompetitionID = (
+                SELECT realCompetitionID FROM RealMatches WHERE realMatchID = :match_id
+            )
+        JOIN RealMatchTeams mt ON mt.realMatchTeamID = e.realMatchTeamID
+        WHERE e.realMatchID = :match_id
+        ORDER BY e.eventPosition
+    """)
+    event_rows = db.execute(events_q, {"match_id": match_id}).mappings().all()
+    events = []
+    for r in event_rows:
+        ev = dict(r)
+        ev["eventTimeStamp"] = to_iso(ev["eventTimeStamp"])
+        events.append(ev)
+
+    match["events"] = events
+    return match
+
+
 # ---------------------------------------------------------------------------
 # Real Team Members (JWT auth)
 # ---------------------------------------------------------------------------

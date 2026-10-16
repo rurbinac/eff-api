@@ -1,11 +1,14 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { mdiSoccer } from '@mdi/js'
+import { useRouter } from 'vue-router'
 import SectionMain from '@/components/SectionMain.vue'
 import SectionTitleLineWithButton from '@/components/SectionTitleLineWithButton.vue'
 import CardBox from '@/components/CardBox.vue'
 import LayoutAuthenticated from '@/layouts/LayoutAuthenticated.vue'
 import api from '@/api.js'
+
+const router = useRouter()
 
 const competitions = ref([])
 const selectedKey = ref('')   // "SYMID|seasonId"
@@ -101,6 +104,7 @@ onMounted(async () => {
               <th class="py-2 px-3 text-right font-semibold text-gray-600 dark:text-slate-300 hidden lg:table-cell" rowspan="2">Attendance</th>
               <th class="py-2 px-3 text-center font-semibold text-blue-600 dark:text-blue-400 border-l border-gray-200 dark:border-slate-700" colspan="3">First Team</th>
               <th class="py-2 px-3 text-center font-semibold text-blue-600 dark:text-blue-400 border-l border-gray-200 dark:border-slate-700" colspan="3">Second Team</th>
+              <th class="py-2 px-2" rowspan="2"></th>
             </tr>
             <tr class="border-b border-gray-100 dark:border-slate-700">
               <th class="py-1 px-2 text-center font-medium text-gray-500 dark:text-slate-400 text-xs border-l border-gray-200 dark:border-slate-700">H/A</th>
@@ -113,10 +117,10 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-if="loading && !rows.length">
-              <td colspan="10" class="py-4 px-3 text-gray-400">Loading…</td>
+              <td colspan="11" class="py-4 px-3 text-gray-400">Loading…</td>
             </tr>
             <tr v-else-if="!loading && !rows.length">
-              <td colspan="10" class="py-4 px-3 text-gray-400">No matches found.</td>
+              <td colspan="11" class="py-4 px-3 text-gray-400">No matches found.</td>
             </tr>
             <tr
               v-for="row in rows"
@@ -135,6 +139,12 @@ onMounted(async () => {
               <td class="py-2 px-2 text-center font-mono text-xs text-gray-500 dark:text-slate-400 border-l border-gray-100 dark:border-slate-800">{{ row.secondSide ?? '?' }}</td>
               <td class="py-2 px-3 text-gray-800 dark:text-slate-200">{{ teamLabel(row.secondName, row.secondShortName) }}</td>
               <td class="py-2 px-2 text-center font-bold text-gray-900 dark:text-slate-100">{{ row.secondScore ?? '—' }}</td>
+              <td class="py-2 px-2 whitespace-nowrap">
+                <button
+                  class="text-xs px-2 py-0.5 rounded border border-blue-400 text-blue-600 dark:text-blue-400 dark:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                  @click="router.push({ name: 'real-match-detail', params: { id: row.realMatchID } })"
+                >Detail</button>
+              </td>
             </tr>
           </tbody>
         </table>

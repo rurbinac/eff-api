@@ -57,6 +57,12 @@ const routes = [
     component: () => import('@/views/RealMatchesView.vue'),
   },
   {
+    meta: { title: 'Match Detail' },
+    path: '/real-matches/:id',
+    name: 'real-match-detail',
+    component: () => import('@/views/RealMatchDetailView.vue'),
+  },
+  {
     meta: { title: 'Real Team Members' },
     path: '/real-team-members',
     name: 'real-team-members',
