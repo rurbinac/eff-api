@@ -254,7 +254,7 @@ class DraftStart(DraftCommand):
                 "draftingTeamOrder": 1,
                 "draftingNextTeamOrder": 2,
                 "draftTime": draftTime,
-                "franchiseMembers": None,
+                "franchiseMembers": "",
             },
             save_old=True,
         )
