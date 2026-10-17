@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { mdiChartBar } from '@mdi/js'
 import SectionMain from '@/components/SectionMain.vue'
 import SectionTitleLineWithButton from '@/components/SectionTitleLineWithButton.vue'
@@ -7,6 +8,7 @@ import CardBox from '@/components/CardBox.vue'
 import LayoutAuthenticated from '@/layouts/LayoutAuthenticated.vue'
 import api from '@/api.js'
 
+const route = useRoute()
 const seasons = ref([])
 const selectedSeason = ref('')
 const matchDays = ref([])
@@ -64,7 +66,10 @@ onMounted(async () => {
     const res = await api.get('/api/v1/admin/real-standings/seasons')
     seasons.value = res.data
     if (res.data.length) {
-      selectedSeason.value = res.data[0]
+      const querySeason = route.query.season_id
+      selectedSeason.value = (querySeason && res.data.includes(querySeason))
+        ? querySeason
+        : res.data[0]
       fetchMatchDays(selectedSeason.value)
     }
   } catch (e) {

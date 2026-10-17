@@ -59,11 +59,12 @@ onMounted(async () => {
               <th class="py-2 px-3 text-left font-semibold text-gray-600 dark:text-slate-300 hidden lg:table-cell">Season #</th>
               <th class="py-2 px-3 text-left font-semibold text-gray-600 dark:text-slate-300 hidden lg:table-cell">Divisions</th>
               <th class="py-2 px-3 text-left font-semibold text-gray-600 dark:text-slate-300 hidden lg:table-cell">Commissioner ID</th>
+              <th class="py-2 px-3"></th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="6" class="py-4 px-3 text-gray-400">Loading…</td>
+              <td colspan="7" class="py-4 px-3 text-gray-400">Loading…</td>
             </tr>
             <tr
               v-for="league in leagues"
@@ -76,6 +77,18 @@ onMounted(async () => {
               <td class="py-2 px-3 text-gray-500 dark:text-slate-400 hidden lg:table-cell">{{ league.seasonNum }}</td>
               <td class="py-2 px-3 text-gray-500 dark:text-slate-400 hidden lg:table-cell">{{ league.numDivisions }}</td>
               <td class="py-2 px-3 font-mono text-xs text-gray-400 hidden lg:table-cell">{{ league.commissionerID }}</td>
+              <td class="py-2 px-3">
+                <div class="flex items-center gap-1 justify-end flex-wrap">
+                  <button
+                    class="rounded px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 whitespace-nowrap"
+                    @click.stop="router.push({ name: 'league-divisions', params: { id: league.leagueID }, query: { name: league.leagueName } })"
+                  >Divisions</button>
+                  <button
+                    class="rounded px-2 py-0.5 text-xs font-medium bg-purple-50 text-purple-600 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50 whitespace-nowrap"
+                    @click.stop="router.push({ name: 'league-matches', params: { id: league.leagueID }, query: { name: league.leagueName } })"
+                  >Matches</button>
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>

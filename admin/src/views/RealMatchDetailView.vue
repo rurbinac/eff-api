@@ -14,6 +14,7 @@ const router = useRouter()
 const match = ref(null)
 const loading = ref(true)
 const error = ref(null)
+const activeTab = ref('players')
 
 const title = computed(() => {
   if (!match.value) return 'Match Detail'
@@ -50,11 +51,32 @@ const resultLabel = (r) => {
 
 const eventIcon = (reason) => {
   const r = (reason || '').toLowerCase()
-  if (r === 'yellow card') return '🟨'
-  if (r === 'red card' || r === 'yellow/red card') return '🟥'
-  if (r === 'goal' || r === 'own goal') return '⚽'
-  if (r === 'substitution') return '🔄'
+  if (r.includes('goal')) return '⚽'
+  if (r.includes('red')) return '🟥'
+  if (r.includes('yellow')) return '🟨'
+  if (r.includes('sub') || r.includes('tactical')) return '🔄'
   return '•'
+}
+
+const playersByTeam = computed(() => {
+  if (!match.value?.players) return []
+  const groups = {}
+  for (const p of match.value.players) {
+    const key = p.realTeamID
+    if (!groups[key]) groups[key] = { name: p.realTeamName, side: p.realTeamSide, players: [] }
+    groups[key].players.push(p)
+  }
+  return Object.values(groups).sort((a, b) => a.side.localeCompare(b.side))
+})
+
+const statIcon = (p) => {
+  const parts = []
+  if (p.matchGoals) parts.push(`${'⚽'.repeat(p.matchGoals)}`)
+  if (p.matchAssists) parts.push(`${'🅰️'.repeat(p.matchAssists)}`)
+  if (p.matchYellowCards) parts.push('🟨'.repeat(p.matchYellowCards))
+  if (p.matchRedCards) parts.push('🟥')
+  if (p.matchCleanSheet) parts.push('🧤')
+  return parts.join(' ')
 }
 
 onMounted(async () => {
@@ -179,11 +201,58 @@ onMounted(async () => {
           </CardBox>
         </div>
 
-        <!-- Events -->
-        <CardBox has-table>
-          <div class="px-3 py-2 border-b border-gray-100 dark:border-slate-700 font-semibold text-sm text-gray-700 dark:text-slate-200">
-            Events ({{ match.events.length }})
+        <!-- Tab bar -->
+        <div class="flex gap-1 mb-3 border-b border-gray-200 dark:border-slate-700">
+          <button
+            v-for="tab in [{ key: 'players', label: `Players (${match.players.length})` }, { key: 'events', label: `Events (${match.events.length})` }]"
+            :key="tab.key"
+            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors"
+            :class="activeTab === tab.key
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'"
+            @click="activeTab = tab.key"
+          >{{ tab.label }}</button>
+        </div>
+
+        <!-- Players tab -->
+        <template v-if="activeTab === 'players'">
+          <div v-if="!match.players.length" class="py-4 text-sm text-gray-400">No player data.</div>
+          <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardBox v-for="group in playersByTeam" :key="group.name" has-table>
+              <div class="px-3 py-2 border-b border-gray-100 dark:border-slate-700 font-semibold text-sm text-gray-700 dark:text-slate-200">
+                {{ group.name }} <span class="text-xs font-normal text-gray-400">({{ group.side }})</span>
+              </div>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-gray-100 dark:border-slate-700 text-xs">
+                    <th class="py-1.5 px-3 text-left font-semibold text-gray-500 dark:text-slate-400">Player</th>
+                    <th class="py-1.5 px-3 text-left font-semibold text-gray-500 dark:text-slate-400 hidden sm:table-cell">Pos</th>
+                    <th class="py-1.5 px-3 text-right font-semibold text-gray-500 dark:text-slate-400">Min</th>
+                    <th class="py-1.5 px-3 text-right font-semibold text-gray-500 dark:text-slate-400 hidden md:table-cell">Pts</th>
+                    <th class="py-1.5 px-3 text-left font-semibold text-gray-500 dark:text-slate-400"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="p in group.players"
+                    :key="p.realStandingID"
+                    class="border-b border-gray-50 dark:border-slate-800"
+                    :class="{ 'opacity-50': !p.matchGamePlayed }"
+                  >
+                    <td class="py-1.5 px-3 text-gray-800 dark:text-slate-200">{{ p.playerName }}</td>
+                    <td class="py-1.5 px-3 text-xs text-gray-400 hidden sm:table-cell">{{ p.draftPosition || p.position }}</td>
+                    <td class="py-1.5 px-3 text-right font-mono text-xs text-gray-500 dark:text-slate-400">{{ p.matchTimePlayed ?? '—' }}</td>
+                    <td class="py-1.5 px-3 text-right font-mono text-xs text-gray-500 dark:text-slate-400 hidden md:table-cell">{{ p.matchPointsL1 ?? '—' }}</td>
+                    <td class="py-1.5 px-3 text-sm">{{ statIcon(p) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </CardBox>
           </div>
+        </template>
+
+        <!-- Events tab -->
+        <CardBox v-else has-table>
           <div v-if="!match.events.length" class="px-3 py-4 text-sm text-gray-400">No events.</div>
           <table v-else class="w-full text-sm">
             <thead>

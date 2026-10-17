@@ -1,13 +1,14 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { mdiSoccer } from '@mdi/js'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import SectionMain from '@/components/SectionMain.vue'
 import SectionTitleLineWithButton from '@/components/SectionTitleLineWithButton.vue'
 import CardBox from '@/components/CardBox.vue'
 import LayoutAuthenticated from '@/layouts/LayoutAuthenticated.vue'
 import api from '@/api.js'
 
+const route = useRoute()
 const router = useRouter()
 
 const competitions = ref([])
@@ -61,10 +62,13 @@ onMounted(async () => {
   try {
     const res = await api.get('/api/v1/admin/real-competitions')
     competitions.value = res.data
-    if (res.data.length) {
+    const queryKey = route.query.key
+    if (queryKey && res.data.some(c => compKey(c) === queryKey)) {
+      selectedKey.value = queryKey
+    } else if (res.data.length) {
       selectedKey.value = compKey(res.data[0])
-      fetchMatches(selectedKey.value)
     }
+    if (selectedKey.value) fetchMatches(selectedKey.value)
   } catch (e) {
     error.value = e.response?.data?.detail || 'Failed to load competitions.'
   }

@@ -9,7 +9,18 @@ from sqlalchemy import select, text
 from app.config import settings
 from app.database import CurrentUser, DbSession
 from app.guards import require_admin, require_division
-from app.models import Division, League, MatchDaysMap, MatchDaysStatus, Process, RealCompetition, RealStanding, RealTeamMember, Team, User
+from app.models import (
+    Division,
+    League,
+    MatchDaysMap,
+    MatchDaysStatus,
+    Process,
+    RealCompetition,
+    RealStanding,
+    RealTeamMember,
+    Team,
+    User,
+)
 from app.services.query import QueryService
 from app.utils.dt import to_iso, utc_now
 
@@ -32,7 +43,7 @@ def _check_token(authorization: str | None) -> None:
 
 def _sql_service():
     from google.auth import default
-    from googleapiclient import discovery
+    from googleapiclient import discovery  # type: ignore
 
     credentials, _ = default(scopes=["https://www.googleapis.com/auth/sqlservice.admin"])
     return discovery.build("sqladmin", "v1", credentials=credentials, cache_discovery=False)
@@ -280,6 +291,41 @@ def admin_list_divisions(league_id: int, db: DbSession, current_user: CurrentUse
     return QueryService.get_divisions_by_league(db, league_id)
 
 
+@router.get("/api/v1/admin/leagues/{league_id}/matches")
+def admin_list_league_matches(
+    league_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    competition_type: int | None = None,
+) -> list[dict]:
+    """List matches for a league, joined with both MatchTeam rows."""
+    require_admin(db, current_user)
+    where = "m.leagueID = :league_id"
+    params: dict = {"league_id": league_id}
+    if competition_type is not None:
+        where += " AND m.competitionType = :competition_type"
+        params["competition_type"] = competition_type
+    rows = db.execute(text(f"""
+        SELECT
+            m.matchID, m.matchStatus, m.competitionType,
+            m.divisionID, m.season, m.seasonNum,
+            m.realCompetitionMatchDay, m.competitionMatchDay,
+            m.competitionMatchNumber, m.competitionMatchGroup,
+            t1.matchTeamID AS homeTeamID, t1.teamName AS homeName,
+            t1.teamScore AS homeScore, t1.teamPoints AS homePoints,
+            t1.userID AS homeUserID,
+            t2.matchTeamID AS awayTeamID, t2.teamName AS awayName,
+            t2.teamScore AS awayScore, t2.teamPoints AS awayPoints,
+            t2.userID AS awayUserID
+        FROM Matches m
+        JOIN MatchTeams t1 ON t1.matchID = m.matchID AND t1.matchTeamNum = 1
+        JOIN MatchTeams t2 ON t2.matchID = m.matchID AND t2.matchTeamNum = 2
+        WHERE {where}
+        ORDER BY m.competitionMatchDay, m.matchID
+    """), params).mappings().all()
+    return [dict(r) for r in rows]
+
+
 @router.get("/api/v1/admin/divisions/{division_id}")
 def admin_get_division(division_id: int, db: DbSession, current_user: CurrentUser) -> dict:
     """Get a single division."""
@@ -440,6 +486,28 @@ def admin_list_real_competitions(db: DbSession, current_user: CurrentUser) -> li
     return [dict(r) for r in rows]
 
 
+@router.get("/api/v1/admin/real-competitions/{competition_id}")
+def admin_get_real_competition(competition_id: int, db: DbSession, current_user: CurrentUser) -> dict:
+    require_admin(db, current_user)
+    row = db.execute(
+        select(
+            RealCompetition.realCompetitionID,
+            RealCompetition.realCompetitionUID,
+            RealCompetition.realCompetitionSYMID,
+            RealCompetition.realCompetitionName,
+            RealCompetition.realCompetitionCountry,
+            RealCompetition.realCompetitionSeasonId,
+            RealCompetition.realCompetitionSeasonName,
+            RealCompetition.realCompetitionLastMatchDay,
+            RealCompetition.baseRealCompetitionID,
+            RealCompetition.extraRealCompetitionID,
+        ).where(RealCompetition.realCompetitionID == competition_id)
+    ).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Competition not found")
+    return dict(row)
+
+
 # ---------------------------------------------------------------------------
 # Real Matches (JWT auth)
 # ---------------------------------------------------------------------------
@@ -553,6 +621,25 @@ def admin_get_real_match(match_id: int, db: DbSession, current_user: CurrentUser
         events.append(ev)
 
     match["events"] = events
+
+    players_q = text("""
+        SELECT
+            s.realStandingID, s.realPlayerID,
+            s.realTeamID, s.realTeamName, s.realTeamShortName, s.realTeamSide,
+            COALESCE(s.knownName, s.name, CONCAT(s.firstName, ' ', s.lastName)) AS playerName,
+            s.position, s.draftPosition, s.draftPositionOrder,
+            s.matchTimePlayed, s.matchGamePlayed,
+            s.matchGoals, s.matchAssists,
+            s.matchYellowCards, s.matchRedCards,
+            s.matchGoalsConceded, s.matchCleanSheet,
+            s.matchPointsL1
+        FROM RealStandings s
+        WHERE s.realMatchID = :match_id AND s.isPlayer = 1
+        ORDER BY s.realTeamID, s.draftPositionOrder, s.sortName
+    """)
+    player_rows = db.execute(players_q, {"match_id": match_id}).mappings().all()
+    match["players"] = [dict(r) for r in player_rows]
+
     return match
 
 

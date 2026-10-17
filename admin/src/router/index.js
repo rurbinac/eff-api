@@ -33,6 +33,18 @@ const routes = [
     component: () => import('@/views/LeaguesView.vue'),
   },
   {
+    meta: { title: 'League Divisions' },
+    path: '/leagues/:id/divisions',
+    name: 'league-divisions',
+    component: () => import('@/views/LeagueDivisionsView.vue'),
+  },
+  {
+    meta: { title: 'League Matches' },
+    path: '/leagues/:id/matches',
+    name: 'league-matches',
+    component: () => import('@/views/LeagueMatchesView.vue'),
+  },
+  {
     meta: { title: 'Match Day Status' },
     path: '/match-day-statuses',
     name: 'match-day-statuses',
@@ -43,6 +55,12 @@ const routes = [
     path: '/real-competitions',
     name: 'real-competitions',
     component: () => import('@/views/RealCompetitionsView.vue'),
+  },
+  {
+    meta: { title: 'Competition Detail' },
+    path: '/real-competitions/:id',
+    name: 'real-competition-detail',
+    component: () => import('@/views/RealCompetitionDetailView.vue'),
   },
   {
     meta: { title: 'Match Days Map' },
