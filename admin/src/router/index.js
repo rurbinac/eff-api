@@ -99,6 +99,12 @@ const routes = [
     component: () => import('@/views/RealStandingsView.vue'),
   },
   {
+    meta: { title: 'Standing Detail' },
+    path: '/real-standings/:id',
+    name: 'real-standing-detail',
+    component: () => import('@/views/RealStandingDetailView.vue'),
+  },
+  {
     meta: { title: 'Processes' },
     path: '/processes',
     name: 'processes',

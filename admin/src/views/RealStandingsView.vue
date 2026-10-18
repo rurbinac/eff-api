@@ -143,7 +143,7 @@ onMounted(async () => {
               <td class="py-2 px-3 text-right">
                 <button
                   class="rounded px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
-                  @click="router.push({ name: 'real-team-member-detail', params: { key: row.realTeamMemberKey } })"
+                  @click="router.push({ name: 'real-standing-detail', params: { id: row.realStandingID } })"
                 >Detail</button>
               </td>
             </tr>

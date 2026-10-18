@@ -770,7 +770,9 @@ def admin_list_real_standings(
         return []
     rows = db.execute(
         select(
+            RealStanding.realStandingID,
             RealStanding.realTeamMemberKey,
+            RealStanding.isPlayer,
             RealStanding.name,
             RealStanding.position,
             RealStanding.realTeamName,
@@ -781,6 +783,56 @@ def admin_list_real_standings(
         .order_by(RealStanding.sortName)
     ).mappings().all()
     return [dict(r) for r in rows]
+
+
+@router.get("/api/v1/admin/real-standings/{standing_id}")
+def admin_get_real_standing(standing_id: int, db: DbSession, current_user: CurrentUser) -> dict:
+    """Full detail for one RealStanding row."""
+    require_admin(db, current_user)
+    row = db.execute(text("""
+        SELECT
+            s.realStandingID, s.realTeamMemberID, s.realTeamMemberKey,
+            s.realCompetitionID, s.realCompetitionSYMID,
+            s.realCompetitionSeasonId, s.realCompetitionMatchDay,
+            s.realCompetitionLastMatchDay, s.baseMatchDay,
+            s.isTeam, s.isPlayer,
+            s.realMatchID, s.realMatchDate, s.realMatchStatus,
+            s.realTeamID, s.realTeamName, s.realTeamShortName,
+            s.realTeamScore, s.realTeamSide,
+            s.oppositeRealTeamID, s.oppositeRealTeamName,
+            s.oppositeRealTeamShortName, s.oppositeRealTeamScore,
+            s.realPlayerID, s.realPlayerUID,
+            s.firstName, s.lastName, s.knownName, s.name, s.sortName,
+            s.position, s.draftPosition, s.draftPositionOrder,
+            s.matchTimePlayed, s.matchGamePlayed,
+            s.matchGoals, s.matchAssists,
+            s.matchYellowCards, s.matchRedCards,
+            s.matchGoalsConceded, s.matchCleanSheet,
+            s.matchDayPlayed, s.matchWon, s.matchDraw, s.matchLost,
+            s.matchPointsL1Played, s.matchPointsL1Goals, s.matchPointsL1Assists,
+            s.matchPointsL1Cards, s.matchPointsL1CleanSheet,
+            s.matchPointsL1GoalsAllowed, s.matchPointsL1OwnGoals, s.matchPointsL1,
+            s.timePlayed, s.gamePlayed,
+            s.goals, s.assists, s.yellowCards, s.redCards,
+            s.goalsConceded, s.cleanSheet,
+            s.played, s.won, s.draw, s.lost,
+            s.goalsFor, s.goalsAgainst, s.place,
+            s.playedHome, s.wonHome, s.drawHome, s.lostHome,
+            s.goalsForHome, s.goalsAgainstHome, s.placeHome,
+            s.playedAway, s.wonAway, s.drawAway, s.lostAway,
+            s.goalsForAway, s.goalsAgainstAway, s.placeAway,
+            s.pointsL1Played, s.pointsL1Goals, s.pointsL1Assists,
+            s.pointsL1Cards, s.pointsL1CleanSheet,
+            s.pointsL1GoalsAllowed, s.pointsL1OwnGoals, s.pointsL1,
+            s.livePointsL1, s.ranking, s.processed
+        FROM RealStandings s
+        WHERE s.realStandingID = :standing_id
+    """), {"standing_id": standing_id}).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Standing not found")
+    result = dict(row)
+    result["realMatchDate"] = to_iso(result["realMatchDate"])
+    return result
 
 
 # ---------------------------------------------------------------------------
