@@ -15,52 +15,52 @@ class Process:
 
     @staticmethod
     def init_sync_real_process(
-        db: Session, sync_name: str, prevProcess: Process | None = None
+        db: Session, sync_name: str, topProcess: Process | None = None
     ) -> Process:
         return Process(
-            db, "SyncReal", sync_name, prevProcess.process_id if prevProcess else None
+            db, "SyncReal", sync_name, topProcess.process_id if topProcess else None
         )
 
     @staticmethod
     def init_sync_fantasy_process(
-        db: Session, sync_name: str, prevProcess: Process | None = None
+        db: Session, sync_name: str, topProcess: Process | None = None
     ) -> Process:
         return Process(
             db,
             "SyncFantasy",
             sync_name,
-            prevProcess.process_id if prevProcess else None,
+            topProcess.process_id if topProcess else None,
         )
 
     @staticmethod
     def init_save_mds_process(
-        db: Session, sync_name: str, prevProcess: Process | None = None
+        db: Session, sync_name: str, topProcess: Process | None = None
     ) -> Process:
         return Process(
-            db, "SaveMDS", sync_name, prevProcess.process_id if prevProcess else None
+            db, "SaveMDS", sync_name, topProcess.process_id if topProcess else None
         )
 
     @staticmethod
     def init_settle_matches_process(
-        db: Session, rc_id: int | None = None, prevProcess: Process | None = None
+        db: Session, rc_id: int | None = None, topProcess: Process | None = None
     ) -> Process:
         return Process(
             db,
             "SettleMatches",
             str(rc_id) if rc_id is not None else "auto",
-            prevProcess.process_id if prevProcess else None,
+            topProcess.process_id if topProcess else None,
             rc_id or 0,
         )
 
     @staticmethod
     def init_settle_waivers_process(
-        db: Session, rc_id: int | None = None, prevProcess: Process | None = None
+        db: Session, rc_id: int | None = None, topProcess: Process | None = None
     ) -> Process:
         return Process(
             db,
             "SettleWaivers",
             str(rc_id) if rc_id is not None else "auto",
-            prevProcess.process_id if prevProcess else None,
+            topProcess.process_id if topProcess else None,
             rc_id or 0,
         )
 
@@ -69,14 +69,14 @@ class Process:
         db: Session,
         process_type: str,
         process_name: str,
-        prev_process_id: int | None = None,
+        top_process_id: int | None = None,
         real_competition_id: int = 0,
     ):
         from app.models import Process as ProcessModel
 
         self._db: Session = db
         self._process_id: int | None = None
-        self._prev_process_id: int | None = prev_process_id
+        self._top_process_id: int | None = top_process_id
         self._real_competition_id: int = real_competition_id
         self._process_type: str = process_type
         self._process_name: str = process_name
@@ -108,7 +108,7 @@ class Process:
             self._is_new = True
         else:
             self._process_id = row.processID
-            self._prev_process_id = row.topProcessID
+            self._top_process_id = row.topProcessID
             self._startDate = row.startDate
             self._finishDate = row.finishDate
             self._versions = row.versions
@@ -117,7 +117,7 @@ class Process:
 
     def reset(self, sha256: bytes | None = None) -> bool:
         if self._process_id is not None:
-            self._prev_process_id = self._process_id
+            self._top_process_id = self._process_id
             self._startDate = utc_now(microsecond=True)
             self._finishDate = None
             self._versions = (self._versions or 0) + 1
@@ -137,8 +137,8 @@ class Process:
         return self._process_id
 
     @property
-    def prev_process_id(self) -> int | None:
-        return self._prev_process_id
+    def top_process_id(self) -> int | None:
+        return self._top_process_id
 
     @property
     def process_type(self) -> str | None:
@@ -214,7 +214,7 @@ class Process:
             ProcessModel(
                 processID=self._process_id,
                 realCompetitionID=self._real_competition_id,
-                topProcessID=self._prev_process_id,
+                topProcessID=self._top_process_id,
                 processType=self._process_type,
                 processName=self._process_name,
                 startDate=self._startDate or utc_now(microsecond=True),

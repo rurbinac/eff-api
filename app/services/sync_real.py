@@ -52,7 +52,7 @@ class SyncRealService:
             return
 
         sync_real_process = Process.init_sync_real_process(
-            db, str(real_competition_id), prevProcess=prev_process
+            db, str(real_competition_id), topProcess=prev_process
         )
         task = sync_real_process.create_task(
             "sync_all", status=Task.RUNNING, status_on_error=Task.ERROR

@@ -182,7 +182,7 @@ class F42Loader:
     @staticmethod
     def _save_mds(db: Session, f42_process: Process, real_competition_id: int) -> None:
         mds_process = Process.init_save_mds_process(
-            db, str(real_competition_id), prevProcess=f42_process
+            db, str(real_competition_id), topProcess=f42_process
         )
         SaveMDS(db, real_competition_id, mds_process).process()
         db.commit()

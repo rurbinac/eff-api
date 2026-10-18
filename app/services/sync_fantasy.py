@@ -28,7 +28,7 @@ class SyncFantasyService:
             prev_process: Process that triggered this sync, used to link via prevProcessID.
         """
         sync_fantasy_process = Process.init_sync_fantasy_process(
-            db, str(real_competition_id or "all"), prevProcess=prev_process
+            db, str(real_competition_id or "all"), topProcess=prev_process
         )
         task = sync_fantasy_process.create_task(
             "sync_fantasy_all", status=Task.RUNNING, status_on_error=Task.ERROR
