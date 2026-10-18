@@ -486,6 +486,15 @@ def admin_list_real_competitions(db: DbSession, current_user: CurrentUser) -> li
     return [dict(r) for r in rows]
 
 
+@router.get("/api/v1/admin/real-competitions/current-base")
+def admin_get_current_base_competition(db: DbSession, current_user: CurrentUser) -> dict:
+    require_admin(db, current_user)
+    rc = QueryService.get_current_base_competition(db)
+    if rc is None:
+        raise HTTPException(status_code=404, detail="No base competition found")
+    return rc
+
+
 @router.get("/api/v1/admin/real-competitions/{competition_id}")
 def admin_get_real_competition(competition_id: int, db: DbSession, current_user: CurrentUser) -> dict:
     require_admin(db, current_user)
@@ -890,11 +899,18 @@ def admin_restore_backup_run(
 
 
 @router.get("/api/v1/admin/processes")
-def admin_list_processes(db: DbSession, current_user: CurrentUser, process_type: str | None = None):
+def admin_list_processes(
+    db: DbSession,
+    current_user: CurrentUser,
+    process_type: str | None = None,
+    real_competition_id: int | None = None,
+):
     require_admin(db, current_user)
     q = select(Process).order_by(Process.startDate.desc()).limit(500)
     if process_type:
         q = q.where(Process.processType == process_type)
+    if real_competition_id is not None:
+        q = q.where(Process.realCompetitionID == real_competition_id)
     rows = db.execute(q).scalars().all()
     result = []
     for r in rows:

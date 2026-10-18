@@ -9,18 +9,22 @@ import api from '@/api.js'
 
 const types = ref([])
 const selectedType = ref('')
+const competitions = ref([])
+const selectedCompetitionId = ref(null)
 const rows = ref([])
 const loading = ref(false)
 const error = ref(null)
 const expanded = ref(new Set())
 
-async function fetchProcesses(type) {
+async function fetchProcesses() {
   loading.value = true
   error.value = null
   rows.value = []
   expanded.value = new Set()
   try {
-    const params = type ? { process_type: type } : {}
+    const params = {}
+    if (selectedType.value) params.process_type = selectedType.value
+    if (selectedCompetitionId.value != null) params.real_competition_id = selectedCompetitionId.value
     const res = await api.get('/api/v1/admin/processes', { params })
     rows.value = res.data
   } catch (e) {
@@ -32,7 +36,17 @@ async function fetchProcesses(type) {
 
 function onTypeChange(e) {
   selectedType.value = e.target.value
-  fetchProcesses(selectedType.value)
+  fetchProcesses()
+}
+
+function onCompetitionChange(e) {
+  const v = e.target.value
+  selectedCompetitionId.value = v === '' ? null : Number(v)
+  fetchProcesses()
+}
+
+function competitionLabel(c) {
+  return `${c.realCompetitionSeasonId} · ${c.realCompetitionName}`
 }
 
 function toggleExpand(id) {
@@ -85,12 +99,18 @@ function infoStr(info) {
 
 onMounted(async () => {
   try {
-    const res = await api.get('/api/v1/admin/processes/types')
-    types.value = res.data
-    fetchProcesses('')
+    const [typesRes, compsRes, baseRes] = await Promise.all([
+      api.get('/api/v1/admin/processes/types'),
+      api.get('/api/v1/admin/real-competitions'),
+      api.get('/api/v1/admin/real-competitions/current-base'),
+    ])
+    types.value = typesRes.data
+    competitions.value = compsRes.data
+    selectedCompetitionId.value = baseRes.data?.realCompetitionID ?? null
   } catch (e) {
-    error.value = e.response?.data?.detail || 'Failed to load process types.'
+    error.value = e.response?.data?.detail || 'Failed to load filters.'
   }
+  fetchProcesses()
 })
 </script>
 
@@ -100,6 +120,18 @@ onMounted(async () => {
       <SectionTitleLineWithButton :icon="mdiCog" title="Processes" main />
 
       <div class="mb-4 flex items-center gap-3 flex-wrap">
+        <label class="text-sm font-medium text-gray-600 dark:text-slate-300">Competition</label>
+        <select
+          :value="selectedCompetitionId ?? ''"
+          class="text-sm border border-gray-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 min-w-[14rem]"
+          @change="onCompetitionChange"
+        >
+          <option value="">All</option>
+          <option v-for="c in competitions" :key="c.realCompetitionID" :value="c.realCompetitionID">
+            {{ competitionLabel(c) }}
+          </option>
+        </select>
+
         <label class="text-sm font-medium text-gray-600 dark:text-slate-300">Type</label>
         <select
           :value="selectedType"
