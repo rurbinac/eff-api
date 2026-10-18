@@ -900,7 +900,8 @@ def admin_list_processes(db: DbSession, current_user: CurrentUser, process_type:
     for r in rows:
         result.append({
             "processID": r.processID,
-            "prevProcessID": r.prevProcessID,
+            "realCompetitionID": r.realCompetitionID,
+            "topProcessID": r.topProcessID,
             "processType": r.processType,
             "processName": r.processName,
             "startDate": to_iso(r.startDate, timespec="microseconds"),

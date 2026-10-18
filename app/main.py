@@ -41,6 +41,9 @@ def _migrate_db() -> None:
         "ALTER TABLE Processes ADD COLUMN prevProcessID INT(11) DEFAULT NULL AFTER processID",
         # 2026-10-14: processID was created without AUTO_INCREMENT
         "ALTER TABLE Processes MODIFY processID INT NOT NULL AUTO_INCREMENT",
+        # 2026-10-17: prevProcessID renamed to topProcessID; realCompetitionID added
+        "ALTER TABLE Processes CHANGE prevProcessID topProcessID INT(11) DEFAULT NULL",
+        "ALTER TABLE Processes ADD COLUMN realCompetitionID INT(11) NOT NULL DEFAULT 0 AFTER processID",
     ]
     with engine.connect() as conn:
         for sql in migrations:

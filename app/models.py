@@ -785,7 +785,8 @@ class Process(SQLModel, table=True):
     __tablename__ = "Processes"
 
     processID: int | None = Field(default=None, primary_key=True)
-    prevProcessID: int | None = Field(default=None, foreign_key="Processes.processID")
+    realCompetitionID: int
+    topProcessID: int | None = None
     processType: str = Field(max_length=20)
     processName: str = Field(max_length=128)
     startDate: datetime = Field(sa_type=UTCDateTime(fsp=6))

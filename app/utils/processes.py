@@ -9,36 +9,75 @@ from app.utils.dt import utc_now
 
 
 class Process:
-
     @staticmethod
     def init_feeds_process(db: Session, feed_type: str, feed_name: str) -> Process:
         return Process(db, f"Feed:{feed_type}", feed_name)
 
     @staticmethod
-    def init_sync_real_process(db: Session, sync_name: str, prevProcess: Process | None = None) -> Process:
-        return Process(db, "SyncReal", sync_name, prevProcess.process_id if prevProcess else None)
+    def init_sync_real_process(
+        db: Session, sync_name: str, prevProcess: Process | None = None
+    ) -> Process:
+        return Process(
+            db, "SyncReal", sync_name, prevProcess.process_id if prevProcess else None
+        )
 
     @staticmethod
-    def init_sync_fantasy_process(db: Session, sync_name: str, prevProcess: Process | None = None) -> Process:
-        return Process(db, "SyncFantasy", sync_name, prevProcess.process_id if prevProcess else None)
+    def init_sync_fantasy_process(
+        db: Session, sync_name: str, prevProcess: Process | None = None
+    ) -> Process:
+        return Process(
+            db,
+            "SyncFantasy",
+            sync_name,
+            prevProcess.process_id if prevProcess else None,
+        )
 
     @staticmethod
-    def init_save_mds_process(db: Session, sync_name: str, prevProcess: Process | None = None) -> Process:
-        return Process(db, "SaveMDS", sync_name, prevProcess.process_id if prevProcess else None)
+    def init_save_mds_process(
+        db: Session, sync_name: str, prevProcess: Process | None = None
+    ) -> Process:
+        return Process(
+            db, "SaveMDS", sync_name, prevProcess.process_id if prevProcess else None
+        )
 
     @staticmethod
-    def init_settle_matches_process(db: Session, rc_id: int | None = None, prevProcess: Process | None = None) -> Process:
-        return Process(db, "SettleMatches", str(rc_id) if rc_id is not None else "auto", prevProcess.process_id if prevProcess else None)
+    def init_settle_matches_process(
+        db: Session, rc_id: int | None = None, prevProcess: Process | None = None
+    ) -> Process:
+        return Process(
+            db,
+            "SettleMatches",
+            str(rc_id) if rc_id is not None else "auto",
+            prevProcess.process_id if prevProcess else None,
+            rc_id or 0,
+        )
 
     @staticmethod
-    def init_settle_waivers_process(db: Session, rc_id: int | None = None, prevProcess: Process | None = None) -> Process:
-        return Process(db, "SettleWaivers", str(rc_id) if rc_id is not None else "auto", prevProcess.process_id if prevProcess else None)
+    def init_settle_waivers_process(
+        db: Session, rc_id: int | None = None, prevProcess: Process | None = None
+    ) -> Process:
+        return Process(
+            db,
+            "SettleWaivers",
+            str(rc_id) if rc_id is not None else "auto",
+            prevProcess.process_id if prevProcess else None,
+            rc_id or 0,
+        )
 
-    def __init__(self, db: Session, process_type: str, process_name: str, prev_process_id: int | None = None):
+    def __init__(
+        self,
+        db: Session,
+        process_type: str,
+        process_name: str,
+        prev_process_id: int | None = None,
+        real_competition_id: int = 0,
+    ):
         from app.models import Process as ProcessModel
+
         self._db: Session = db
         self._process_id: int | None = None
         self._prev_process_id: int | None = prev_process_id
+        self._real_competition_id: int = real_competition_id
         self._process_type: str = process_type
         self._process_name: str = process_name
         self._startDate: datetime | None = None
@@ -69,7 +108,7 @@ class Process:
             self._is_new = True
         else:
             self._process_id = row.processID
-            self._prev_process_id = row.prevProcessID
+            self._prev_process_id = row.topProcessID
             self._startDate = row.startDate
             self._finishDate = row.finishDate
             self._versions = row.versions
@@ -145,31 +184,49 @@ class Process:
         status: str | None = None,
         status_on_error: str | None = None,
     ) -> Task:
-        task = Task(process=self, name=name, status=status, status_on_error=status_on_error)
+        task = Task(
+            process=self, name=name, status=status, status_on_error=status_on_error
+        )
         self._tasks.append(task)
         return task
 
     def finish(self) -> None:
+        """Finish the process by setting the finish date if it is new and has a start date.
+
+        This method will only set the finish date if the process is new, has a start date,
+        and does not already have a finish date. It then saves the process to the database.
+        """
         if self._is_new and self._startDate is not None and self._finishDate is None:
             self._finishDate = utc_now(microsecond=True)
             self.save()
 
     def save(self) -> bool:
+        """Save the process to the database.
+
+        Returns:
+            bool: True if the process was successfully saved, False otherwise.
+        """
         from app.models import Process as ProcessModel
+
         if not self._is_new:
             return False
-        self._db.merge(ProcessModel(
-            processID=self._process_id,
-            prevProcessID=self._prev_process_id,
-            processType=self._process_type,
-            processName=self._process_name,
-            startDate=self._startDate or utc_now(microsecond=True),
-            finishDate=self._finishDate,
-            duration=self.duration,
-            versions=self._versions,
-            sha256=self._sha256,
-            tasks={t.name: t.to_dict() for t in self._tasks} if self._tasks else None,
-        ))
+        self._db.merge(
+            ProcessModel(
+                processID=self._process_id,
+                realCompetitionID=self._real_competition_id,
+                topProcessID=self._prev_process_id,
+                processType=self._process_type,
+                processName=self._process_name,
+                startDate=self._startDate or utc_now(microsecond=True),
+                finishDate=self._finishDate,
+                duration=self.duration,
+                versions=self._versions,
+                sha256=self._sha256,
+                tasks={t.name: t.to_dict() for t in self._tasks}
+                if self._tasks
+                else None,
+            )
+        )
         self._db.flush()
         return True
 
@@ -250,9 +307,9 @@ class Task:
         """
         if self.is_closed or not self.is_paused:
             return False
-        self._paused_s += (
-            utc_now(microsecond=True) - self._stopped_time
-        ) / timedelta(seconds=1)
+        self._paused_s += (utc_now(microsecond=True) - self._stopped_time) / timedelta(
+            seconds=1
+        )
         self._stopped_time = None
         return True
 
@@ -414,8 +471,17 @@ class Task:
         return data
 
 
-def _duration(start: datetime, end: datetime | None, paused_s: float  = 0) -> float:
+def _duration(start: datetime, end: datetime | None, paused_s: float = 0) -> float:
+    """_summary_
+
+    Args:
+        start (datetime): _description_
+        end (datetime | None): _description_
+        paused_s (float, optional): _description_. Defaults to 0.
+
+    Returns:
+        float: _description_
+    """
     if end is None:
         end = utc_now(microsecond=True)
     return (end - start) / timedelta(seconds=1) - paused_s
-
