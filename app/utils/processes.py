@@ -5,63 +5,71 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.services.query import QueryService
 from app.utils.dt import utc_now
 
 
 class Process:
     @staticmethod
-    def init_feeds_process(db: Session, feed_type: str, feed_name: str) -> Process:
-        return Process(db, f"Feed:{feed_type}", feed_name)
+    def init_feeds_process(db: Session, feed_type: str, feed_name: str, real_competition_id: int | None = None) -> Process:
+        real_competition_id = QueryService.get_competition_id(db, real_competition_id) or 0
+        return Process(db, f"Feed:{feed_type}", feed_name, real_competition_id=real_competition_id)
 
     @staticmethod
     def init_sync_real_process(
-        db: Session, sync_name: str, topProcess: Process | None = None
+        db: Session, sync_name: str, topProcess: Process | None = None, real_competition_id: int | None = None
     ) -> Process:
+        real_competition_id = QueryService.get_base_competition_id(db, real_competition_id) or 0
         return Process(
-            db, "SyncReal", sync_name, topProcess.process_id if topProcess else None
+            db, "SyncReal", sync_name, topProcess.process_id if topProcess else None, real_competition_id=real_competition_id
         )
 
     @staticmethod
     def init_sync_fantasy_process(
-        db: Session, sync_name: str, topProcess: Process | None = None
+        db: Session, sync_name: str, topProcess: Process | None = None, real_competition_id: int | None = None
     ) -> Process:
+        real_competition_id = QueryService.get_base_competition_id(db, real_competition_id) or 0
         return Process(
             db,
             "SyncFantasy",
             sync_name,
             topProcess.process_id if topProcess else None,
+            real_competition_id=real_competition_id,
         )
 
     @staticmethod
     def init_save_mds_process(
-        db: Session, sync_name: str, topProcess: Process | None = None
+        db: Session, sync_name: str, topProcess: Process | None = None, real_competition_id: int | None = None
     ) -> Process:
+        real_competition_id = QueryService.get_base_competition_id(db, real_competition_id) or 0
         return Process(
-            db, "SaveMDS", sync_name, topProcess.process_id if topProcess else None
+            db, "SaveMDS", sync_name, topProcess.process_id if topProcess else None, real_competition_id=real_competition_id,
         )
 
     @staticmethod
     def init_settle_matches_process(
-        db: Session, rc_id: int | None = None, topProcess: Process | None = None
+        db: Session, rc_id: int | None = None, topProcess: Process | None = None, real_competition_id: int | None = None
     ) -> Process:
+        real_competition_id = QueryService.get_base_competition_id(db, real_competition_id) or 0
         return Process(
             db,
             "SettleMatches",
             str(rc_id) if rc_id is not None else "auto",
             topProcess.process_id if topProcess else None,
-            rc_id or 0,
+            real_competition_id=real_competition_id,
         )
 
     @staticmethod
     def init_settle_waivers_process(
-        db: Session, rc_id: int | None = None, topProcess: Process | None = None
+        db: Session, rc_id: int | None = None, topProcess: Process | None = None, real_competition_id: int | None = None
     ) -> Process:
+        real_competition_id = QueryService.get_base_competition_id(db, real_competition_id) or 0
         return Process(
             db,
             "SettleWaivers",
             str(rc_id) if rc_id is not None else "auto",
             topProcess.process_id if topProcess else None,
-            rc_id or 0,
+            real_competition_id=real_competition_id,
         )
 
     def __init__(
