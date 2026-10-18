@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { mdiAccountMultiple } from '@mdi/js'
 import SectionMain from '@/components/SectionMain.vue'
 import SectionTitleLineWithButton from '@/components/SectionTitleLineWithButton.vue'
@@ -9,6 +9,7 @@ import LayoutAuthenticated from '@/layouts/LayoutAuthenticated.vue'
 import api from '@/api.js'
 
 const route = useRoute()
+const router = useRouter()
 const seasons = ref([])
 const selectedSeason = ref('')
 const rows = ref([])
@@ -80,14 +81,15 @@ onMounted(async () => {
               <th class="py-2 px-3 text-left font-semibold text-gray-600 dark:text-slate-300">Name</th>
               <th class="py-2 px-3 text-left font-semibold text-gray-600 dark:text-slate-300">Position</th>
               <th class="py-2 px-3 text-left font-semibold text-gray-600 dark:text-slate-300">Team</th>
+              <th class="py-2 px-3"></th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading && !rows.length">
-              <td colspan="4" class="py-4 px-3 text-gray-400">Loading…</td>
+              <td colspan="5" class="py-4 px-3 text-gray-400">Loading…</td>
             </tr>
             <tr v-else-if="!loading && !rows.length">
-              <td colspan="4" class="py-4 px-3 text-gray-400">No members found.</td>
+              <td colspan="5" class="py-4 px-3 text-gray-400">No members found.</td>
             </tr>
             <tr
               v-for="row in rows"
@@ -100,6 +102,12 @@ onMounted(async () => {
               <td class="py-2 px-3 text-gray-600 dark:text-slate-300">
                 {{ row.teamName }}
                 <span v-if="row.teamShortName" class="text-gray-400 dark:text-slate-500 font-mono text-xs">({{ row.teamShortName }})</span>
+              </td>
+              <td class="py-2 px-3 text-right">
+                <button
+                  class="rounded px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                  @click="router.push({ name: 'real-team-member-detail', params: { key: row.key } })"
+                >Detail</button>
               </td>
             </tr>
           </tbody>

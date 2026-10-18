@@ -665,6 +665,40 @@ def admin_rtm_seasons(db: DbSession, current_user: CurrentUser) -> list[str]:
     return list(rows)
 
 
+@router.get("/api/v1/admin/real-team-members/{member_key}")
+def admin_get_real_team_member(member_key: str, db: DbSession, current_user: CurrentUser) -> dict:
+    """Full detail for one RealTeamMember by key."""
+    require_admin(db, current_user)
+    row = db.execute(text("""
+        SELECT
+            rtm.realTeamMemberID, rtm.realTeamMemberKey,
+            rtm.prevRealTeamMemberKey, rtm.nextRealTeamMemberKey,
+            rtm.baseRealCompetitionID, rtm.extraRealCompetitionID,
+            rtm.isTeam, rtm.isPlayer,
+            rtm.realTeamID, rtm.realTeamUID, rtm.realTeamName, rtm.realTeamShortName,
+            rtm.realPlayerID, rtm.realPlayerUID,
+            rtm.firstName, rtm.lastName, rtm.knownName, rtm.name, rtm.sortName,
+            rtm.position, rtm.draftPosition, rtm.draftPositionOrder,
+            rtm.birthDate, rtm.weight, rtm.height, rtm.jerseyNumber, rtm.enabled,
+            rtm.ranking, rtm.timePlayed, rtm.gamePlayed,
+            rtm.goals, rtm.assists, rtm.yellowCards, rtm.redCards,
+            rtm.goalsConceded, rtm.cleanSheet,
+            rtm.played, rtm.won, rtm.draw, rtm.lost,
+            rtm.goalsFor, rtm.goalsAgainst, rtm.pointsL1, rtm.livePointsL1,
+            rtm.lastF7Date, rtm.lastF42Date,
+            rc.realCompetitionSYMID, rc.realCompetitionName, rc.realCompetitionSeasonId
+        FROM RealTeamMembers rtm
+        JOIN RealCompetitions rc ON rc.realCompetitionID = rtm.baseRealCompetitionID
+        WHERE rtm.realTeamMemberKey = :key
+    """), {"key": member_key}).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    result = dict(row)
+    for col in ("lastF7Date", "lastF42Date"):
+        result[col] = to_iso(result[col])
+    return result
+
+
 @router.get("/api/v1/admin/real-team-members")
 def admin_list_real_team_members(
     db: DbSession,

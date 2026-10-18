@@ -87,6 +87,12 @@ const routes = [
     component: () => import('@/views/RealTeamMembersView.vue'),
   },
   {
+    meta: { title: 'Player Detail' },
+    path: '/real-team-members/:key',
+    name: 'real-team-member-detail',
+    component: () => import('@/views/RealTeamMemberDetailView.vue'),
+  },
+  {
     meta: { title: 'Real Standings' },
     path: '/real-standings',
     name: 'real-standings',
