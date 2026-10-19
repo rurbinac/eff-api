@@ -71,6 +71,7 @@ class DraftHelper:
                 self.draft_values.load_members()
                 drafting_users = self._draft_values.get_drafting_users()
                 while self._draft_unsigned_users(team, drafting_users):
+                    self.draft_values.init_curr_team_num()
                     team = self.draft_values.team
                     cnt += 1
                 if cnt > 0:

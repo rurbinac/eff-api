@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, update
 
 from app.actions.draft.draft_base import DraftBase, DraftHelperProtocol
-from app.models import Team
 from app.actions.draft.draft_exception import (
+    CannotDraftException,
     MemberNotAvailableException,
     NotAvailableDraftPositionsException,
     NotAvailableMembersException,
@@ -17,6 +17,7 @@ from app.constants import (
     DraftPositionConstants,
     MatchCreationConstants,
 )
+from app.models import Team
 from app.utils.match_day_map_keys import (
     division_map_days_map_key,
     split_map_days_map_key,
@@ -56,6 +57,8 @@ class DraftMember(DraftBase):
         super()._process_ready()
         dv = self._dh.draft_values
         team = self.team
+        if team is None:
+            raise CannotDraftException()
         if (
             not self._draft_unsigned
             and not self._timed_out
