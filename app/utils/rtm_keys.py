@@ -571,6 +571,8 @@ def stats_by_dp(keys: Keys | KeyGroups, get_dp: KeysReader | Callable[[str], str
     deficit = False
     surplus = False
     for dp, cnt_dp in dp_cnt.items():
+        if dp not in DraftPositionConstants.LIMITS:
+            continue
         limits = DraftPositionConstants.LIMITS[dp]
         dp_stats[dp] = {"cnt": cnt_dp, "min": limits["min"], "max": limits["max"]}
         if dp not in {DraftPositionConstants.PLAYER, DraftPositionConstants.MEMBER}:
@@ -658,6 +660,8 @@ class DraftingKeys(Keys):
         deficit = False
         surplus = False
         for dp, cnt_dp in dp_cnt.items():
+            if dp not in DraftPositionConstants.LIMITS:
+                continue
             limits = DraftPositionConstants.LIMITS[dp]
             dp_stats[dp] = {"cnt": cnt_dp, "min": limits["min"], "max": limits["max"]}
             if dp not in {DraftPositionConstants.PLAYER, DraftPositionConstants.MEMBER}:

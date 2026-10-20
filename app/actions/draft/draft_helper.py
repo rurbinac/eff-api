@@ -61,6 +61,7 @@ class DraftHelper:
         return self._finish_process()
 
     def _finish_process(self, draft_unsigned_users: bool = True) -> dict:
+        self.draft_values.init_curr_team_num()
         self.draft_notice.send()
         data = dict(self._draft_values.division)
         team = self.draft_values.team
