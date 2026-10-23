@@ -73,11 +73,9 @@ class DraftMember(DraftBase):
             raise NotAvailableDraftPositionsException()
 
         for key in self._next_member_key(available_positions):
-            dtm.append(key)
-            if dtm.is_valid:
-                self._selected_key = key
-                dv.set_member_team_id(key, team.get("teamID"), freeze_values=True)
-                return
+            self._selected_key = key
+            dv.set_member_team_id(key, team.get("teamID"), freeze_values=True)
+            return
 
         raise NotAvailableMembersException()
 

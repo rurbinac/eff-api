@@ -216,6 +216,13 @@ class DraftValues:
         self._old_team = {}
         return True
 
+    def reload_drafting_users(self) -> None:
+        raw = self._db.execute(
+            select(Division.draftingUsers).where(Division.divisionID == self._division_id)
+        ).scalar()
+        if self._division is not None:
+            self._division["draftingUsers"] = raw
+
     def get_drafting_users(self, only_signed: bool = True) -> list[int]:
         users: list[int] = []
         if self._division is None or "draftingUsers" not in self._division:
