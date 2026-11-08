@@ -1,5 +1,8 @@
 import json
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
@@ -289,32 +292,43 @@ async def rest_divisions_pusher_webhook(request: Request, db: DbSession):
     key = request.headers.get("X-Pusher-Key", "")
     signature = request.headers.get("X-Pusher-Signature", "")
 
+    logger.warning("PUSHER_HOOK path=%s key=%r sig=%r body=%s", request.url.path, key, signature, body.decode("utf-8")[:500])
+
     webhook = pusher_service.get_client().validate_webhook(
         key, signature, body.decode("utf-8")
     )
     if webhook is None:
+        logger.warning("PUSHER_HOOK signature validation FAILED")
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     sequence = webhook.get("time_ms", 0)
+    logger.warning("PUSHER_HOOK validated sequence=%s events=%s", sequence, webhook.get("events"))
 
     for event in webhook.get("events", []):
         channel = event.get("channel", "")
         name = event.get("name", "")
         user_id = event.get("user_id")
 
+        logger.warning("PUSHER_HOOK event name=%r channel=%r user_id=%r", name, channel, user_id)
+
         if not channel.startswith("presence-draft-") or user_id is None:
+            logger.warning("PUSHER_HOOK skipping event (channel or user_id filter)")
             continue
         if name not in ("member_added", "member_removed"):
+            logger.warning("PUSHER_HOOK skipping event (name filter)")
             continue
 
         try:
             division_id = int(channel.removeprefix("presence-draft-"))
         except ValueError:
+            logger.warning("PUSHER_HOOK could not parse division_id from channel=%r", channel)
             continue
 
+        logger.warning("PUSHER_HOOK updating division_id=%s user_id=%s online=%s", division_id, user_id, name == "member_added")
         _update_drafting_users(
             db, division_id, int(user_id), name == "member_added", sequence
         )
+        logger.warning("PUSHER_HOOK done division_id=%s", division_id)
 
     return {"status": "ok"}
 
