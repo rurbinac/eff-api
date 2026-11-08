@@ -2,7 +2,12 @@ from datetime import datetime
 
 from fastapi import APIRouter, Form, Query, Request
 
-from app.actions.sign import ChangePasswordAction, SignInAction, SignUpAction, UpdateUserAction
+from app.actions.sign import (
+    ChangePasswordAction,
+    SignInAction,
+    SignUpAction,
+    UpdateUserAction,
+)
 from app.context import RequestContext
 from app.database import CurrentUser, DbSession
 from app.exceptions import EFFException, RequiredValueException, UnknownActionException

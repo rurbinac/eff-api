@@ -282,6 +282,7 @@ def rest_divisions_transactions_detail(db: DbSession, divisionID: int | None = N
 
 
 @router.post("/api/v1/divisions/pusher_webhook")
+@router.post("/eff/eff_api/PusherHook.php")
 async def rest_divisions_pusher_webhook(request: Request, db: DbSession):
     """Pusher webhook: update draftingUsers when members join/leave presence channels."""
     body = await request.body()
