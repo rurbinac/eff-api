@@ -77,6 +77,8 @@ async def legacy_divisions(
     draftType: str | None = Form(None),
     draftDate: Annotated[datetime | None, Form()] = None,
     draftCompleteDate: Annotated[datetime | None, Form()] = None,
+    realTeamMemberKey: str | None = Form(None),
+    useRanking: int | None = Form(None),
 ):
     """Legacy PHP-compatible endpoint for Divisions actions."""
     RequestContext.set_datetime()
@@ -127,6 +129,30 @@ async def legacy_divisions(
             division_id = require_int(divisionID, "divisionID", f)
             items = DivisionsShuffleTeamsAction.execute(db, division_id, current_user)
             return return_many_legacy("Teams", items)
+        elif f == "DraftMember":
+            require_pos_int(divisionID, "divisionID", f)
+            require_league_member(db, current_user, division_id=divisionID)
+            dh, auth_err = _auth_helper(db, current_user, divisionID)
+            if auth_err:
+                raise auth_err
+            try:
+                dh.pickup(
+                    member_key=realTeamMemberKey,
+                    use_ranking=bool(useRanking),
+                    auto_draft=False,
+                )
+            except DraftException as e:
+                return PlainTextResponse(e.legacy_response(), status_code=e.status_code)
+            dv = dh.draft_values
+            return return_one_legacy(f, {
+                "divisionID": divisionID,
+                "draftStatus": dv.division.get("draftStatus"),
+                "draftingRound": dv.division.get("draftingRound"),
+                "draftingTeamOrder": dv.division.get("draftingTeamOrder"),
+                "draftingNextTeamOrder": dv.division.get("draftingNextTeamOrder"),
+                "draftingMemberOrder": dv.division.get("draftingMemberOrder"),
+                "draftingLimit": dv.division.get("draftingLimit"),
+            })
         elif f in ("StartDraft", "PauseDraft", "RestartDraft"):
             require_pos_int(divisionID, "divisionID", f)
             require_commissioner(db, current_user, division_id=divisionID)
